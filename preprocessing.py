@@ -1,6 +1,5 @@
 import os
 import numpy as np
-import pandas as pd
 import anndata as ad
 import scipy.sparse as sp
 
@@ -10,64 +9,57 @@ class Binarizador:
 
     Atributos
     ---------
-    path_h5ad       : caminho para o arquivo .h5ad de entrada
-    out_dir         : diretório onde os arquivos gerados serão salvos
-    chunk           : número de células processadas por vez (padrão 3000)
-    path_binarizada : preenchido automaticamente após chamar .binarizar()
+    path_h5ad          : caminho para o arquivo .h5ad de entrada
+    out_dir            : diretório geral de saída do pipeline
+    out_dir_binarizada : pasta específica onde o .h5ad binarizado será salvo
+                         (padrão: mesmo que out_dir)
+    path_binarizada    : preenchido automaticamente após chamar .binarizar()
     """
 
-    def __init__(self, path_h5ad, out_dir, chunk=3000):
+    def __init__(self, path_h5ad, out_dir=None, out_dir_binarizada=None):
         self.path_h5ad = path_h5ad
-        self.out_dir = out_dir
-        self.chunk = chunk
+        self.out_dir = out_dir or os.path.join(os.getcwd(), "outputs")
+        self.out_dir_binarizada = out_dir_binarizada or self.out_dir
         self.path_binarizada = None  # definido após binarizar()
 
     # ------------------------------------------------------------------
     # Métodos públicos (etapas do pipeline)
     # ------------------------------------------------------------------
 
-    def binarizar(self, nome_arquivo="matrizM_binarizada.txt"):
-        """Binariza a matriz de expressão e salva no diretório de saída.
+    def binarizar(self, nome_arquivo="matrizBinarizadaM.h5ad"):
+        """Binariza a matriz de expressão e salva como .h5ad no diretório de saída.
 
-        Valores > 0 viram 1.0, zeros permanecem 0.0.
+        Valores > 0 viram 1, zeros permanecem 0 (dtype int8).
         Retorna o próprio objeto para permitir encadeamento de chamadas.
         """
-        self.path_binarizada = os.path.join(self.out_dir, nome_arquivo)
+        nome_entrada = os.path.splitext(os.path.basename(self.path_h5ad))[0]
+        pasta_saida = os.path.join(self.out_dir_binarizada, nome_entrada)
+        self.path_binarizada = os.path.join(pasta_saida, nome_arquivo)
 
-        adata = ad.read_h5ad(self.path_h5ad, backed='r')
-        n_celulas, n_genes = adata.shape
-        gene_names = list(adata.var_names)
-        print(f"[Preprocessador] Shape da matriz: {adata.shape}")
+        print("[Binarizador] Carregando arquivo h5ad...")
+        adata = ad.read_h5ad(self.path_h5ad)
+        print(f"[Binarizador] Shape da matriz: {adata.shape}")
 
-        os.makedirs(self.out_dir, exist_ok=True)
+        print("[Binarizador] Binarizando a matriz...")
+        if sp.issparse(adata.X):
+            adata.X.data = np.where(adata.X.data > 0, 1, 0)
+            adata.X = adata.X.astype(np.int8)
+        else:
+            adata.X = np.where(adata.X > 0, 1, 0).astype(np.int8)
 
-        with open(self.path_binarizada, 'w', buffering=64 * 1024 * 1024) as fout:
-            fout.write(','.join(gene_names) + '\n')
+        os.makedirs(pasta_saida, exist_ok=True)
 
-            for start in range(0, n_celulas, self.chunk):
-                end = min(start + self.chunk, n_celulas)
-                X = adata.X[start:end]
-                if sp.issparse(X):
-                    X = X.toarray()
-
-                bin_chunk = (X > 0).astype(np.float32)
-                pd.DataFrame(bin_chunk).to_csv(
-                    fout, header=False, index=False, float_format='%.1f'
-                )
-
-                if start == 0:
-                    print(f"[Preprocessador] Primeiro chunk escrito ({end} células). Continuando...")
-
-        adata.file.close()
-        print(f"[Preprocessador] Arquivo salvo: {self.path_binarizada}")
-        return self  # permite encadear: prep.binarizar().proxima_etapa()
+        print("[Binarizador] Salvando arquivo h5ad binarizado...")
+        adata.write_h5ad(self.path_binarizada)
+        print(f"[Binarizador] Arquivo salvo: {self.path_binarizada}")
+        return self
 
     def carregar_binarizada(self):
-        """Carrega a matriz binarizada já gerada como DataFrame do pandas."""
+        """Carrega a matriz binarizada já gerada como AnnData."""
         if self.path_binarizada is None:
             raise RuntimeError("Execute .binarizar() antes de carregar.")
-        print(f"[Preprocessador] Carregando: {self.path_binarizada}")
-        return pd.read_csv(self.path_binarizada)
+        print(f"[Binarizador] Carregando: {self.path_binarizada}")
+        return ad.read_h5ad(self.path_binarizada)
 
     # ------------------------------------------------------------------
     # Representação do objeto (útil para debug no notebook)
@@ -76,10 +68,10 @@ class Binarizador:
     def __repr__(self):
         binarizada = self.path_binarizada or "ainda não gerada"
         return (
-            f"Preprocessador(\n"
-            f"  path_h5ad       = {self.path_h5ad}\n"
-            f"  out_dir         = {self.out_dir}\n"
-            f"  chunk           = {self.chunk}\n"
-            f"  path_binarizada = {binarizada}\n"
+            f"Binarizador(\n"
+            f"  path_h5ad          = {self.path_h5ad}\n"
+            f"  out_dir            = {self.out_dir}\n"
+            f"  out_dir_binarizada = {self.out_dir_binarizada}\n"
+            f"  path_binarizada    = {binarizada}\n"
             f")"
         )
