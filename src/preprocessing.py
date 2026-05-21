@@ -36,6 +36,10 @@ class Binarizador:
         pasta_saida = os.path.join(self.out_dir_binarizada, nome_entrada)
         self.path_binarizada = os.path.join(pasta_saida, nome_arquivo)
 
+        if os.path.exists(self.path_binarizada):
+            print(f"[Binarizador] Arquivo já existe, pulando: {self.path_binarizada}")
+            return self
+
         print("[Binarizador] Carregando arquivo h5ad...")
         adata = ad.read_h5ad(self.path_h5ad)
         print(f"[Binarizador] Shape da matriz: {adata.shape}")

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(& \"c:\\\\Users\\\\Leticia\\\\Documents\\\\Letworkspace\\\\pipiline_hopifield\\\\.venv\\\\Scripts\\\\python.exe\" -m pip install numpy anndata scipy pandas)"
+    ]
+  }
+}
