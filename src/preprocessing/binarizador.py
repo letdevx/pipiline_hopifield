@@ -20,11 +20,7 @@ class Binarizador:
         self.path_h5ad = path_h5ad
         self.out_dir = out_dir or os.path.join(os.getcwd(), "outputs")
         self.out_dir_binarizada = out_dir_binarizada or self.out_dir
-        self.path_binarizada = None  # definido após binarizar()
-
-    # ------------------------------------------------------------------
-    # Métodos públicos (etapas do pipeline)
-    # ------------------------------------------------------------------
+        self.path_binarizada = None
 
     def binarizar(self, nome_arquivo="matrizBinarizadaM.h5ad"):
         """Binariza a matriz de expressão e salva como .h5ad no diretório de saída.
@@ -64,10 +60,6 @@ class Binarizador:
             raise RuntimeError("Execute .binarizar() antes de carregar.")
         print(f"[Binarizador] Carregando: {self.path_binarizada}")
         return ad.read_h5ad(self.path_binarizada)
-
-    # ------------------------------------------------------------------
-    # Representação do objeto (útil para debug no notebook)
-    # ------------------------------------------------------------------
 
     def __repr__(self):
         binarizada = self.path_binarizada or "ainda não gerada"
