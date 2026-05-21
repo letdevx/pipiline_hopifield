@@ -16,7 +16,11 @@ class SelecionadorGenesFrequentes:
         self.df_resultado = None
         self._data        = None
 
-    def calcular(self):
+    def calcular(self, out_csv=None):
+        if out_csv and os.path.exists(out_csv):
+            print(f"[SelecionadorGenesFrequentes] Arquivo já existe, pulando: {out_csv}")
+            self.df_resultado = pl.read_csv(out_csv)
+            return self
         print(f"[SelecionadorGenesFrequentes] Lendo: {self.path_txt}")
         self._data = pl.read_csv(self.path_txt)
 
