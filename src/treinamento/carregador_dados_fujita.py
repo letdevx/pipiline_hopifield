@@ -53,7 +53,7 @@ class CarregadorDadosFujita:
 
     def _carregar_matriz(self):
         print(f"[CarregadorDadosFujita] Carregando matriz: {self.path_matriz}")
-        self.X = np.loadtxt(self.path_matriz, delimiter=",", dtype=np.float32)
+        self.X = pd.read_csv(self.path_matriz).to_numpy(dtype=np.float32)
         print(f"[CarregadorDadosFujita] Matriz carregada: {self.X.shape}")
 
     def _selecionar_top_genes(self):
@@ -76,7 +76,7 @@ class CarregadorDadosFujita:
 
     def _carregar_sweep(self):
         print(f"[CarregadorDadosFujita] Carregando SWeeP pré-computado: {self.path_sweep}")
-        self.Wswp = pd.read_csv(self.path_sweep, index_col=0).to_numpy(dtype=np.float32)
+        self.Wswp = pd.read_csv(self.path_sweep).to_numpy(dtype=np.float32)
         print(f"[CarregadorDadosFujita] Wswp shape: {self.Wswp.shape}")
 
     def __repr__(self):
