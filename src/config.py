@@ -16,7 +16,8 @@ PATH_TOP5000 = r"C:\Users\Leticia\Documents\Letworkspace\Sweep-Harmonization\Meu
 
 PATH_SWEEP_F  = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                              "outputs", "treinamento", "matriz_reduzida_sweepF.csv")
-PATH_LABELS_F = r"C:\Users\Leticia\Documents\Letworkspace\pipiline_hopifield\dadosExternos\cell_types_binario.txt"
+PATH_LABELS_F = os.path.join(ROOT, "imputs", "cell_types_binarioF.txt")
+PATH_LABELS_M = os.path.join(ROOT, "imputs", "celltypeBinMparcial.csv")
 
 # ---------------------------------------------------------------------------
 # Saídas — geradas automaticamente dentro da raiz do projeto

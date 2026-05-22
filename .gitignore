@@ -61,6 +61,7 @@ desktop.ini
 logs/
 
 # arquivos
-.csv
-.txt
-.parquet
+*csv
+*txt
+*.parquet
+*.h5ad

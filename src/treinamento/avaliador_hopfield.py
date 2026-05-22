@@ -26,17 +26,22 @@ class AvaliadorHopfield:
     y_pred        : rótulos preditos pela rede
     """
 
-    def __init__(self, padroes, classes, nc=10, nomes_classes=None):
+    def __init__(self, padroes, classes, nc=10, nomes_classes=None, meta=None):
         self.padroes = np.asarray(padroes, dtype=np.float64)
         self.classes = list(classes)
         self.nc = nc
         self.nomes_classes = nomes_classes
-        self.acuracia = None
-        self.f1_macro = None
-        self.f1_weighted = None
-        self.matriz_conf = None
-        self.y_true = None
-        self.y_pred = None
+        # meta: lista de (classe, idx_célula) gerada pelo ExtratorPadroesSubcluster
+        # quando fornecida, substitui o mapeamento por idx_proto // nc
+        self._pattern_classes = np.array([m[0] for m in meta]) if meta is not None else None
+        self.acuracia          = None
+        self.f1_macro          = None
+        self.f1_weighted       = None
+        self.taxa_reconstrucao = None
+        self.semelhanca_media  = None
+        self.matriz_conf       = None
+        self.y_true            = None
+        self.y_pred            = None
 
     def avaliar(self, Wrecuperado, labels):
         """Avalia a recuperação comparando com os rótulos verdadeiros.
@@ -56,21 +61,32 @@ class AvaliadorHopfield:
         a2 = (W_f ** 2).sum(axis=1, keepdims=True)
         b2 = (perf_f ** 2).sum(axis=1, keepdims=True).T
         idx_proto = (a2 + b2 - 2 * (W_f @ perf_f.T)).argmin(axis=1)
-        pred = classes_arr[idx_proto // self.nc]
+        if self._pattern_classes is not None:
+            pred = self._pattern_classes[idx_proto]
+        else:
+            pred = classes_arr[idx_proto // self.nc]
 
-        mask = labels != 0
+        # Taxa de reconstrução: fração com distância de Hamming = 0 ao protótipo mais próximo
+        prototipos = perf_f[idx_proto]
+        hamming    = (W_f != prototipos).mean(axis=1)
+
+        mask = np.isin(labels, self.classes)
         self.y_true = labels[mask]
         self.y_pred = pred[mask]
 
-        self.acuracia = (self.y_true == self.y_pred).mean()
-        self.f1_macro = f1_score(self.y_true, self.y_pred, average="macro", zero_division=0)
-        self.f1_weighted = f1_score(self.y_true, self.y_pred, average="weighted", zero_division=0)
-        self.matriz_conf = confusion_matrix(self.y_true, self.y_pred, labels=self.classes)
+        self.acuracia          = (self.y_true == self.y_pred).mean()
+        self.f1_macro          = f1_score(self.y_true, self.y_pred, average="macro", zero_division=0)
+        self.f1_weighted       = f1_score(self.y_true, self.y_pred, average="weighted", zero_division=0)
+        self.taxa_reconstrucao = (hamming[mask] == 0).mean()
+        self.semelhanca_media  = (1 - hamming[mask]).mean()
+        self.matriz_conf       = confusion_matrix(self.y_true, self.y_pred, labels=self.classes)
 
         print(f"[AvaliadorHopfield] Acurácia: {self.acuracia * 100:.2f}% "
               f"(n={mask.sum():,})")
         print(f"[AvaliadorHopfield] F1 macro={self.f1_macro:.4f}, "
               f"F1 ponderado={self.f1_weighted:.4f}")
+        print(f"[AvaliadorHopfield] Taxa de reconstrução exata : {self.taxa_reconstrucao * 100:.2f}%")
+        print(f"[AvaliadorHopfield] Semelhança média ao protótipo: {self.semelhanca_media:.4f}")
         print(classification_report(self.y_true, self.y_pred,
                                     labels=self.classes,
                                     target_names=[str(c) for c in self.classes],
@@ -97,16 +113,20 @@ class AvaliadorHopfield:
         return self
 
     def __repr__(self):
-        acc = f"{self.acuracia * 100:.2f}%" if self.acuracia is not None else "não avaliado"
-        f1m = f"{self.f1_macro:.4f}" if self.f1_macro is not None else "—"
-        f1w = f"{self.f1_weighted:.4f}" if self.f1_weighted is not None else "—"
+        acc = f"{self.acuracia * 100:.2f}%"          if self.acuracia          is not None else "não avaliado"
+        f1m = f"{self.f1_macro:.4f}"                  if self.f1_macro          is not None else "—"
+        f1w = f"{self.f1_weighted:.4f}"               if self.f1_weighted       is not None else "—"
+        rec = f"{self.taxa_reconstrucao * 100:.2f}%"  if self.taxa_reconstrucao is not None else "—"
+        sim = f"{self.semelhanca_media:.4f}"           if self.semelhanca_media  is not None else "—"
         return (
             f"AvaliadorHopfield(\n"
-            f"  padroes     = {self.padroes.shape}\n"
-            f"  classes     = {self.classes}\n"
-            f"  nc          = {self.nc}\n"
-            f"  acuracia    = {acc}\n"
-            f"  f1_macro    = {f1m}\n"
-            f"  f1_weighted = {f1w}\n"
+            f"  padroes            = {self.padroes.shape}\n"
+            f"  classes            = {self.classes}\n"
+            f"  nc                 = {self.nc}\n"
+            f"  acuracia           = {acc}\n"
+            f"  f1_macro           = {f1m}\n"
+            f"  f1_weighted        = {f1w}\n"
+            f"  taxa_reconstrucao  = {rec}\n"
+            f"  semelhanca_media   = {sim}\n"
             f")"
         )
