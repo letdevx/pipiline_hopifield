@@ -4,6 +4,7 @@ from .carregador_dados_fujita import CarregadorDadosFujita
 from .projetor_sweep import ProjetorSWeP, ProjetorSWeePR
 from .extrator_padroes import ExtratorPadroesSubcluster
 from .avaliador_hopfield import AvaliadorHopfield
+from .gerador_relatorio import GeradorRelatorio
 
 __all__ = [
     "GeradorConjuntoTreinamento",
@@ -13,4 +14,5 @@ __all__ = [
     "ProjetorSWeePR",
     "ExtratorPadroesSubcluster",
     "AvaliadorHopfield",
+    "GeradorRelatorio",
 ]

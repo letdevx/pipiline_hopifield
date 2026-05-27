@@ -1,5 +1,7 @@
 import os
 
+import numpy as np
+import pandas as pd
 import polars as pl
 
 
@@ -7,7 +9,7 @@ class SelecionadorGenesFrequentes:
     """Calcula os N genes mais frequentes a partir de um arquivo CSV/TXT binarizado.
 
     Frequência = soma da coluna (equivalente a células com valor > 0 em dados binarizados).
-    A primeira coluna é detectada automaticamente como identificador de célula.
+    O arquivo não contém coluna de cell_id — todas as colunas são genes.
     """
 
     def __init__(self, path_txt, n=5000):
@@ -24,20 +26,24 @@ class SelecionadorGenesFrequentes:
         print(f"[SelecionadorGenesFrequentes] Lendo: {self.path_txt}")
 
         with open(self.path_txt, encoding='utf-8') as fh:
-            header = fh.readline().strip().split(',')
-        coluna_celulas = header[0]
-        total_genes    = len(header) - 1
+            gene_names = fh.readline().strip().split(',')
+        total_genes = len(gene_names)
 
-        print(f"  Calculando frequências para {total_genes} genes (streaming)...")
+        print(f"  Calculando frequências para {total_genes} genes (streaming por chunks)...")
 
-        somas = (
-            pl.scan_csv(self.path_txt, infer_schema_length=1)
-            .select(pl.all().exclude(coluna_celulas).sum())
-            .collect()
-        )
-        df_frequencias = somas.unpivot(variable_name="gene", value_name="frequencia")
+        # Pandas chunked read: ~293 MB per chunk (2000 × 36601 × float32).
+        # Accumulate integer column sums without loading the full 6 GB file.
+        somas = np.zeros(total_genes, dtype=np.int64)
+        n_celulas = 0
+        for chunk in pd.read_csv(self.path_txt, chunksize=2000, dtype=np.float32, header=0):
+            somas += (chunk.values > 0).sum(axis=0).astype(np.int64)
+            n_celulas += len(chunk)
+            if n_celulas % 10000 < 2000:
+                print(f"  {n_celulas} células processadas...")
 
-        n_real = min(self.n, len(df_frequencias))
+        df_frequencias = pl.DataFrame({'gene': gene_names, 'frequencia': somas})
+
+        n_real = min(self.n, total_genes)
         self.df_resultado = (
             df_frequencias
             .sort("frequencia", descending=True)
