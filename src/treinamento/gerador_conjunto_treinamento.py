@@ -46,7 +46,7 @@ class GeradorConjuntoTreinamento:
         print(f"  Escrevendo via Polars streaming...")
 
         (
-            pl.scan_csv(path_txt)
+            pl.scan_csv(path_txt, infer_schema_length=1)
             .select(genes_filtrados)
             .sink_csv(path_tmp)
         )

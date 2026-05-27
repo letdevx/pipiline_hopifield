@@ -22,15 +22,19 @@ class SelecionadorGenesFrequentes:
             self.df_resultado = pl.read_csv(out_csv)
             return self
         print(f"[SelecionadorGenesFrequentes] Lendo: {self.path_txt}")
-        self._data = pl.read_csv(self.path_txt)
 
-        coluna_celulas = self._data.columns[0]
-        total_genes    = len(self._data.columns) - 1
-        total_celulas  = len(self._data)
+        with open(self.path_txt, encoding='utf-8') as fh:
+            header = fh.readline().strip().split(',')
+        coluna_celulas = header[0]
+        total_genes    = len(header) - 1
 
-        print(f"  Calculando frequências para {total_genes} genes...")
+        print(f"  Calculando frequências para {total_genes} genes (streaming)...")
 
-        somas = self._data.drop(coluna_celulas).sum()
+        somas = (
+            pl.scan_csv(self.path_txt, infer_schema_length=1)
+            .select(pl.all().exclude(coluna_celulas).sum())
+            .collect()
+        )
         df_frequencias = somas.unpivot(variable_name="gene", value_name="frequencia")
 
         n_real = min(self.n, len(df_frequencias))
@@ -40,7 +44,7 @@ class SelecionadorGenesFrequentes:
             .head(n_real)
         )
 
-        print(f"[SelecionadorGenesFrequentes] Concluído. {total_celulas} células, top {n_real} genes selecionados.")
+        print(f"[SelecionadorGenesFrequentes] Concluído. Top {n_real} genes selecionados.")
         return self
 
     def salvar(self, out_csv):

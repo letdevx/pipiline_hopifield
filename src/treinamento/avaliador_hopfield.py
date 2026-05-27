@@ -1,7 +1,11 @@
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import confusion_matrix, f1_score, classification_report
+from sklearn.metrics import (
+    confusion_matrix, f1_score, classification_report,
+    precision_recall_fscore_support,
+)
 
 from .hopfield_utils import closervects
 
@@ -93,8 +97,14 @@ class AvaliadorHopfield:
                                     zero_division=0))
         return self
 
-    def plotar(self, titulo="Matriz de Confusão — rede35"):
+    def plotar(self, titulo="Matriz de Confusão — rede35", normalizado=False, ax=None):
         """Plota a matriz de confusão como heatmap.
+
+        Parâmetros
+        ----------
+        titulo      : título do gráfico
+        normalizado : se True, normaliza por linha (taxa por classe real)
+        ax          : eixo matplotlib externo; se None, cria figura própria
 
         Retorna o próprio objeto para permitir encadeamento de chamadas.
         """
@@ -102,15 +112,71 @@ class AvaliadorHopfield:
             raise RuntimeError("[AvaliadorHopfield] Execute .avaliar() antes de .plotar().")
 
         rotulos = self.nomes_classes if self.nomes_classes else [str(c) for c in self.classes]
-        fig, ax = plt.subplots(figsize=(max(6, len(self.classes)), max(5, len(self.classes))))
-        sns.heatmap(self.matriz_conf, annot=True, fmt="d", cmap="Blues",
+
+        mat = self.matriz_conf.astype(float)
+        if normalizado:
+            totais = mat.sum(axis=1, keepdims=True)
+            totais[totais == 0] = 1
+            mat = mat / totais
+            fmt = ".1%"
+        else:
+            fmt = "d"
+            mat = mat.astype(int)
+
+        criar_figura = ax is None
+        if criar_figura:
+            fig, ax = plt.subplots(figsize=(max(6, len(self.classes)), max(5, len(self.classes))))
+
+        sns.heatmap(mat, annot=True, fmt=fmt, cmap="Blues",
                     xticklabels=rotulos, yticklabels=rotulos, ax=ax)
         ax.set_xlabel("Predito")
         ax.set_ylabel("Real")
         ax.set_title(titulo)
-        plt.tight_layout()
-        plt.show()
+
+        if criar_figura:
+            plt.tight_layout()
+            plt.show()
         return self
+
+    def metricas_resumo(self, nome=""):
+        """Retorna dict com métricas globais da avaliação.
+
+        Útil para comparar múltiplos datasets em uma tabela consolidada.
+        """
+        if self.acuracia is None:
+            raise RuntimeError("[AvaliadorHopfield] Execute .avaliar() antes de .metricas_resumo().")
+        return {
+            "dataset":           nome,
+            "n_celulas":         int(len(self.y_true)),
+            "acuracia":          round(float(self.acuracia), 4),
+            "f1_macro":          round(float(self.f1_macro), 4),
+            "f1_weighted":       round(float(self.f1_weighted), 4),
+            "taxa_reconstrucao": round(float(self.taxa_reconstrucao), 4),
+            "semelhanca_media":  round(float(self.semelhanca_media), 4),
+        }
+
+    def metricas_por_classe(self):
+        """Retorna DataFrame com precision, recall e F1 por classe.
+
+        Retorna
+        -------
+        pd.DataFrame com colunas: classe, n_celulas, precisao, recall, f1
+        """
+        if self.y_true is None:
+            raise RuntimeError("[AvaliadorHopfield] Execute .avaliar() antes de .metricas_por_classe().")
+        rotulos = self.nomes_classes if self.nomes_classes else [str(c) for c in self.classes]
+        p, r, f, s = precision_recall_fscore_support(
+            self.y_true, self.y_pred,
+            labels=self.classes,
+            zero_division=0,
+        )
+        return pd.DataFrame({
+            "classe":    rotulos,
+            "n_celulas": s.astype(int),
+            "precisao":  p.round(4),
+            "recall":    r.round(4),
+            "f1":        f.round(4),
+        })
 
     def __repr__(self):
         acc = f"{self.acuracia * 100:.2f}%"          if self.acuracia          is not None else "não avaliado"
