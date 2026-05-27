@@ -16,26 +16,19 @@ class AnalisadorCobertura:
             print(f"[AnalisadorCobertura] Arquivo já existe, pulando: {out_csv}")
             return pl.read_csv(out_csv)
 
-        top_n = pl.read_csv(self.path_top_n)
-        map_f_df = pl.DataFrame({
-            'gene'      : list(self.map_f.keys()),
-            'ensembl_id': list(self.map_f.values()),
-        })
-        ids_m_list = list(self.map_m.values())
+        top_n      = pl.read_csv(self.path_top_n)
+        ids_m_list = list(self.map_m.values())  # Ensembl IDs do Mathys
 
+        # top_n['gene'] já contém Ensembl IDs (nomes de coluna do TXT alinhado)
         df = (
             top_n
-            .join(map_f_df, on='gene', how='left')
             .with_columns([
-                pl.col('ensembl_id')
+                pl.col('gene')
                     .is_in(ids_m_list)
-                    .fill_null(False)
                     .alias('presente_mathys'),
-                pl.col('ensembl_id')
-                    .is_null()
-                    .alias('sem_ensembl_fujita'),
+                pl.lit(False).alias('sem_ensembl_fujita'),
             ])
-            .rename({'gene': 'gene_name'})
+            .rename({'gene': 'ensembl_id'})
         )
 
         total       = df.height

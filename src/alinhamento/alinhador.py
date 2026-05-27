@@ -153,7 +153,7 @@ class Alinhador:
                     X = adata.X[start:end]
                     if sp.issparse(X):
                         X = X.toarray()
-                    fout.write(pl.from_numpy(X.astype(np.float32)).write_csv(include_header=False))
+                    fout.write(pl.from_numpy(np.asfortranarray(X.astype(np.float32))).write_csv(include_header=False))
                     total += end - start
                     if total % (chunk * 5) == 0:
                         print(f"  {total} células processadas...")
