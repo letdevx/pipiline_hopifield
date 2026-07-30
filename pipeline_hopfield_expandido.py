@@ -14,26 +14,25 @@
 # ---
 
 # %% [markdown]
-# # `pipeline_hopfield_v2` — Pipeline Completo com Classes `src/`
+# # %% [markdown]
+# # `pipeline_hopfield_expandido` — Pipeline Completo com Dataset Expandido (~11.000 genes)
 #
-# Reimplementação do fluxo de `script01_analises_preliminares.ipynb` usando as
-# classes disponíveis em `src/` em vez de funções inline.
+# Reimplementação do fluxo de análise de tipo celular e memória associativa Hopfield no **dataset expandido**.
 #
 # **Contexto biológico.** O experimento parte de matrizes binárias de expressão
-# gênica (~40 000 células Fujita × ~45 000 células Mathys × N genes). São
-# selecionados os **5 000 genes mais frequentes** do Fujita e cada célula é
-# representada por um vetor SWeeP de **600 dimensões** via projeção `W0 · R5k`
-# (rSWeeP, AIBIALab). A memória associativa armazena perfis **binários** por
-# tipo celular; o espaço SWeeP é usado para clusterizar e escolher protótipos.
+# gênica (~40 000 células Fujita × ~45 000 células Mathys). São selecionados os
+# **5 000 genes mais frequentes do Fujita acrescidos dos ~6 000 genes do Fujita ausentes no Mathys**
+# (preenchidos com valor 0.5 para o Mathys), totalizando aproximadamente **11.000 genes**.
+# Cada célula é representada por um vetor SWeeP de **600 dimensões** via projeção da matriz expandida
+# (rSWeeP, AIBIALab). A memória associativa armazena perfis **binários no espaço de ~11.000 genes**;
+# o espaço SWeeP é usado para clusterizar e escolher protótipos.
 #
-# **Diferenças em relação ao `script01`:**
-# - Usa as classes de `src/` para binarização, alinhamento, seleção de genes,
-#   projeção SWeeP, extração de padrões e avaliação.
-# - Cobre o pipeline completo (binarização → avaliação cross-dataset).
+# **Diferenças principais:**
+# - Espaço gênico expandido para ~11.000 genes.
 # - Remapeamento de classes seguindo o padrão do script01: classes não presentes
 #   em `[1, 3, 4, 5, 6, 7]` são remapeadas para a classe `2`.
-# - Configuração: `nc=10` clusters por classe, `k=1` representante por centroide
-#   → **70 padrões** (7 classes × 10 subclusters).
+# - Configuração: `nc=30` clusters por classe, `k=1` representante por centroide
+#   → **210 padrões** (7 classes × 30 subclusters).
 #
 # **Rede utilizada:** Modern Hopfield Network (Ramsauer et al., 2020) com
 # capacidade de armazenamento exponencial e recuperação equivalente a um passo
@@ -197,8 +196,8 @@ validador.validar()
 
 # %%
 path_top_expandidos = os.path.join(OUT_TOP_GENES, 'genes_expandidos_frequentes.csv')
-path_f_top5k = os.path.join(OUT_TREINAMENTO, 'adataF_binarizado_alinhado_expandido.txt')
-path_m_top5k = os.path.join(OUT_TREINAMENTO, 'adataM_binarizado_alinhado_expandido.txt')
+path_f_expandido = os.path.join(OUT_TREINAMENTO, 'adataF_binarizado_alinhado_expandido.txt')
+path_m_expandido = os.path.join(OUT_TREINAMENTO, 'adataM_binarizado_alinhado_expandido.txt')
 
 path_f_txt = alinhador.path_f_alinhado.replace('.h5ad', '.txt')
 path_m_txt = alinhador.path_m_alinhado.replace('.h5ad', '.txt')
@@ -221,10 +220,10 @@ print(f'  Dimensionalidade final unificada para a Hopfield: {len(genes_unificado
 selecionador.df_resultado = pl.DataFrame({'gene': genes_unificados})
 selecionador.df_resultado.write_csv(path_top_expandidos)
 
-selecionador.filtrar_matriz(path_f_txt, path_f_top5k)
+selecionador.filtrar_matriz(path_f_txt, path_f_expandido)
 
 print(f'\n[Mathys] Filtrando genes nas novas dimensões... (genes faltando aparecerão como 0.5 perfeitamente)')
-selecionador.filtrar_matriz(path_m_txt, path_m_top5k)
+selecionador.filtrar_matriz(path_m_txt, path_m_expandido)
 
 print('\nVerificando cobertura no Mathys nas Dimensões Expandidas:')
 cobertura = AnalisadorCobertura(path_top_expandidos, leitor.map_f, leitor.map_m)
@@ -242,69 +241,57 @@ gerador.gerar(path_m_txt)
 print(gerador)
 
 
-# 
-# Projeta a matriz binarizada do Fujita (células × 5 000 genes) no espaço
-# SWeeP de 600 dimensões usando a base ortonormal rSWeeP.
-# Se o R não estiver disponível, `ProjetorSWeePR` usa o fallback Python (QR sintético).
-# 
-# Wswp = W0 @ R5k        (células × 600)
-
-
 # %% [markdown]
 # ## 5. Projeção SWeeP (rSWeeP via R / fallback Python)
 #
-# Projeta a matriz binarizada do Fujita no espaço SWeeP de 600 dimensões usando a base ortonormal rSWeeP.
+# Projeta a matriz binarizada expandida do Fujita (~11.000 genes) no espaço SWeeP de 600 dimensões usando a base ortonormal rSWeeP.
 # Se o R não estiver disponível, `ProjetorSWeePR` usa o fallback Python (QR sintético).
 #
 # ```
-# Wswp = W0 @ R5k        (células × 600)
+# Wswp = W0 @ R_expandido        (células × 600)
 # ```
 #
 
 # %%
+PATH_SWEEP_F_EXPANDIDO = os.path.join(OUT_TREINAMENTO, 'matriz_reduzida_sweepF_expandido.csv')
+
 projetor_r = ProjetorSWeePR(
-    path_matriz   = path_f_top5k,
-    path_saida    = PATH_SWEEP_F,
+    path_matriz   = path_f_expandido,
+    path_saida    = PATH_SWEEP_F_EXPANDIDO,
     n_componentes = 600,
     seed          = SEED,
 )
 projetor_r.projetar()
 
 
-# 
-# Carrega:
-# - `W0`: matriz binária Fujita (células × 5 000 genes) — usada como padrões da rede.
-# - `labels`: rótulos inteiros de tipo celular por célula.
-# - `Wswp`: projeções SWeeP pré-computadas (células × 600) — usadas para K-means.
-
-
 # %% [markdown]
 # ## 6. Carregamento dos dados
 #
 # Carrega:
-# - `W0`: matriz binária Fujita (células × ~11 000 genes) — usada como padrões da rede.
+# - `W0`: matriz binária Fujita expandida (células × ~11 000 genes) — usada como padrões da rede.
 # - `labels`: rótulos inteiros de tipo celular por célula.
-# - `Wswp`: projeções SWeeP pré-computadas (células × 600) — usadas para K-means.
+# - `Wswp`: projeções SWeeP da matriz expandida pré-computadas (células × 600) — usadas para K-means.
 #
 
 # %%
 # Fujita — padrões de treinamento
 carregador = CarregadorDadosFujita(
-    path_matriz = path_f_top5k,
+    path_matriz = path_f_expandido,
     path_genes  = path_top_expandidos,
     path_labels = PATH_LABELS_F,
-    path_sweep  = PATH_SWEEP_F,
-    n_genes     = 5000,
+    path_sweep  = PATH_SWEEP_F_EXPANDIDO,
+    n_genes     = len(genes_unificados),
 )
 carregador.carregar()
 print(carregador)
 
 
+
 # %%
 # Mathys — dados para imputação cross-dataset
 # Genes ausentes no Mathys foram preenchidos com 0.5 (sentinela) pelo Alinhador.
-print('[Mathys] Carregando matriz top5000...')
-W_mathys = pl.read_csv(path_m_top5k).to_numpy().astype(np.float32)
+print(f'[Mathys] Carregando matriz expandida ({len(genes_unificados)} genes)...')
+W_mathys = pl.read_csv(path_m_expandido).to_numpy().astype(np.float32)
 print(f'[Mathys] W_mathys shape: {W_mathys.shape}')
 
 print('[Mathys] Carregando rótulos...')
@@ -366,7 +353,8 @@ for v, c in zip(vals_m, counts_m):
 #
 
 # %%
-projetor = ProjetorSWeP(n_features=5000, n_componentes=600, seed=SEED)
+projetor = ProjetorSWeP(n_features=carregador.W0.shape[1], n_componentes=600, seed=SEED)
+
 projetor.usar_sweep_precomputado(carregador.Wswp).aplicar_pca()
 print(projetor)
 
@@ -530,7 +518,8 @@ CLASSES_ARR = np.array([1, 2, 3, 4, 5, 6, 7])
 Wk4    = wsort(carregador.W0[clo == 3])
 n_test = min(1000, Wk4.shape[0])
 Wtes   = rede35.retrieve(Wk4[:n_test], batch_size=4096)
-print(f'hopf_ts(Wswp[:{n_test}], rede35): shape {Wtes.shape}')
+print(f'hopf_ts(Wk4[:{n_test}], rede35): shape {Wtes.shape}')
+
 
 perf35_f = perf35.astype(np.float64)
 Wtes_f   = Wtes.astype(np.float64)
@@ -720,9 +709,9 @@ plt.show()
 #
 # Visualização não-linear da separação entre tipos celulares em duas dimensões.
 #
-# **Passo A** — t-SNE dos 5 000 Fujita no espaço SWeeP (primeiros 50 PCs): mostra se os tipos celulares formam ilhas distintas no espaço de baixa dimensionalidade.
+# **Passo A** — t-SNE de 5.000 células Fujita no espaço SWeeP (primeiros 50 PCs): mostra se os tipos celulares formam ilhas distintas no espaço de baixa dimensionalidade.
 #
-# **Passo B** — t-SNE conjunto (Fujita ● + Mathys ▲ reconstruídos, 5 000 de cada): células do mesmo tipo das duas espécies devem se sobrepor se a reconstrução pela Hopfield Network preservou as identidades celulares.
+# **Passo B** — t-SNE conjunto (5.000 células Fujita ● + 5.000 células Mathys ▲ reconstruídas): células do mesmo tipo das duas espécies devem se sobrepor se a reconstrução pela Hopfield Network preservou as identidades celulares.
 #
 
 # %%
@@ -769,7 +758,7 @@ print(f'DBSCAN ARI (Fujita t-SNE 2D): {ari:.4f}')
 
 
 # %% [markdown]
-# ## 18. Reconstrução dos Genes Ausentes no Mathys
+# ## 17. Reconstrução dos Genes Ausentes no Mathys
 #
 # Análise e métricas por gene para os genes ausentes no Mathys que foram recuperados pela rede Hopfield.
 #
@@ -792,10 +781,11 @@ plt.tight_layout(); plt.show()
 
 
 # %% [markdown]
-# ## 17. Relatório Final do Experimento
+# ## 18. Relatório Final do Experimento
 #
 # Gera o relatório em HTML/Markdown com métricas consolidadas do experimento.
 #
+
 
 # %%
 import importlib

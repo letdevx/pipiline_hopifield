@@ -57,11 +57,12 @@ class CarregadorDadosFujita:
         print(f"[CarregadorDadosFujita] Matriz carregada: {self.X.shape}")
 
     def _selecionar_top_genes(self):
-        # O arquivo já contém apenas os top N genes na ordem correta (frequência Fujita).
-        # Re-ordenar aqui causaria mismatch com W_mathys carregado diretamente do CSV.
+        # O arquivo já contém os genes de interesse na ordem correta.
         self.ids_top = np.arange(self.X.shape[1])
         self.W0 = self.X
-        print(f"[CarregadorDadosFujita] W0 shape: {self.W0.shape}")
+        self.n_genes = self.X.shape[1]
+        print(f"[CarregadorDadosFujita] W0 shape: {self.W0.shape} ({self.n_genes} genes)")
+
 
     def _carregar_genes(self):
         print(f"[CarregadorDadosFujita] Carregando genes: {self.path_genes}")
