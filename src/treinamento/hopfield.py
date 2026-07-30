@@ -16,9 +16,9 @@ class ModernHopfieldNetwork(nn.Module):
     ---------
     beta       : temperatura inversa do softmax (maior → winner-takes-all)
     n_iters    : número de iterações da regra de atualização
-    binary     : se True, converte {0,1} ↔ {-1,+1} internamente
+    binary     : se True, aplica limiar {0,1} na saída
     threshold  : limiar para binarizar saída quando binary=True
-    patterns   : tensor com os padrões armazenados (preenchido em .store())
+    patterns   : tensor com os padrões armazenados
     """
 
     def __init__(self, beta=8.0, n_iters=1, binary=True, threshold=0.0):
@@ -30,86 +30,125 @@ class ModernHopfieldNetwork(nn.Module):
         self.register_buffer("patterns", torch.empty(0))
 
     def store(self, patterns):
-        """Armazena os padrões na rede (equivalente a hopf_tr do MATLAB).
+        """Armazena os padrões na rede.
 
         Retorna o próprio objeto para permitir encadeamento de chamadas.
         """
-        P = torch.as_tensor(np.asarray(patterns), dtype=torch.float32)
+        K = torch.as_tensor(np.asarray(patterns), dtype=torch.float32)
+
         if self.binary:
-            P = 2.0 * P - 1.0
-        device = self.patterns.device if self.patterns.numel() else torch.device("cpu")
-        self.patterns = P.to(device)
+            K = 2.0 * K - 1.0
+
+        self.patterns = K.to(torch.device("cpu"))
         print(f"[ModernHopfieldNetwork] {self.patterns.shape[0]} padrões armazenados "
-              f"(dim={self.patterns.shape[1]}, device={device})")
+              f"({self.patterns.shape[1]} genes, device=cpu)")
         return self
 
     @torch.no_grad()
     def retrieve(self, queries, batch_size=2048):
-        """Recupera o padrão mais próximo para cada query (equivalente a hopf_ts do MATLAB).
-
-        Retorna array numpy com os padrões recuperados.
-        """
+        """Recupera o padrão mais próximo para cada query."""
         if self.patterns.numel() == 0:
-            raise RuntimeError("[ModernHopfieldNetwork] Execute .store(patterns) antes de .retrieve().")
+            raise RuntimeError("[ModernHopfieldNetwork] Execute .store() antes de .retrieve().")
 
         Xi = self.patterns
         Q = torch.as_tensor(np.asarray(queries), dtype=torch.float32)
-        if self.binary:
-            Q = 2.0 * Q - 1.0
-        Q = Q.to(Xi.device)
 
-        out = torch.empty_like(Q)
+        # Allocate output tensor on CPU to prevent out-of-memory on GPU (esp. for >1GB matrices)
+        out = torch.empty((Q.shape[0], Q.shape[1]), dtype=torch.float32, device='cpu')
+
         for s in range(0, Q.shape[0], batch_size):
             x = Q[s:s + batch_size]
+            
+            if self.binary:
+                x = 2.0 * x - 1.0
+                
+            x_cpu = x.cpu()
+            
             for _ in range(self.n_iters):
-                scores = self.beta * x @ Xi.T
+                scores = self.beta * (x_cpu @ Xi.T)
                 weights = torch.softmax(scores, dim=-1)
-                x = weights @ Xi
-            out[s:s + batch_size] = x
-
-        if self.binary:
-            out = (out > self.threshold).float()
+                x_cpu = weights @ Xi
+                
+            x_out = x_cpu
+            
+            # Saída binária se solicitado
+            if self.binary:
+                x_out = (x_out > self.threshold).float()
+                
+            out[s:s + batch_size] = x_out
 
         print(f"[ModernHopfieldNetwork] Recuperação concluída: {out.shape}")
-        return out.cpu().numpy()
+        return out.numpy()
 
     def salvar(self, path):
-        """Salva hiperparâmetros e padrões em arquivo .pt para transferência entre máquinas.
-
-        Retorna o próprio objeto para permitir encadeamento de chamadas.
-        """
         if self.patterns.numel() == 0:
-            raise RuntimeError("[ModernHopfieldNetwork] Execute .store(patterns) antes de salvar.")
+            raise RuntimeError("[ModernHopfieldNetwork] Execute .store() antes de salvar.")
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         torch.save({
             "beta":      self.beta,
             "n_iters":   self.n_iters,
             "binary":    self.binary,
             "threshold": self.threshold,
-            "patterns":  self.patterns.cpu(),
+            "patterns":  self.patterns.cpu()
         }, path)
         print(f"[ModernHopfieldNetwork] Rede salva em: {path} "
-              f"({self.patterns.shape[0]} padrões × {self.patterns.shape[1]} dim)")
+              f"({self.patterns.shape[0]} padrões)")
         return self
 
     @classmethod
     def carregar(cls, path):
-        """Carrega rede treinada a partir de arquivo .pt gerado por .salvar().
-
-        Exemplo:
-            rede35 = ModernHopfieldNetwork.carregar('outputs/hopfield/rede35_treinada.pt')
-        """
         data = torch.load(path, map_location="cpu")
         rede = cls(
             beta      = data["beta"],
             n_iters   = data["n_iters"],
             binary    = data["binary"],
-            threshold = data["threshold"],
+            threshold = data["threshold"]
         )
         rede.patterns = data["patterns"]
         print(f"[ModernHopfieldNetwork] Rede carregada de: {path} "
-              f"({rede.patterns.shape[0]} padrões × {rede.patterns.shape[1]} dim)")
+              f"({rede.patterns.shape[0]} padrões)")
         return rede
+
+    def salvar_com_metadados(self, path_pt, path_meta, meta, classes=None, nc=None):
+        """Salva a rede (.pt) e o arquivo JSON de metadados (.json)."""
+        import json
+        self.salvar(path_pt)
+
+        meta_serializavel = [list(item) if isinstance(item, (tuple, list, np.ndarray)) else item for item in meta]
+        n_patterns = self.patterns.shape[0] if self.patterns.numel() else 0
+        n_genes = self.patterns.shape[1] if self.patterns.numel() else 0
+
+        info = {
+            "meta": meta_serializavel,
+            "classes": classes if classes is not None else [1, 2, 3, 4, 5, 6, 7],
+            "nc": nc if nc is not None else (n_patterns // len(classes) if classes else 30),
+            "n_patterns": n_patterns,
+            "n_genes": n_genes
+        }
+
+        os.makedirs(os.path.dirname(os.path.abspath(path_meta)), exist_ok=True)
+        with open(path_meta, "w", encoding="utf-8") as f:
+            json.dump(info, f, indent=2)
+
+        print(f"[ModernHopfieldNetwork] Metadados salvos em: {path_meta} "
+              f"({n_patterns} padrões, {n_genes} genes)")
+        return self
+
+    @classmethod
+    def carregar_com_metadados(cls, path_pt, path_meta):
+        """Carrega a rede (.pt) e o arquivo JSON de metadados (.json)."""
+        import json
+        rede = cls.carregar(path_pt)
+
+        with open(path_meta, "r", encoding="utf-8") as f:
+            meta_json = json.load(f)
+
+        meta_eval = [tuple(x) for x in meta_json["meta"]]
+
+        print(f"[ModernHopfieldNetwork] Metadados carregados de: {path_meta} "
+              f"(classes={meta_json.get('classes')}, nc={meta_json.get('nc')}, n_patterns={meta_json.get('n_patterns')})")
+        return rede, meta_eval, meta_json
+
 
     def hopf_tr(self, patterns):
         """Alias compatível com o script MATLAB original."""
@@ -123,13 +162,13 @@ class ModernHopfieldNetwork(nn.Module):
 
     def __repr__(self):
         n_pad = self.patterns.shape[0] if self.patterns.numel() else 0
-        dim = self.patterns.shape[1] if self.patterns.numel() else 0
+        dim   = self.patterns.shape[1] if self.patterns.numel() else 0
         return (
             f"ModernHopfieldNetwork(\n"
             f"  beta       = {self.beta}\n"
             f"  n_iters    = {self.n_iters}\n"
             f"  binary     = {self.binary}\n"
             f"  threshold  = {self.threshold}\n"
-            f"  padrões    = {n_pad} × {dim}\n"
+            f"  patterns   = {n_pad} × {dim}\n"
             f")"
         )

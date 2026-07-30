@@ -5,6 +5,7 @@ from .projetor_sweep import ProjetorSWeP, ProjetorSWeePR
 from .extrator_padroes import ExtratorPadroesSubcluster
 from .avaliador_hopfield import AvaliadorHopfield
 from .gerador_relatorio import GeradorRelatorio
+from .estrategias_clusterizacao import EstrategiaKMeansDinamico, EstrategiaHDBSCAN, EstrategiaKMeansFixo
 
 __all__ = [
     "GeradorConjuntoTreinamento",
@@ -15,4 +16,7 @@ __all__ = [
     "ExtratorPadroesSubcluster",
     "AvaliadorHopfield",
     "GeradorRelatorio",
+    "EstrategiaKMeansDinamico",
+    "EstrategiaHDBSCAN",
+    "EstrategiaKMeansFixo",
 ]

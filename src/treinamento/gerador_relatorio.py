@@ -1,7 +1,6 @@
 import base64
 import io
 import os
-from datetime import datetime
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -25,6 +24,7 @@ class GeradorRelatorio:
         self._genes_ausentes = None
         self._mae_05  = None
         self._mae_bin = None
+        self._figuras = []  # [(secao, titulo, img_b64), ...]
 
     def adicionar_metadados(self, **kwargs):
         self._metadados.update(kwargs)
@@ -39,6 +39,27 @@ class GeradorRelatorio:
         self._mae_05  = mae_05
         self._mae_bin = mae_bin
         return self
+
+    def adicionar_figura(self, titulo, fig, secao="Visualizações"):
+        img_b64 = self._fig_para_base64(fig)
+        self._figuras.append((secao, titulo, img_b64))
+        return self
+
+    def _gerar_figuras_html(self):
+        if not self._figuras:
+            return ""
+        secoes = {}
+        for sec, titulo, img in self._figuras:
+            secoes.setdefault(sec, []).append((titulo, img))
+        blocos = []
+        for sec, items in secoes.items():
+            cards = "".join(
+                f'<div class="card"><h3>{t}</h3>'
+                f'<img src="data:image/png;base64,{i}"></div>'
+                for t, i in items
+            )
+            blocos.append(f"<h2>{sec}</h2><div class='grid'>{cards}</div>")
+        return "\n".join(blocos)
 
     def gerar(self):
         os.makedirs(self.out_dir, exist_ok=True)
@@ -167,11 +188,12 @@ class GeradorRelatorio:
             tabela_ga = f"<table>{cab_ga}{''.join(lins_ga)}</table>"
 
             import numpy as _np
-            ref  = df_ga["ref_fujita"].values
-            r05  = df_ga["rec_05"].values
-            rbin = df_ga["rec_bin"].values
+            ref   = df_ga["ref_fujita"].values
+            r05   = df_ga["rec_05"].values
+            rbin  = df_ga["rec_bin"].values
+            freqs = df_ga["frequencia"].values
 
-            fig_ga, axes_ga = plt.subplots(1, 2, figsize=(12, 5))
+            fig_ga, axes_ga = plt.subplots(1, 3, figsize=(18, 5))
             ax = axes_ga[0]
             ax.scatter(ref, r05,  alpha=0.7, label="Mathys 0.5", color="steelblue", s=30)
             ax.scatter(ref, rbin, alpha=0.7, label="Mathys bin", color="tomato", s=30, marker="s")
@@ -187,6 +209,22 @@ class GeradorRelatorio:
             ax.set_xlabel("Erro (reconstruído − referência)"); ax.set_ylabel("Número de genes")
             ax.set_title("Distribuição do erro"); ax.legend()
 
+            ax = axes_ga[2]
+            n_show = min(20, len(ref))
+            ordem  = _np.argsort(freqs)[::-1][:n_show]
+            y_pos  = _np.arange(n_show)
+            h_bar  = 0.25
+            gene_names = df_ga["gene"].values if "gene" in df_ga.columns else _np.arange(len(ref)).astype(str)
+            ax.barh(y_pos + h_bar, ref[ordem],  h_bar, label="Fujita (ref)", color="gray",      alpha=0.8)
+            ax.barh(y_pos,         r05[ordem],  h_bar, label="Mathys 0.5",   color="steelblue", alpha=0.8)
+            ax.barh(y_pos - h_bar, rbin[ordem], h_bar, label="Mathys bin",   color="tomato",    alpha=0.8)
+            ax.set_yticks(y_pos)
+            ax.set_yticklabels([gene_names[i][:14] for i in ordem], fontsize=8)
+            ax.set_xlabel("Taxa de ativação")
+            ax.set_title(f"Top-{n_show} genes ausentes (por frequência)")
+            ax.legend(fontsize=8)
+            ax.set_xlim(0, 1.1)
+
             img_ga = self._fig_para_base64(fig_ga)
             plt.close(fig_ga)
 
@@ -195,12 +233,11 @@ class GeradorRelatorio:
   <p>Genes do top-5000 Fujita ausentes no Mathys (preenchidos com sentinela 0.5).</p>
   <p>MAE cenário 0.5 vs Fujita: <strong>{self._mae_05:.4f}</strong> &nbsp;|&nbsp;
      MAE cenário bin vs Fujita: <strong>{self._mae_bin:.4f}</strong></p>
-  <img src="data:image/png;base64,{img_ga}" style="max-width:960px">
-  <h3>Top-20 genes por frequência</h3>
-  {tabela_ga}"""
+  <img src="data:image/png;base64,{img_ga}" style="max-width:1200px">"""
+
+        figuras_html = self._gerar_figuras_html()
 
         # Monta HTML final
-        data_geracao = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         html = f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -211,7 +248,6 @@ class GeradorRelatorio:
 </head>
 <body>
   <h1>Relatório: {self.nome_experimento}</h1>
-  <p>Gerado em: <strong>{data_geracao}</strong></p>
 
   <h2>Metadados do Experimento</h2>
   {meta_html}
@@ -224,6 +260,7 @@ class GeradorRelatorio:
 
   <h2>Métricas por Classe</h2>
   {"".join(per_class_html)}
+  {figuras_html}
   {genes_html}
 </body>
 </html>"""

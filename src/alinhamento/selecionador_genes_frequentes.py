@@ -16,7 +16,6 @@ class SelecionadorGenesFrequentes:
         self.path_txt     = path_txt
         self.n            = n
         self.df_resultado = None
-        self._data        = None
 
     def calcular(self, out_csv=None):
         if out_csv and os.path.exists(out_csv):
@@ -61,19 +60,21 @@ class SelecionadorGenesFrequentes:
         print(f"[SelecionadorGenesFrequentes] Salvo em: {out_csv}")
         return self
 
-    def filtrar_matriz(self, out_csv):
+    def filtrar_matriz(self, in_csv, out_csv):
         """Salva nova matriz contendo apenas as colunas dos top N genes selecionados."""
-        if self.df_resultado is None or self._data is None:
+        if self.df_resultado is None:
             raise RuntimeError("Execute .calcular() antes de filtrar.")
 
-        coluna_celulas = self._data.columns[0]
-        lista_genes    = self.df_resultado["gene"].to_list()
-        colunas_validas = [coluna_celulas] + [c for c in lista_genes if c in self._data.columns]
+        with open(in_csv, encoding='utf-8') as fh:
+            header = fh.readline().strip('\n').strip('\r').split(',')
 
-        df_filtrado = self._data.select(colunas_validas)
+        coluna_celulas = header[0]
+        lista_genes    = self.df_resultado["gene"].to_list()
+        colunas_validas = [coluna_celulas] + [c for c in lista_genes if c in header]
+
         os.makedirs(os.path.dirname(out_csv), exist_ok=True)
-        df_filtrado.write_csv(out_csv)
-        print(f"[SelecionadorGenesFrequentes] Matriz filtrada salva em: {out_csv} ({len(df_filtrado.columns)} colunas)")
+        pl.scan_csv(in_csv).select(colunas_validas).sink_csv(out_csv)
+        print(f"[SelecionadorGenesFrequentes] Matriz filtrada salva em: {out_csv} ({len(colunas_validas)} colunas)")
         return self
 
     def __repr__(self):
