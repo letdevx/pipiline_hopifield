@@ -73,9 +73,24 @@ class SelecionadorGenesFrequentes:
         colunas_validas = [coluna_celulas] + [c for c in lista_genes if c in header]
 
         os.makedirs(os.path.dirname(out_csv), exist_ok=True)
-        pl.scan_csv(in_csv).select(colunas_validas).sink_csv(out_csv)
-        print(f"[SelecionadorGenesFrequentes] Matriz filtrada salva em: {out_csv} ({len(colunas_validas)} colunas)")
+        if os.path.exists(out_csv):
+            os.remove(out_csv)
+
+        if str(out_csv).endswith('.npy'):
+            # Para exportação binária rápida (.npy), lê via polars/pandas e salva numpy float32
+            df_filtered = pl.read_csv(in_csv, columns=colunas_validas)
+            # Remove a primeira coluna se for identificador não-numérico ou mantém se já for genes
+            if df_filtered.columns[0] == coluna_celulas and not df_filtered.dtypes[0].is_numeric():
+                arr = df_filtered.select(colunas_validas[1:]).to_numpy().astype(np.float32)
+            else:
+                arr = df_filtered.to_numpy().astype(np.float32)
+            np.save(out_csv, arr)
+            print(f"[SelecionadorGenesFrequentes] Matriz filtrada salva em binário: {out_csv} ({arr.shape})")
+        else:
+            pl.scan_csv(in_csv).select(colunas_validas).sink_csv(out_csv)
+            print(f"[SelecionadorGenesFrequentes] Matriz filtrada salva em: {out_csv} ({len(colunas_validas)} colunas)")
         return self
+
 
     def __repr__(self):
         n = len(self.df_resultado) if self.df_resultado is not None else 'não calculado'

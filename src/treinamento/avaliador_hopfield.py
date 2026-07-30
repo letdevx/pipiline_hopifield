@@ -31,7 +31,7 @@ class AvaliadorHopfield:
     """
 
     def __init__(self, padroes, classes, nc=10, nomes_classes=None, meta=None):
-        self.padroes = np.asarray(padroes, dtype=np.float64)
+        self.padroes = np.asarray(padroes, dtype=np.float32)
         self.classes = list(classes)
         self.nc = nc
         self.nomes_classes = nomes_classes
@@ -58,21 +58,38 @@ class AvaliadorHopfield:
         classes_arr = np.array(self.classes)
         labels = np.asarray(labels, dtype=int)
 
-        print("[AvaliadorHopfield] Mapeando padrões recuperados para classes...")
-        perf_f = self.padroes.astype(np.float64)
-        W_f = np.asarray(Wrecuperado, dtype=np.float64)
-
-        a2 = (W_f ** 2).sum(axis=1, keepdims=True)
+        print("[AvaliadorHopfield] Mapeando padrões recuperados para classes (processamento em lotes em float32)...")
+        n_obs = Wrecuperado.shape[0]
+        n_genes = Wrecuperado.shape[1]
+        perf_f = self.padroes.astype(np.float32, copy=False)
         b2 = (perf_f ** 2).sum(axis=1, keepdims=True).T
-        idx_proto = (a2 + b2 - 2 * (W_f @ perf_f.T)).argmin(axis=1)
+
+        idx_proto_list = []
+        hamming_list = []
+        chunk_size = 2000
+
+        for start in range(0, n_obs, chunk_size):
+            end = min(start + chunk_size, n_obs)
+            W_chunk_f = np.asarray(Wrecuperado[start:end], dtype=np.float32)
+            a2_chunk = (W_chunk_f ** 2).sum(axis=1, keepdims=True)
+            sq_dist_chunk = a2_chunk + b2 - 2 * (W_chunk_f @ perf_f.T)
+            idx_chunk = sq_dist_chunk.argmin(axis=1)
+
+            min_sq_dist = sq_dist_chunk[np.arange(end - start), idx_chunk]
+            hamming_chunk = np.maximum(0.0, min_sq_dist) / n_genes
+
+            idx_proto_list.append(idx_chunk)
+            hamming_list.append(hamming_chunk)
+
+        idx_proto = np.concatenate(idx_proto_list)
+        hamming = np.concatenate(hamming_list)
+        self.idx_proto = idx_proto
+
         if self._pattern_classes is not None:
             pred = self._pattern_classes[idx_proto]
         else:
             pred = classes_arr[idx_proto // self.nc]
 
-        # Taxa de reconstrução: fração com distância de Hamming = 0 ao protótipo mais próximo
-        prototipos = perf_f[idx_proto]
-        hamming    = (W_f != prototipos).mean(axis=1)
 
         mask = np.isin(labels, self.classes)
         self.y_true = labels[mask]

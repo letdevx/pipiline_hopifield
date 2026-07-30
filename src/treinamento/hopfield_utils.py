@@ -20,7 +20,7 @@ def princomp_(W):
     Retorna a matriz de loadings (d x d) com componentes nas colunas,
     em ordem decrescente de variância explicada.
     """
-    W = np.asarray(W, dtype=np.float64)
+    W = np.asarray(W, dtype=np.float32)
     _, _, Vt = np.linalg.svd(W, full_matrices=False)
     return Vt.T
 
@@ -34,8 +34,8 @@ def closervects(W, Wi, k, distance="euclidean"):
 
     distance: "euclidean" (padrão) ou número para Lk-norm.
     """
-    W = np.asarray(W, dtype=np.float64)
-    Wi = np.asarray(Wi, dtype=np.float64)
+    W = np.asarray(W, dtype=np.float32)
+    Wi = np.asarray(Wi, dtype=np.float32)
     if Wi.ndim == 1:
         Wi = Wi[None, :]
     _, mm = W.shape

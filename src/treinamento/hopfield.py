@@ -45,37 +45,34 @@ class ModernHopfieldNetwork(nn.Module):
         return self
 
     @torch.no_grad()
-    def retrieve(self, queries, batch_size=2048):
+    def retrieve(self, queries, batch_size=1024):
         """Recupera o padrão mais próximo para cada query."""
         if self.patterns.numel() == 0:
             raise RuntimeError("[ModernHopfieldNetwork] Execute .store() antes de .retrieve().")
 
-        Xi = self.patterns
-        Q = torch.as_tensor(np.asarray(queries), dtype=torch.float32)
+        Xi = self.patterns.to(dtype=torch.float32, device='cpu')
+        queries_np = np.asarray(queries, dtype=np.float32)
+        n_queries, n_features = queries_np.shape
 
-        # Allocate output tensor on CPU to prevent out-of-memory on GPU (esp. for >1GB matrices)
-        out = torch.empty((Q.shape[0], Q.shape[1]), dtype=torch.float32, device='cpu')
+        # Allocate output tensor on CPU
+        out = torch.empty((n_queries, n_features), dtype=torch.float32, device='cpu')
 
-        for s in range(0, Q.shape[0], batch_size):
-            x = Q[s:s + batch_size]
-            
+        for s in range(0, n_queries, batch_size):
+            chunk_np = queries_np[s:s + batch_size]
+            x = torch.from_numpy(chunk_np).to(device='cpu')
+
             if self.binary:
                 x = 2.0 * x - 1.0
-                
-            x_cpu = x.cpu()
-            
+
             for _ in range(self.n_iters):
-                scores = self.beta * (x_cpu @ Xi.T)
+                scores = self.beta * (x @ Xi.T)
                 weights = torch.softmax(scores, dim=-1)
-                x_cpu = weights @ Xi
-                
-            x_out = x_cpu
-            
-            # Saída binária se solicitado
+                x = weights @ Xi
+
             if self.binary:
-                x_out = (x_out > self.threshold).float()
-                
-            out[s:s + batch_size] = x_out
+                x = (x > self.threshold).float()
+
+            out[s:s + batch_size] = x
 
         print(f"[ModernHopfieldNetwork] Recuperação concluída: {out.shape}")
         return out.numpy()

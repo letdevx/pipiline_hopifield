@@ -44,9 +44,11 @@
 
 # %%
 import sys, os
+import gc
 import importlib
 import numpy as np
 import pandas as pd
+import polars as pl
 import torch
 import anndata as ad
 import matplotlib.pyplot as plt
@@ -195,9 +197,10 @@ validador.validar()
 #
 
 # %%
+path_top_5000 = os.path.join(OUT_TOP_GENES, 'top_5000_frequentes.csv')
 path_top_expandidos = os.path.join(OUT_TOP_GENES, 'genes_expandidos_frequentes.csv')
-path_f_expandido = os.path.join(OUT_TREINAMENTO, 'adataF_binarizado_alinhado_expandido.txt')
-path_m_expandido = os.path.join(OUT_TREINAMENTO, 'adataM_binarizado_alinhado_expandido.txt')
+path_f_expandido = os.path.join(OUT_TREINAMENTO, 'adataF_binarizado_alinhado_expandido.npy')
+path_m_expandido = os.path.join(OUT_TREINAMENTO, 'adataM_binarizado_alinhado_expandido.npy')
 
 path_f_txt = alinhador.path_f_alinhado.replace('.h5ad', '.txt')
 path_m_txt = alinhador.path_m_alinhado.replace('.h5ad', '.txt')
@@ -205,12 +208,12 @@ path_m_txt = alinhador.path_m_alinhado.replace('.h5ad', '.txt')
 import polars as pl
 print(f'=== Calculando Córtex Expandido (Top 5000 + Exclusivos do Fujita) ===')
 
-selecionador = SelecionadorGenesFrequentes(path_f_txt, n=5000).calcular(path_top_expandidos)
+selecionador = SelecionadorGenesFrequentes(path_f_txt, n=5000).calcular(path_top_5000)
 top_5000_genes = selecionador.df_resultado['gene'].to_list()
 
 tracking_path = os.path.join(OUT_ALINHAMENTO, 'tracking_genes_adicionados_mathys.csv')
 df_tracking = pl.read_csv(tracking_path)
-exclusivos_fujita = df_tracking.filter(pl.col('presente_mathys') == False)['gene_name'].to_list()
+exclusivos_fujita = df_tracking.filter(pl.col('presente_mathys') == False)['ensembl_id'].to_list()
 
 genes_unificados = list(set(top_5000_genes).union(set(exclusivos_fujita)))
 print(f'  Genes Top 5.000 padrão: {len(top_5000_genes)}')
@@ -228,6 +231,7 @@ selecionador.filtrar_matriz(path_m_txt, path_m_expandido)
 print('\nVerificando cobertura no Mathys nas Dimensões Expandidas:')
 cobertura = AnalisadorCobertura(path_top_expandidos, leitor.map_f, leitor.map_m)
 cobertura.analisar(out_csv=os.path.join(OUT_TREINAMENTO, 'cobertura_mathys_expandida.csv'))
+
 
 
 # %%
@@ -291,7 +295,10 @@ print(carregador)
 # Mathys — dados para imputação cross-dataset
 # Genes ausentes no Mathys foram preenchidos com 0.5 (sentinela) pelo Alinhador.
 print(f'[Mathys] Carregando matriz expandida ({len(genes_unificados)} genes)...')
-W_mathys = pl.read_csv(path_m_expandido).to_numpy().astype(np.float32)
+if str(path_m_expandido).endswith('.npy'):
+    W_mathys = np.load(path_m_expandido).astype(np.float32, copy=False)
+else:
+    W_mathys = pl.read_csv(path_m_expandido).to_numpy().astype(np.float32)
 print(f'[Mathys] W_mathys shape: {W_mathys.shape}')
 
 print('[Mathys] Carregando rótulos...')
@@ -521,8 +528,8 @@ Wtes   = rede35.retrieve(Wk4[:n_test], batch_size=4096)
 print(f'hopf_ts(Wk4[:{n_test}], rede35): shape {Wtes.shape}')
 
 
-perf35_f = perf35.astype(np.float64)
-Wtes_f   = Wtes.astype(np.float64)
+perf35_f = perf35.astype(np.float32, copy=False)
+Wtes_f   = Wtes.astype(np.float32, copy=False)
 a2 = (Wtes_f ** 2).sum(axis=1, keepdims=True)
 b2 = (perf35_f ** 2).sum(axis=1, keepdims=True).T
 idx_proto = (a2 + b2 - 2 * (Wtes_f @ perf35_f.T)).argmin(axis=1)
@@ -554,8 +561,10 @@ plt.tight_layout(); plt.show()
 #
 
 # %%
+import gc
+
 print('=== Auto-imputação: Fujita → Fujita ===')
-Wrecuperado_f = rede35.retrieve(carregador.W0, batch_size=4096)
+Wrecuperado_f = rede35.retrieve(carregador.W0, batch_size=2048)
 
 avaliador_f = AvaliadorHopfield(
     padroes = perf35,
@@ -566,6 +575,9 @@ avaliador_f = AvaliadorHopfield(
 avaliador_f.avaliar(Wrecuperado_f, clo).plotar(titulo='Confusão — rede35 (Fujita → Fujita)')
 print(avaliador_f)
 
+del Wrecuperado_f
+gc.collect()
+
 
 # %% [markdown]
 # ## 13. Imputação cross-dataset — Mathys com sentinela 0.5
@@ -574,24 +586,37 @@ print(avaliador_f)
 #
 
 # %%
+import gc
+
 print('=== Imputação cross-dataset: Mathys ===')
 
 print('\n--- Processo de Imputação ---')
 print('Usando template Fujita para preencher buracos do Mathys (np.where(== 0.5))')
 
-Wrecuperado_m = rede35.retrieve(W_mathys, batch_size=4096)
+Wrecuperado_m = rede35.retrieve(W_mathys, batch_size=1024)
 
-genes_faltantes_qtd = np.sum(W_mathys == 0.5)
-W_mathys_imputado = np.where(W_mathys == 0.5, Wrecuperado_m, W_mathys)
-genes_resolvidos_qtd = np.sum(W_mathys_imputado == 0.5)
+mask_sentinela = (W_mathys == 0.5)
+genes_faltantes_qtd = int(mask_sentinela.sum())
+
+mask_nao_sentinela = ~mask_sentinela
+diff_frac = float((W_mathys[mask_nao_sentinela] != Wrecuperado_m[mask_nao_sentinela]).mean())
+
+W_mathys_imputado = np.where(mask_sentinela, Wrecuperado_m, W_mathys)
+genes_resolvidos_qtd = int((W_mathys_imputado == 0.5).sum())
 
 print(f'Genes faltantes originais Mathys (0.5): {genes_faltantes_qtd}')
 print(f'Genes faltantes após Imputação: {genes_resolvidos_qtd}')
+
+# Guarda contagem de ativações para visualização na Seção 17
+recuperados_count = np.sum(W_mathys_imputado != 0.5, axis=0)
 
 os.makedirs(OUT_TOP_GENES, exist_ok=True)
 PATH_IMPUTADO = os.path.join(OUT_TOP_GENES, 'X_mathys_IMPUTADO_rede35.npy')
 np.save(PATH_IMPUTADO, W_mathys_imputado)
 print(f'Matriz Mathys Imputada Exportada para: {PATH_IMPUTADO}')
+
+del W_mathys_imputado
+gc.collect()
 
 avaliador_m = AvaliadorHopfield(
     padroes = perf35,
@@ -602,6 +627,10 @@ avaliador_m = AvaliadorHopfield(
 avaliador_m.avaliar(Wrecuperado_m, clo_m).plotar(titulo='Confusão — rede35 (Mathys → Fujita, 0.5)')
 print(avaliador_m)
 
+# Liberar Wrecuperado_m para economizar 2GB de RAM antes da Seção 14
+del Wrecuperado_m
+gc.collect()
+
 
 # %% [markdown]
 # ## 14. Imputação cross-dataset — Mathys binário puro (0.5 → 0)
@@ -610,14 +639,20 @@ print(avaliador_m)
 #
 
 # %%
-W_mathys_bin = W_mathys.copy()
-n_meio = int((W_mathys_bin == 0.5).sum())
-W_mathys_bin[W_mathys_bin == 0.5] = 0.0
+import gc
+
+mask_sentinela = (W_mathys == 0.5)
+n_meio = int(mask_sentinela.sum())
+
+W_mathys_bin = np.where(mask_sentinela, 0.0, W_mathys)
 print(f'Valores convertidos de 0.5 → 0: {n_meio}')
 print(f'Valores únicos após conversão: {np.unique(W_mathys_bin)}')
 
 print('\n=== Imputação cross-dataset: Mathys (binário puro, sem 0.5) ===')
-Wrecuperado_m_bin = rede35.retrieve(W_mathys_bin, batch_size=4096)
+Wrecuperado_m_bin = rede35.retrieve(W_mathys_bin, batch_size=1024)
+
+del W_mathys_bin
+gc.collect()
 
 avaliador_m_bin = AvaliadorHopfield(
     padroes = perf35,
@@ -628,6 +663,9 @@ avaliador_m_bin = AvaliadorHopfield(
 avaliador_m_bin.avaliar(Wrecuperado_m_bin, clo_m).plotar(titulo='Confusão — rede35 (Mathys binário puro)')
 print(avaliador_m_bin)
 
+del Wrecuperado_m_bin
+gc.collect()
+
 
 # %% [markdown]
 # ## 15. Diagnóstico: mapeamento de classes Mathys → protótipos Fujita
@@ -635,11 +673,9 @@ print(avaliador_m_bin)
 
 # %%
 print("=== Diagnóstico: distribuição de protótipos selecionados por classe Mathys ===\n")
-perf_f64 = perf35.astype(np.float64)
-Wm_f64   = Wrecuperado_m.astype(np.float64)
-a2 = (Wm_f64 ** 2).sum(axis=1, keepdims=True)
-b2 = (perf_f64 ** 2).sum(axis=1, keepdims=True).T
-idx_proto_m = (a2 + b2 - 2 * (Wm_f64 @ perf_f64.T)).argmin(axis=1)
+
+# Reutiliza os protótipos mais próximos já calculados em lotes pelo avaliador_m
+idx_proto_m = avaliador_m.idx_proto
 pred_m = np.array([meta_eval[i][0] for i in idx_proto_m])
 
 classes_eval = [1, 2, 3, 4, 5, 6, 7]
@@ -654,9 +690,8 @@ for true_c, pred_c in zip(clo_m, pred_m):
 print("Mapeamento Mathys → protótipos Fujita (contagens):")
 display(CM_diag)
 
-mask_nao_sentinela = (W_mathys != 0.5)
-diff_frac = float((W_mathys[mask_nao_sentinela] != Wrecuperado_m[mask_nao_sentinela]).mean())
 print(f"\nFração de genes não-sentinela alterados após retrieve(): {diff_frac:.4f}")
+
 
 
 # %% [markdown]
@@ -765,8 +800,6 @@ print(f'DBSCAN ARI (Fujita t-SNE 2D): {ari:.4f}')
 
 # %%
 # Metrics por gene para os genes ausentes
-genes_ausentes_mask = (W_mathys == 0.5)
-recuperados_count = np.sum(W_mathys_imputado != 0.5, axis=0)
 print(f'Total de células com genes recuperados: {np.sum(recuperados_count > 0)}')
 
 
@@ -789,8 +822,34 @@ plt.tight_layout(); plt.show()
 
 # %%
 import importlib
-from treinamento import GeradorRelatorio
-relatorio = GeradorRelatorio(out_dir=OUT_RELATORIO)
-relatorio.gerar(avaliador_f=avaliador_f, avaliador_m=avaliador_m, avaliador_m_bin=avaliador_m_bin)
+import treinamento.gerador_relatorio as _gr_mod
+importlib.reload(_gr_mod)
+from treinamento.gerador_relatorio import GeradorRelatorio
+
+relatorio = GeradorRelatorio(
+    out_dir          = OUT_RELATORIO,
+    nome_experimento = 'experimento_dataset_expandido_11k',
+)
+
+relatorio.adicionar_metadados(
+    titulo           = 'Pipeline Hopfield Dataset Expandido (~11.000 genes)',
+    modelo           = 'Modern Hopfield Network (Ramsauer et al., 2020)',
+    beta             = rede35.beta,
+    n_iters          = rede35.n_iters,
+    binary           = rede35.binary,
+    threshold        = rede35.threshold,
+    n_padroes        = int(rede35.patterns.shape[0]),
+    n_genes          = int(perf35.shape[1]),
+    n_classes        = 7,
+    nc_subclusters   = NC,
+    seed             = SEED,
+)
+
+relatorio.adicionar_avaliador('Fujita → Fujita',       avaliador_f)
+relatorio.adicionar_avaliador('Mathys → Fujita (0.5)', avaliador_m)
+relatorio.adicionar_avaliador('Mathys → Fujita (bin)', avaliador_m_bin)
+
+relatorio.gerar()
+print(relatorio)
 print('Relatório final gerado com sucesso!')
 

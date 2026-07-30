@@ -1,0 +1,32 @@
+# ==========================================
+# Configurações Internas e Cache do Obsidian
+# ==========================================
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+.obsidian/indexed*
+.obsidian/backups/
+.obsidian/plugins/*/data.json.bak
+
+# ==========================================
+# Arquivos de Sistema Operacional
+# ==========================================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+desktop.ini
+*~
+.fuse_hidden*
+
+# ==========================================
+# Arquivos Temporários de IA e IDEs
+# ==========================================
+.vscode/
+.idea/
+.claude/
+*.tmp
+*.log

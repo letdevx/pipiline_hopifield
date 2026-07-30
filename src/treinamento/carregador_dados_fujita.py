@@ -53,7 +53,10 @@ class CarregadorDadosFujita:
 
     def _carregar_matriz(self):
         print(f"[CarregadorDadosFujita] Carregando matriz: {self.path_matriz}")
-        self.X = pd.read_csv(self.path_matriz).to_numpy(dtype=np.float32)
+        if str(self.path_matriz).endswith('.npy'):
+            self.X = np.load(self.path_matriz).astype(np.float32, copy=False)
+        else:
+            self.X = pd.read_csv(self.path_matriz).to_numpy(dtype=np.float32)
         print(f"[CarregadorDadosFujita] Matriz carregada: {self.X.shape}")
 
     def _selecionar_top_genes(self):
