@@ -624,7 +624,7 @@ avaliador_m = AvaliadorHopfield(
     nc=30,
     meta    = meta_eval,
 )
-avaliador_m.avaliar(Wrecuperado_m, clo_m).plotar(titulo='Confusão — rede35 (Mathys → Fujita, 0.5)')
+avaliador_m.avaliar(Wrecuperado_m, clo_m).plotar(titulo='Confusão — rede35 (Modelo Fujita → Mathys, Sentinela 0.5)')
 print(avaliador_m)
 
 # Liberar Wrecuperado_m para economizar 2GB de RAM antes da Seção 14
@@ -660,7 +660,7 @@ avaliador_m_bin = AvaliadorHopfield(
     nc=30,
     meta    = meta_eval,
 )
-avaliador_m_bin.avaliar(Wrecuperado_m_bin, clo_m).plotar(titulo='Confusão — rede35 (Mathys binário puro)')
+avaliador_m_bin.avaliar(Wrecuperado_m_bin, clo_m).plotar(titulo='Confusão — rede35 (Modelo Fujita → Mathys, Binário Puro)')
 print(avaliador_m_bin)
 
 del Wrecuperado_m_bin
@@ -687,7 +687,7 @@ for true_c, pred_c in zip(clo_m, pred_m):
     if true_c in classes_eval and pred_c in classes_eval:
         CM_diag.loc[true_c, pred_c] += 1
 
-print("Mapeamento Mathys → protótipos Fujita (contagens):")
+print("Mapeamento Mathys (Real) → Protótipos Modelo Fujita (Predito):")
 display(CM_diag)
 
 print(f"\nFração de genes não-sentinela alterados após retrieve(): {diff_frac:.4f}")
@@ -729,10 +729,10 @@ fig, axes = plt.subplots(3, 2, figsize=(14, 18))
 
 avaliador_f.plotar(    titulo='Fujita → Fujita (contagens)',          ax=axes[0, 0])
 avaliador_f.plotar(    titulo='Fujita → Fujita (normalizada)',         ax=axes[0, 1], normalizado=True)
-avaliador_m.plotar(    titulo='Mathys → Fujita 0.5 (contagens)',       ax=axes[1, 0])
-avaliador_m.plotar(    titulo='Mathys → Fujita 0.5 (normalizada)',     ax=axes[1, 1], normalizado=True)
-avaliador_m_bin.plotar(titulo='Mathys → Fujita binário (contagens)',   ax=axes[2, 0])
-avaliador_m_bin.plotar(titulo='Mathys → Fujita binário (normalizada)', ax=axes[2, 1], normalizado=True)
+avaliador_m.plotar(    titulo='Fujita → Mathys 0.5 (contagens)',       ax=axes[1, 0])
+avaliador_m.plotar(    titulo='Fujita → Mathys 0.5 (normalizada)',     ax=axes[1, 1], normalizado=True)
+avaliador_m_bin.plotar(titulo='Fujita → Mathys binário (contagens)',   ax=axes[2, 0])
+avaliador_m_bin.plotar(titulo='Fujita → Mathys binário (normalizada)', ax=axes[2, 1], normalizado=True)
 
 plt.suptitle('Matrizes de Confusão — rede35', fontsize=14, y=1.01)
 plt.tight_layout()
