@@ -21,9 +21,9 @@ O sistema de **Pipeline Hopfield Expandido** foi desenhado com base em uma arqui
 
 ```mermaid
 graph TD
-    subgraph Presentation["Camada de Apresentação & Execução"]
-        NB["pipeline_hopfield_expandido.ipynb"]
-        PY["executar_mathys_expandido.py"]
+    subgraph Presentation["Camada de Apresentação & Execução (Controle de Experimentos)"]
+        NB11K["pipeline_hopfield_expandido (.ipynb / .py)<br/>Seleção Diferencial ~11k Genes"]
+        NB36K["pipeline_hopfield_completo_36k (.ipynb / .py)<br/>Genoma Completo 36.591 Genes (ADR 007)"]
     end
 
     subgraph Preprocessing["Camada de Pré-processamento"]
@@ -34,7 +34,7 @@ graph TD
         LEIT["src/alinhamento/leitor_features.py"]
         SOBR["src/alinhamento/analisador_sobreposicao.py"]
         ALIN["src/alinhamento/alinhador.py<br/>(Alinhamento Ensembl + Sentinela 0.5)"]
-        SELE["src/alinhamento/selecionador_genes_frequentes.py"]
+        SELE["src/alinhamento/selecionador_genes_diferenciais.py<br/>(Seleção Diferencial χ² Top 5k)"]
     end
 
     subgraph Training["Camada de Treinamento & Imputação Associativa"]
@@ -66,7 +66,8 @@ Define os caminhos absolutos e relativos para arquivos de dados brutos (`.h5ad`)
 - **`analisador_sobreposicao.py` (`AnalisadorSobreposicao`)**: Mapeia a interseção e os genes exclusivos de cada dataset baseando-se no Ensembl ID.
 - **`alinhador.py` (`Alinhador`)**: Realinha as matrizes binarizadas para a ordem de genes canônica do Fujita. Para o dataset Mathys, genes inexistentes no seu genoma nativo recebem o **[[03_Conhecimento/sentinela_meio_genes_ausentes|valor sentinela neutro 0.5]]**. Veja **[[04_Recursos/adrs/adr_002_sentinela_meio_genes_ausentes|ADR 002]]**.
 - **`validador_alinhamento.py` (`ValidadorAlinhamento`)**: Valida programaticamente se os genes alinhados em ambos os datasets estão na mesma ordem Ensembl.
-- **`selecionador_genes_frequentes.py` (`SelecionadorGenesFrequentes`)**: Calcula o suporte de presença dos genes e seleciona o subconjunto expandido de ~11.000 genes (Top 5.000 Fujita + ~6.000 genes exclusivos nativos do Fujita ausentes no Mathys). Veja **[[04_Recursos/adrs/adr_003_expansao_espaco_genico_11k|ADR 003]]**.
+- **`selecionador_genes_frequentes.py` (`SelecionadorGenesFrequentes`)**: Módulo original que calcula o suporte simples de presença dos genes (legado).
+- **`selecionador_genes_diferenciais.py` (`SelecionadorGenesDiferenciais`)**: Aplica o teste estatístico de Qui-Quadrado ($\chi^2$) entre a expressão binarizada e os rótulos celulares (`clo`), selecionando os Top 5.000 genes de maior ganho de informação biológica (sem ruído de genes constitutivos) e unindo-os aos ~6.000 genes exclusivos nativos do Fujita (espaço expandido de ~11.000 genes). Veja **[[04_Recursos/adrs/adr_006_selecao_diferencial_genes_chi2|ADR 006]]** e **[[04_Recursos/adrs/adr_003_expansao_espaco_genico_11k|ADR 003]]**.
 - **`analisador_cobertura.py` (`AnalisadorCobertura`)**: Avalia a taxa de preenchimento e presenças no espaço gênico expandido.
 
 ### 2.4. `src/treinamento/` — Aprendizado Associativo e Recuperação
@@ -89,7 +90,8 @@ Define os caminhos absolutos e relativos para arquivos de dados brutos (`.h5ad`)
 | **Expansão Gênica** | Top 5k + Exclusivos | `.csv` / `.npy` | `outputs/top_genes/` | Matrizes filtradas no espaço de ~11.000 genes |
 | **Projeção SWeeP** | Embeddings 600D | `.csv` / `.npy` | `outputs/treinamento/` | Coordenadas compactas para clusterização K-Means |
 | **Rede Treinada** | Pesos & Metadados | `.pt` / `.json` | `outputs/hopfield/` | Modelo de memória associativa salvo (210 padrões) |
-| **Matriz Imputada** | Expressão Reconstruída | `.npy` | `outputs/top_genes/` | Matriz Mathys com genes ausentes imputados |
+| **Matriz Imputada 11k** | Expressão Reconstruída | `.npy` | `outputs/top_genes/` | Matriz Mathys com ~11k genes imputados |
+| **Matriz Imputada 36k** | Expressão Reconstruída | `.h5ad` (Sparse CSR Gzip) | `outputs/top_genes/` | Matriz Mathys completa 36k esparsa comprimida (ADR 007) |
 
 ---
 
@@ -131,5 +133,11 @@ flowchart TD
    - O uso de `float32` é suficiente e obrigatório. `float64` duplica o consumo de memória RAM/VRAM sem trazer ganho de precisão biológica na recuperação Hopfield.
 2. **Liberação Explícita de Memória (`gc.collect()`)**:
    - Após as etapas de recuperação cross-dataset (Seção 13 e 14 do notebook), as matrizes temporárias `Wrecuperado_m` (~2.0 GB) devem ser explicitamente deletadas com `del` seguido de `gc.collect()` para prevenir falhas de *Out of Memory (OOM)*.
-3. **Tamanho do Lote na Recuperação (`batch_size=1024` ou `2048`)**:
+3. **Tamanho do Lote na Recuperação (`batch_size=1024` ou `512`)**:
    - O método `retrieve` divide os 45.000 vetores de busca do Mathys em blocos para evitar a alocação simultânea da matriz de atenção em VRAM/RAM.
+4. **Otimização OOM e Persistência Esparsa no Pipeline 36k Genes**:
+   - No experimento de genoma integral de 36.591 genes ([pipeline_hopfield_completo_36k](file:///c:/Users/Leticia/Documents/Letworkspace/pipiline_hopifield/pipeline_hopfield_completo_36k.ipynb)), uma matriz denso em `float32` pesa ~6,6 GB. Para prevenir estouro de memória, utilizamos `batch_size=512` na atenção Softmax e exportamos o resultado em arquivo **`.h5ad` esparso (`scipy.sparse.csr_matrix`) com compressão `gzip`**, reduzindo o tamanho físico do arquivo final em disco para cerca de 600 MB e aliviando a carga de memória, de acordo com o registro **[[04_Recursos/adrs/adr_007_pipeline_genoma_completo_36k_esparso|ADR 007]]**.
+5. **Calibração da Temperatura ($\beta$) e Suavização de Consenso**:
+   - Para evitar o regime de *Hard-Argmax* (vulnerável a ruídos de sequenciamento individuais) que ocorre em $\beta = 50.0$ no espaço de 36.591 genes, a Seção 13 executa uma **varredura em grade (Grid Search)** sobre o espectro $\beta \in [5, ..., 50]$. A rede identifica autônoma e empíricamente o **$\beta^*$ ótimo**, que maximiza o F1-Score do dataset Mathys, gerando imputação baseada no consenso ponderado de múltiplos protótipos compatíveis. Veja **[[04_Recursos/adrs/adr_008_calibracao_temperatura_consenso_hopfield|ADR 008]]**.
+6. **Otimização da Granularidade de Protótipos ($nc$) e Capacidade Associativa**:
+   - Superando a limitação de $nc=30$ subclusters fixados pelo sistema legado, a Seção 13.1 introduz uma varredura empírica sobre a capacidade associativa para $nc \in [10, 20, 30, 50, 80, 100, 150]$. Como a Rede Hopfield Moderna possui capacidade exponencial sem amnésia por sobreposição de memórias, a identificação automática do **$nc^*$ ótimo** permite mapear de centenas até mais de mil protótipos em 36k genes, cobriando variações sutis e subtipos celulare neuronais transicionais. Veja **[[04_Recursos/adrs/adr_009_otimizacao_granularidade_subclusters_nc|ADR 009]]**.

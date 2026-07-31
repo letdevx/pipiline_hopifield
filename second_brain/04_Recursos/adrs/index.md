@@ -19,6 +19,10 @@ Esta pasta armazena o repositório de decisões formais de arquitetura para gara
 * 📜 **[[04_Recursos/adrs/adr_003_expansao_espaco_genico_11k|ADR 003: Expansão do Espaço Gênico para ~11.000 Genes]]**
 * 📜 **[[04_Recursos/adrs/adr_004_projecao_rsweep_600d_kmeans|ADR 004: Projeção rSWeeP 600D para Clusterização K-Means]]**
 * 📜 **[[04_Recursos/adrs/adr_005_rede_hopfield_moderna_parametros|ADR 005: Hiperparâmetros da Modern Hopfield Network ($\beta=50.0$, $nc=30$)]]**
+* 📜 **[[04_Recursos/adrs/adr_006_selecao_diferencial_genes_chi2|ADR 006: Seleção Diferencial por Qui-Quadrado (Chi2 / Ganho de Informação)]]**
+* 📜 **[[04_Recursos/adrs/adr_007_pipeline_genoma_completo_36k_esparso|ADR 007: Pipeline com Genoma Completo (36.591 genes) e Serialização Esparsa H5AD]]**
+* 📜 **[[04_Recursos/adrs/adr_008_calibracao_temperatura_consenso_hopfield|ADR 008: Calibração da Temperatura ($\beta$) e Suavização de Consenso em Redes Hopfield Modernas]]**
+* 📜 **[[04_Recursos/adrs/adr_009_otimizacao_granularidade_subclusters_nc|ADR 009: Otimização Empírica da Granularidade de Protótipos ($nc$) e Capacidade Associativa]]**
 
 ---
 

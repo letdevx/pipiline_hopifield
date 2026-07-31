@@ -3,7 +3,7 @@ tipo: adr
 tags: [adr, sentinela, alinhamento, mathys, decisao-arquitetura]
 criado: 2026-07-30
 atualizado: 2026-07-30
-resumo: "ADR 002: Decisão de usar o valor neutro 0.5 para genes ausentes no alinhamento cross-dataset Mathys -> Fujita."
+resumo: "ADR 002: Decisão de usar o valor neutro 0.5 para genes ausentes no alinhamento cross-dataset (Modelo Fujita -> Dados Mathys)."
 ---
 
 # ADR 002: Preenchimento de Genes Ausentes com Valor Sentinela Neutral 0.5 no Alinhamento Cross-Dataset

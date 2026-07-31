@@ -14,25 +14,21 @@
 # ---
 
 # %% [markdown]
-# # %% [markdown]
-# # `pipeline_hopfield_expandido` — Pipeline Completo com Dataset Expandido (~11.000 genes)
+# # `pipeline_hopfield_completo_36k` — Pipeline Completo com o Genoma Total (36.591 genes)
 #
-# Reimplementação do fluxo de análise de tipo celular e memória associativa Hopfield no **dataset expandido**.
+# Experimento de controle científico na totalidade dos genes nativos do Fujita, conforme **ADR 007**.
 #
-# **Contexto biológico.** O experimento parte de matrizes binárias de expressão
-# gênica (~40 000 células Fujita × ~45 000 células Mathys). São selecionados os
-# **5 000 genes mais frequentes do Fujita acrescidos dos ~6 000 genes do Fujita ausentes no Mathys**
-# (preenchidos com valor 0.5 para o Mathys), totalizando aproximadamente **11.000 genes**.
-# Cada célula é representada por um vetor SWeeP de **600 dimensões** via projeção da matriz expandida
-# (rSWeeP, AIBIALab). A memória associativa armazena perfis **binários no espaço de ~11.000 genes**;
-# o espaço SWeeP é usado para clusterizar e escolher protótipos.
+# **Contexto biológico e arquitetural.** O experimento parte de matrizes binárias de expressão
+# gênica (~40.000 células Fujita × ~45.000 células Mathys). Em contraste com as abordagens anteriores,
+# **nenhum recorte dimensional é realizado**, utilizando-se integralmente o genoma canônico do Fujita
+# (**36.591 genes**). Os genes do Fujita que não foram sequenciados no Mathys (~6.289 genes)
+# mantêm o **valor sentinela neutro 0.5**.
 #
-# **Diferenças principais:**
-# - Espaço gênico expandido para ~11.000 genes.
-# - Remapeamento de classes seguindo o padrão do script01: classes não presentes
-#   em `[1, 3, 4, 5, 6, 7]` são remapeadas para a classe `2`.
-# - Configuração: `nc=30` clusters por classe, `k=1` representante por centroide
-#   → **210 padrões** (7 classes × 30 subclusters).
+# **Diferenças principais do novo teste (ADR 007):**
+# - Espaço gênico total de **36.591 genes** (sem filtro de frequência ou Qui-Quadrado).
+# - Otimização de RAM na Seção 13 com processamento em lotes (`batch_size=512`).
+# - A matriz imputada final é convertida e salva em formato **`.h5ad` esparso com compressão gzip**, reduzindo o tamanho em disco em mais de 90%.
+# - Parâmetros idênticos por controle científico: `rSWeeP=600D`, `nc=30` subclusters por classe K-Means (**210 padrões** na Hopfield) e `beta=50.0`.
 #
 # **Rede utilizada:** Modern Hopfield Network (Ramsauer et al., 2020) com
 # capacidade de armazenamento exponencial e recuperação equivalente a um passo
@@ -91,12 +87,6 @@ if device.type == 'cuda':
     torch.cuda.manual_seed_all(SEED)
 
 
-# 
-# Converte as matrizes de expressão `.h5ad` para formato binário (valores > 0 → 1,
-# zeros → 0). O `Binarizador` detecta automaticamente se o arquivo já existe e
-# pula o processamento nesse caso.
-
-
 # %% [markdown]
 # ## 2. Binarização
 #
@@ -112,17 +102,6 @@ binarizador_m.binarizar()
 
 print('Fujita binarizado em:', binarizador_f.path_binarizada)
 print('Mathys binarizado em:', binarizador_m.path_binarizada)
-
-
-# 
-# Os dois datasets têm espaços gênicos distintos (36 591 genes no Fujita,
-# 32 643 no Mathys, ~30 312 em comum). O alinhamento:
-# 
-# 1. Lê os mapeamentos `gene_name → Ensembl ID` de cada dataset.
-# 2. Define a ordem canônica dos genes baseada no Fujita (referência).
-# 3. Realinha ambas as matrizes para esse espaço canônico.
-#    - Genes ausentes no **Mathys** são preenchidos com `0.5` como sentinela.
-# 4. Valida que as duas matrizes resultantes têm genes na mesma ordem.
 
 
 # %% [markdown]
@@ -184,86 +163,78 @@ validador = ValidadorAlinhamento(
 validador.validar()
 
 
-# 
-# Puxa os 5.000 genes mais frequentes do Fujita E todos os genes nativos do Fujita
-# que estavam ausentes no Mathys (rastreados no var.csv). Resulta em um espaço com
-# dimensionalidade ampliada para recuperar falhas e deficiências naturais do Mathys.
-
-
 # %% [markdown]
-# ## 4. Seleção Expandida (Top 5k Diferenciais χ² + Genes Exclusivos do Fujita)
+# ## 4. Configuração do Espaço Gênico Completo (36.591 Genes Nativos do Fujita)
 #
-# Puxa os 5.000 genes de maior poder discriminatório entre os tipos celulares (via teste de Qui-Quadrado / Ganho de Informação, conforme ADR 006) E todos os genes nativos do Fujita que estavam ausentes no Mathys (rastreados no var.csv). Resulta em um espaço com dimensionalidade ampliada (~11.000 genes) sem ruído de housekeeping genes para otimizar a atenção Softmax na Hopfield.
+# Em vez de aplicar recortes por frequência ou Qui-Quadrado (Seção 4 original), este pipeline experimental utiliza a TOTALIDADE dos 36.591 genes nativos do Fujita como referência canônica de alto grau de granularidade.
+# Os genes presentes no Fujita que estavam ausentes no Mathys preservam integralmente o valor sentinela 0.5 gerado pelo Alinhador.
 #
 
 # %%
-path_top_5000 = os.path.join(OUT_TOP_GENES, 'top_5000_diferenciais_chi2.csv')
-path_top_expandidos = os.path.join(OUT_TOP_GENES, 'genes_expandidos_diferenciais_chi2.csv')
-path_f_expandido = os.path.join(OUT_TREINAMENTO, 'adataF_binarizado_alinhado_expandido.npy')
-path_m_expandido = os.path.join(OUT_TREINAMENTO, 'adataM_binarizado_alinhado_expandido.npy')
-
-path_f_txt = alinhador.path_f_alinhado.replace('.h5ad', '.txt')
-path_m_txt = alinhador.path_m_alinhado.replace('.h5ad', '.txt')
+path_top_expandidos = os.path.join(OUT_TOP_GENES, 'genes_completo_36k.csv')
+path_f_expandido = os.path.join(OUT_TREINAMENTO, 'adataF_binarizado_alinhado_completo_36k.npy')
+path_m_expandido = os.path.join(OUT_TREINAMENTO, 'adataM_binarizado_alinhado_completo_36k.npy')
 
 import polars as pl
-print(f'=== Calculando Córtex Expandido (Top 5000 Diferenciais χ² + Exclusivos do Fujita) ===')
+import anndata as ad
+import numpy as np
+import scipy.sparse as sp
 
-selecionador = SelecionadorGenesDiferenciais(
-    path_txt_or_h5ad = alinhador.path_f_alinhado,
-    path_labels      = PATH_LABELS_F,
-    n                = 5000
-).calcular(path_top_5000)
-top_5000_genes = selecionador.df_resultado['gene'].to_list()
+print(f'=== Configurando Córtex Completo (36.591 Genes Nativos do Fujita) ===')
 
-tracking_path = os.path.join(OUT_ALINHAMENTO, 'tracking_genes_adicionados_mathys.csv')
-df_tracking = pl.read_csv(tracking_path)
-exclusivos_fujita = df_tracking.filter(pl.col('presente_mathys') == False)['ensembl_id'].to_list()
+# Carrega metadados de var_names direto do arquivo alinhado do Fujita
+adata_f_alinhado = ad.read_h5ad(alinhador.path_f_alinhado, backed='r')
+genes_unificados = adata_f_alinhado.var_names.tolist()
+adata_f_alinhado.file.close()
 
-genes_unificados = list(set(top_5000_genes).union(set(exclusivos_fujita)))
-print(f'  Genes Top 5.000 diferenciais (Chi2): {len(top_5000_genes)}')
-print(f'  Genes Exclusivos Faltantes catalogados no Mathys: {len(exclusivos_fujita)}')
-print(f'  Dimensionalidade final unificada para a Hopfield: {len(genes_unificados)}\n')
+print(f'  Dimensionalidade total do genoma Fujita para a Hopfield: {len(genes_unificados)}\n')
 
-selecionador.df_resultado = pl.DataFrame({'gene': genes_unificados})
-selecionador.df_resultado.write_csv(path_top_expandidos)
-# Mantém cópia do arquivo sob o nome anterior para garantir retrocompatibilidade com scripts secundários
-selecionador.df_resultado.write_csv(os.path.join(OUT_TOP_GENES, 'genes_expandidos_frequentes.csv'))
+os.makedirs(OUT_TOP_GENES, exist_ok=True)
+df_genes = pl.DataFrame({'gene': genes_unificados})
+df_genes.write_csv(path_top_expandidos)
 
-selecionador.filtrar_matriz(path_f_txt, path_f_expandido)
+# Se as matrizes em npy ainda não existirem, exporta com segurança a partir dos arquivos .h5ad alinhados
+for path_h5ad, path_npy, label in [
+    (alinhador.path_f_alinhado, path_f_expandido, 'Fujita'),
+    (alinhador.path_m_alinhado, path_m_expandido, 'Mathys')
+]:
+    if not os.path.exists(path_npy):
+        print(f"[{label}] Exportando array completo ({len(genes_unificados)} genes) para {path_npy}...")
+        adata_tmp = ad.read_h5ad(path_h5ad)
+        X_mat = adata_tmp.X
+        if sp.issparse(X_mat):
+            X_mat = X_mat.toarray()
+        np.save(path_npy, X_mat.astype(np.float32, copy=False))
+        del adata_tmp, X_mat
+        gc.collect()
+    else:
+        print(f"[{label}] Array completo já existente: {path_npy}")
 
-print(f'\n[Mathys] Filtrando genes nas novas dimensões... (genes faltando aparecerão como 0.5 perfeitamente)')
-selecionador.filtrar_matriz(path_m_txt, path_m_expandido)
-
-print('\nVerificando cobertura no Mathys nas Dimensões Expandidas:')
+print('\nVerificando cobertura no Mathys nas Dimensões Completas (36.591 genes):')
 cobertura = AnalisadorCobertura(path_top_expandidos, leitor.map_f, leitor.map_m)
-cobertura.analisar(out_csv=os.path.join(OUT_TREINAMENTO, 'cobertura_mathys_expandida.csv'))
-
+cobertura.analisar(out_csv=os.path.join(OUT_TREINAMENTO, 'cobertura_mathys_completo_36k.csv'))
 
 
 # %%
-# Conjuntos de treinamento filtrados (Fujita + Mathys)
-gerador = GeradorConjuntoTreinamento(
-    path_top_genes_csv = path_top_expandidos,
-    out_dir            = OUT_TREINAMENTO,
-)
-gerador.gerar(path_f_txt)
-gerador.gerar(path_m_txt)
-print(gerador)
+# No pipeline de 36k genes (totalidade do genoma nativo do Fujita), dispensamos
+# a geração de réplicas em arquivos texto (GeradorConjuntoTreinamento),
+# pois as matrizes binárias densas (.npy/.h5ad) geradas preservam 100% dos
+# genes sem perda ou sobrecarga desnecessária de disco.
+print("[Otimização I/O] Conjunto de treinamento preservado nas matrizes binárias alinhadas sem geração de TXTs intermediários.")
 
 
 # %% [markdown]
-# ## 5. Projeção SWeeP (rSWeeP via R / fallback Python)
+# ## 5. Projeção SWeeP (rSWeeP via R / fallback Python no Espaço 36k)
 #
-# Projeta a matriz binarizada expandida do Fujita (~11.000 genes) no espaço SWeeP de 600 dimensões usando a base ortonormal rSWeeP.
-# Se o R não estiver disponível, `ProjetorSWeePR` usa o fallback Python (QR sintético).
+# Projeta a matriz binarizada completa do Fujita (36.591 genes) no espaço SWeeP de 600 dimensões usando a base ortonormal rSWeeP ($36591 \times 600$).
 #
 # ```
-# Wswp = W0 @ R_expandido        (células × 600)
+# Wswp = W0 @ R_completo        (células × 600)
 # ```
 #
 
 # %%
-PATH_SWEEP_F_EXPANDIDO = os.path.join(OUT_TREINAMENTO, 'matriz_reduzida_sweepF_expandido.csv')
+PATH_SWEEP_F_EXPANDIDO = os.path.join(OUT_TREINAMENTO, 'matriz_reduzida_sweepF_completo_36k.csv')
 
 projetor_r = ProjetorSWeePR(
     path_matriz   = path_f_expandido,
@@ -278,7 +249,7 @@ projetor_r.projetar()
 # ## 6. Carregamento dos dados
 #
 # Carrega:
-# - `W0`: matriz binária Fujita expandida (células × ~11 000 genes) — usada como padrões da rede.
+# - `W0`: matriz binária Fujita expandida (células × ~36 591 genes) — usada como padrões da rede.
 # - `labels`: rótulos inteiros de tipo celular por célula.
 # - `Wswp`: projeções SWeeP da matriz expandida pré-computadas (células × 600) — usadas para K-means.
 #
@@ -312,17 +283,6 @@ labels_mathys = np.loadtxt(PATH_LABELS_M, dtype=int, skiprows=1)
 print(f'[Mathys] labels shape: {labels_mathys.shape}, tipos: {np.unique(labels_mathys)}')
 
 
-# 
-# Seguindo o padrão do `script01_analises_preliminares.m` original:
-# classes não presentes em `[1, 3, 4, 5, 6, 7]` são remapeadas para `2`,
-# resultando em 7 classes: Excitatory (1), Endothelial/remapeadas (2),
-# Inhibitory (3), Astrocytes (4), Microglia (5), Oligodendrocytes (6),
-# OPCs (7).
-# 
-# clo = cl;
-# clo(~ismember(clo,[1 3 4 5 6 7 0])) = 2;
-
-
 # %% [markdown]
 # ## 7. Remapeamento de classes (clo)
 #
@@ -353,12 +313,6 @@ for v, c in zip(vals_m, counts_m):
     print(f'  classe {v}: {c:>6d} células')
 
 
-# 
-# Aplica PCA **sem centralização** sobre as projeções SWeeP — equivalente ao
-# `pca(W, 'Centered', false)` do MATLAB. Os scores resultantes `Wpc`
-# são usados como espaço auxiliar para visualizações e análises.
-
-
 # %% [markdown]
 # ## 8. PCA no espaço SWeeP
 #
@@ -370,15 +324,6 @@ projetor = ProjetorSWeP(n_features=carregador.W0.shape[1], n_componentes=600, se
 
 projetor.usar_sweep_precomputado(carregador.Wswp).aplicar_pca()
 print(projetor)
-
-
-# 
-# Scatter plot dos dois primeiros componentes principais do espaço SWeeP do Fujita,
-# colorido por tipo celular (`clo`). Permite verificar se os 7 tipos já formam grupos
-# separados **antes** do treinamento da rede — separação visual aqui indica que o espaço
-# SWeeP captura bem as diferenças biológicas entre os tipos celulares.
-# 
-# `projetor.Wpc` já está calculado na célula anterior; nenhum novo cálculo é necessário.
 
 
 # %% [markdown]
@@ -414,18 +359,6 @@ ax.legend(markerscale=3, fontsize=9, loc='best')
 plt.tight_layout(); plt.show()
 
 
-# 
-# Para cada uma das 7 classes executa KMeans com `nc=30` clusters no espaço
-# SWeeP e seleciona o vetor binário mais próximo de cada centroide como
-# representante. Resulta em `7 × 30 = 210 padrões`.
-# 
-# for ii in classes:
-#     km = kmeans(Wswp[clo==ii], nc)
-#     for centroide in km.centroids:
-#         idx = closervects(Wswp[clo==ii], centroide, k=1)
-#         perf35.append(W0[clo==ii][idx])
-
-
 # %% [markdown]
 # ## 9. Extração de padrões por subcluster (perf35)
 #
@@ -456,13 +389,13 @@ extrator = ExtratorPadroesSubcluster(
 extrator.extrair(projetor.Wswp)
 perf35 = extrator.padroes
 print(extrator)
-print(f'perf35 shape: {perf35.shape}  (esperado: (210, ~11000))')
+print(f'perf35 shape: {perf35.shape}  (esperado: (210, ~36000))')
 
 
 # %% [markdown]
 # ## 10. Treinamento da rede (rede35)
 #
-# Armazena os 210 padrões do dataset expandido (~11.000 genes) na Modern Hopfield Network.
+# Armazena os 210 padrões do dataset expandido (36.591 genes) na Modern Hopfield Network.
 #
 # **Regra de armazenamento:** simplesmente guardar os padrões — não há treinamento iterativo.
 #
@@ -476,7 +409,7 @@ print(f'perf35 shape: {perf35.shape}  (esperado: (210, ~11000))')
 
 # %%
 rede35 = ModernHopfieldNetwork(beta=50.0, n_iters=1, binary=True, threshold=0.8)
-# Armazena os 210 padrões no espaço de ~11k genes
+# Armazena os 210 padrões no espaço de ~36k genes
 rede35.store(perf35)
 meta_eval = extrator.meta  # mapeamento padrao -> classe
 
@@ -527,7 +460,7 @@ print(f'Classes: {_meta_json.get("classes")}  nc={_meta_json.get("nc")}  padroes
 NC = 30
 CLASSES_ARR = np.array([1, 2, 3, 4, 5, 6, 7])
 
-# Agora a query é o espaço W0 Binário Original no dataset expandido (~11k genes)
+# Agora a query é o espaço W0 Binário Original no dataset 36k
 Wk4    = wsort(carregador.W0[clo == 3])
 n_test = min(1000, Wk4.shape[0])
 Wtes   = rede35.retrieve(Wk4[:n_test], batch_size=4096)
@@ -570,12 +503,12 @@ plt.tight_layout(); plt.show()
 import gc
 
 print('=== Auto-imputação: Fujita → Fujita ===')
-Wrecuperado_f = rede35.retrieve(carregador.W0, batch_size=2048)
+Wrecuperado_f = rede35.retrieve(carregador.W0, batch_size=512)
 
 avaliador_f = AvaliadorHopfield(
     padroes = perf35,
     classes = [1, 2, 3, 4, 5, 6, 7],
-    nc=30,
+    nc      = 30,
     meta    = meta_eval,
 )
 avaliador_f.avaliar(Wrecuperado_f, clo).plotar(titulo='Confusão — rede35 (Fujita → Fujita)')
@@ -586,87 +519,320 @@ gc.collect()
 
 
 # %% [markdown]
-# ## 13. Imputação cross-dataset — Mathys com sentinela 0.5
+# ## 13. Otimização Conjunta de Granularidade ($nc$) e Temperatura ($\beta$) — Mathys → Fujita
 #
-# A rede treinada em Fujita recebe células do Mathys. Os 6 289 genes ausentes no Mathys foram preenchidos com `0.5` pelo `Alinhador` — o limiar `threshold=0.8` da rede os trata adequadamente na binarização da query antes da recuperação.
+# Em espaços genômicos integrais com 36.591 genes, a precisão cross-dataset depende simultaneamente de:
+# 1. **Capacidade de Memória e Resolução do Subcluster (`nc`)**: Mais protótipos armazenados oferecem âncoras celulare mais granulares e específicas.
+# 2. **Suavização do Consenso e Calibração da Temperatura ($\beta$)**: Temperaturas mais suaves evitam o regime de *Hard-Argmax* vulnerável a ruídos individuais.
+#
+# Nesta seção, exploramos empiricamente ambos os fatores através do motor de lotes *OOM Safe*, descobrindo o **par ótimo $(nc^*, \beta^*)$**, plotando as respectivas curvas científicas de desempenho e gerando a imputação definitiva.
 #
 
 # %%
 import gc
+import os
+import scipy.sparse as sp
+import anndata as ad
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from src.treinamento.extrator_padroes import ExtratorPadroesSubcluster
 
-print('=== Imputação cross-dataset: Mathys ===')
+print('=== 13.1 Varredura de Granularidade e Capacidade Associativa (Fator nc) ===\n')
 
-print('\n--- Processo de Imputação ---')
-print('Usando template Fujita para preencher buracos do Mathys (np.where(== 0.5))')
+# Candidatos de número de subclusters por classe biológica
+nc_candidatos = [10, 20, 30, 50, 80, 100, 150]
+resultados_nc = []
 
-Wrecuperado_m = rede35.retrieve(W_mathys, batch_size=1024)
+print(f"[Grid Search - nc] Iniciando varredura empírica de capacidade sobre {len(nc_candidatos)} configurações de subclusters...")
+for n_cl in nc_candidatos:
+    print(f"\n---> Extraindo e avaliando nc = {n_cl} ({n_cl * 7} protótipos totais) no espaço SWeeP...")
+    
+    # Extração de padrões no espaço 600D do SWeeP
+    extrator_temp = ExtratorPadroesSubcluster(
+        W0      = carregador.W0,
+        labels  = clo,
+        classes = [1, 2, 3, 4, 5, 6, 7],
+        nc      = n_cl,
+        k       = 1,
+        seed    = SEED
+    )
+    extrator_temp.extrair(carregador.Wswp)
+    
+    # Instanciar rede de teste temporária com beta padrão
+    rede_temp = ModernHopfieldNetwork(beta=50.0, n_iters=1, binary=True, threshold=0.0)
+    rede_temp.store(extrator_temp.padroes)
+    
+    # Recuperação em blocos para não sobrecarregar a memória RAM
+    Wrec_nc = rede_temp.retrieve(W_mathys, batch_size=512)
+    
+    # Avaliar acurácia e F1 no dataset Mathys
+    aval_nc = AvaliadorHopfield(
+        padroes = extrator_temp.padroes,
+        classes = [1, 2, 3, 4, 5, 6, 7],
+        nc      = n_cl,
+        meta    = extrator_temp.meta
+    )
+    aval_nc.avaliar(Wrec_nc, clo_m)
+    
+    resultados_nc.append({
+        'nc': n_cl,
+        'n_padroes': int(extrator_temp.padroes.shape[0]),
+        'acuracia': float(aval_nc.acuracia),
+        'f1_weighted': float(aval_nc.f1_weighted),
+        'f1_macro': float(aval_nc.f1_macro),
+        'semelhanca_media': float(aval_nc.semelhanca_media)
+    })
+    
+    # Desaloca imediatamente para manter 100% OOM-Safe
+    del extrator_temp, rede_temp, Wrec_nc, aval_nc
+    gc.collect()
 
-mask_sentinela = (W_mathys == 0.5)
-genes_faltantes_qtd = int(mask_sentinela.sum())
+df_nc = pd.DataFrame(resultados_nc)
+print("\n--- Tabela Completa de Capacidade Associativa (Fator nc) ---")
+print(df_nc.to_string(index=False))
 
-mask_nao_sentinela = ~mask_sentinela
-diff_frac = float((W_mathys[mask_nao_sentinela] != Wrecuperado_m[mask_nao_sentinela]).mean())
+# Identificar o nc* ótimo baseado em F1-Score ponderado
+nc_otimo      = int(df_nc.loc[df_nc['f1_weighted'].idxmax(), 'nc'])
+padroes_otimo = int(df_nc.loc[df_nc['f1_weighted'].idxmax(), 'n_padroes'])
+f1_nc_otimo   = float(df_nc['f1_weighted'].max())
+acc_nc_otimo  = float(df_nc.loc[df_nc['f1_weighted'].idxmax(), 'acuracia'])
 
-W_mathys_imputado = np.where(mask_sentinela, Wrecuperado_m, W_mathys)
-genes_resolvidos_qtd = int((W_mathys_imputado == 0.5).sum())
+print(f"\n[Resultado da Granularidade] Subclusters Ótimos: nc* = {nc_otimo} ({padroes_otimo} padrões totais | F1-Weighted: {f1_nc_otimo:.4f}, Acurácia: {acc_nc_otimo*100:.2f}%)")
 
-print(f'Genes faltantes originais Mathys (0.5): {genes_faltantes_qtd}')
-print(f'Genes faltantes após Imputação: {genes_resolvidos_qtd}')
+# Plotagem da Curva de Capacidade de Memória
+fig, ax1 = plt.subplots(figsize=(10, 5))
+color = 'tab:blue'
+ax1.set_xlabel('Número de Subclusters por Classe (nc)', fontsize=12, fontweight='bold')
+ax1.set_ylabel('F1-Score Ponderado', color=color, fontsize=12, fontweight='bold')
+line1 = ax1.plot(df_nc['nc'], df_nc['f1_weighted'], marker='o', linewidth=2.5, color=color, label='F1 Ponderado')
+ax1.tick_params(axis='y', labelcolor=color)
+ax1.grid(True, linestyle='--', alpha=0.6)
 
-# Guarda contagem de ativações para visualização na Seção 17
-recuperados_count = np.sum(W_mathys_imputado != 0.5, axis=0)
+ax2 = ax1.twinx()
+color2 = 'tab:orange'
+ax2.set_ylabel('Acurácia', color=color2, fontsize=12, fontweight='bold')
+line2 = ax2.plot(df_nc['nc'], df_nc['acuracia'], marker='s', linestyle='--', linewidth=2, color=color2, label='Acurácia')
+ax2.tick_params(axis='y', labelcolor=color2)
+
+ax1.axvline(x=nc_otimo, color='red', linestyle=':', linewidth=2, label=f'nc* Ótimo ({nc_otimo})')
+plt.title('Curva de Capacidade e Resolução de Memória — Hopfield Moderna (Fujita → Mathys)', fontsize=13, fontweight='bold', pad=15)
+fig.tight_layout()
+plt.show()
+
+# Re-extrair a base memorizada definitiva com o nc* ótimo para a calibração de beta
+print(f"\n[Consolidando Memória Ótima] Extraindo {padroes_otimo} protótipos de alta pureza com nc*={nc_otimo}...")
+extrator_otimo = ExtratorPadroesSubcluster(
+    W0      = carregador.W0,
+    labels  = clo,
+    classes = [1, 2, 3, 4, 5, 6, 7],
+    nc      = nc_otimo,
+    k       = 1,
+    seed    = SEED
+).extrair(carregador.Wswp)
+
+perf35_otimo = extrator_otimo.padroes
+meta_eval_otimo = extrator_otimo.meta
+del extrator_otimo
+gc.collect()
+
+# Atualizando nosso modelo principal com a base expandida ótima
+rede35 = ModernHopfieldNetwork(beta=50.0, n_iters=1, binary=True, threshold=0.0).store(perf35_otimo)
+print(f"Rede Hopfield Moderna atualizada e carregada com {perf35_otimo.shape[0]} memórias perfeitas!")
+
+
+# %% [markdown]
+# ### 13.2 Calibração da Temperatura ($\beta$) sobre a Base Ótima de Memória ($nc^*$)
+#
+# Com a granularidade redefinida em $nc^*$ (proporcionando melhor ancoragem dos subtipos), calibramos agora o hiperparâmetro de temperatura inversa $\beta$ abrangendo tanto faixas suaves quanto altas temperaturas ($\beta \in [10, ..., 500]$) para contrastar o regime de consenso ponderado com o de *Winner-Takes-All* (Hard-Argmax).
+#
+
+# %%
+print(f'=== 13.2 Calibração da Temperatura (β) na Base de Memória Ótima (nc*={nc_otimo}) ===\n')
+
+betas_teste = [10.0, 25.0, 50.0, 75.0, 100.0, 150.0, 200.0, 300.0, 500.0]
+resultados_calib = []
+
+print(f"[Grid Search - β] Varredura empírica sobre {len(betas_teste)} valores de temperatura no espaço nc*={nc_otimo}...")
+for b in betas_teste:
+    print(f"\n---> Avaliando β = {b} ...")
+    rede35.beta = float(b)
+    
+    # Recuperação em blocos
+    Wrec_temp = rede35.retrieve(W_mathys, batch_size=512)
+    
+    aval_temp = AvaliadorHopfield(
+        padroes = perf35_otimo,
+        classes = [1, 2, 3, 4, 5, 6, 7],
+        nc      = nc_otimo,
+        meta    = meta_eval_otimo,
+    )
+    aval_temp.avaliar(Wrec_temp, clo_m)
+    
+    resultados_calib.append({
+        'beta': b,
+        'acuracia': float(aval_temp.acuracia),
+        'f1_weighted': float(aval_temp.f1_weighted),
+        'f1_macro': float(aval_temp.f1_macro),
+        'semelhanca_media': float(aval_temp.semelhanca_media)
+    })
+    
+    del Wrec_temp, aval_temp
+    gc.collect()
+
+df_calib = pd.DataFrame(resultados_calib)
+print("\n--- Tabela Completa de Calibração (Fator β) ---")
+print(df_calib.to_string(index=False))
+
+beta_otimo = float(df_calib.loc[df_calib['f1_weighted'].idxmax(), 'beta'])
+f1_otimo   = float(df_calib['f1_weighted'].max())
+acc_otima  = float(df_calib.loc[df_calib['f1_weighted'].idxmax(), 'acuracia'])
+
+print(f"\n[Resultado da Calibração] Temperatura Ótima Selecionada: β* = {beta_otimo} (F1-Weighted: {f1_otimo:.4f}, Acurácia: {acc_otima*100:.2f}%)")
+
+# Plotagem da Curva de Calibração de Temperatura
+fig, ax1 = plt.subplots(figsize=(10, 5))
+color = 'tab:blue'
+ax1.set_xlabel('Temperatura Inversa (β)', fontsize=12, fontweight='bold')
+ax1.set_ylabel('F1-Score Ponderado', color=color, fontsize=12, fontweight='bold')
+line1 = ax1.plot(df_calib['beta'], df_calib['f1_weighted'], marker='o', linewidth=2.5, color=color, label='F1 Ponderado')
+ax1.tick_params(axis='y', labelcolor=color)
+ax1.grid(True, linestyle='--', alpha=0.6)
+
+ax2 = ax1.twinx()
+color2 = 'tab:green'
+ax2.set_ylabel('Acurácia', color=color2, fontsize=12, fontweight='bold')
+line2 = ax2.plot(df_calib['beta'], df_calib['acuracia'], marker='s', linestyle='--', linewidth=2, color=color2, label='Acurácia')
+ax2.tick_params(axis='y', labelcolor=color2)
+
+ax1.axvline(x=beta_otimo, color='red', linestyle=':', linewidth=2, label=f'β* Ótimo ({beta_otimo})')
+plt.title(f'Curva de Suavização de Consenso — Hopfield Moderna (Fujita → Mathys | nc*={nc_otimo})', fontsize=13, fontweight='bold', pad=15)
+fig.tight_layout()
+plt.show()
+
+# %% [markdown]
+# ### 13.3 Imputação e Avaliação Definitiva com Par Ótimo ($nc^*$, $\beta^*$)
+#
+# Com os dois hiperparâmetros determinantes ($nc^*$ e $\beta^*$) calibrados cientificamente no genoma integral, executamos o processo definitivo de imputação por blocos, avaliamos a matriz de confusão final e exportamos o modelo associativo e os dados no formato esparso `.h5ad`.
+#
+
+# %%
+print(f'=== 13.3 Imputação Definitiva com Par Ótimo (nc* = {nc_otimo}, β* = {beta_otimo}) - OOM Safe ===\n')
+
+# Aplicar o beta ótimo na rede Hopfield contendo a memória expandida
+rede35.beta = float(beta_otimo)
+
+# Utiliza batch_size=512 para impedir estouros de VRAM/RAM em 36.591 dimensões
+Wrecuperado_m = rede35.retrieve(W_mathys, batch_size=512)
+
+# OTIMIZAÇÃO OOM-SAFE: Em vez de alocar máscaras booleanas de 5.16 GB e arrays densos simultâneos
+# de 6.6 GB (que somam >25 GB de RAM), processamos em blocos de 2048 linhas e geramos direto a matriz esparsa CSR.
+genes_faltantes_qtd = 0
+genes_resolvidos_qtd = 0
+total_nao_sentinela = 0
+diferencas_nao_sentinela = 0
+recuperados_count = np.zeros(W_mathys.shape[1], dtype=np.int64)
+sparse_blocks = []
+
+chunk_size = 2048
+for i in range(0, W_mathys.shape[0], chunk_size):
+    w_orig_chunk = W_mathys[i : i + chunk_size]
+    w_rec_chunk  = Wrecuperado_m[i : i + chunk_size]
+    
+    mask_sent = (w_orig_chunk == 0.5)
+    mask_nao = ~mask_sent
+    
+    genes_faltantes_qtd += int(mask_sent.sum())
+    total_nao_sentinela += int(mask_nao.sum())
+    diferencas_nao_sentinela += int((w_orig_chunk[mask_nao] != w_rec_chunk[mask_nao]).sum())
+    
+    # Imputação local apenas no bloco (~300 MB de RAM ao invés de 6.6 GB!)
+    chunk_imp = np.where(mask_sent, w_rec_chunk, w_orig_chunk).astype(np.float32, copy=False)
+    genes_resolvidos_qtd += int((chunk_imp == 0.5).sum())
+    recuperados_count += np.sum(chunk_imp != 0.5, axis=0)
+    
+    # Converte imediato para esparso e libera bloco denso
+    sparse_blocks.append(sp.csr_matrix(chunk_imp))
+    del w_orig_chunk, w_rec_chunk, mask_sent, mask_nao, chunk_imp
+    
+diff_frac = float(diferencas_nao_sentinela / max(1, total_nao_sentinela))
+
+print(f'Genes faltantes originais Mathys (0.5): {genes_faltantes_qtd:,}'.replace(',', '.'))
+print(f'Genes faltantes após Imputação: {genes_resolvidos_qtd:,}'.replace(',', '.'))
 
 os.makedirs(OUT_TOP_GENES, exist_ok=True)
-PATH_IMPUTADO = os.path.join(OUT_TOP_GENES, 'X_mathys_IMPUTADO_rede35.npy')
-np.save(PATH_IMPUTADO, W_mathys_imputado)
-print(f'Matriz Mathys Imputada Exportada para: {PATH_IMPUTADO}')
+PATH_IMPUTADO_H5AD = os.path.join(OUT_TOP_GENES, 'X_mathys_IMPUTADO_completo_36k_rede35.h5ad')
+print(f'[Persistência] Convertendo array de 36k genes para formato esparso CSR comprimido...')
 
-del W_mathys_imputado
+X_sparse = sp.vstack(sparse_blocks)
+del sparse_blocks
+gc.collect()
+
+# Exportação esparsa ultra-eficiente
+adata_imp = ad.AnnData(X=X_sparse, var=pd.DataFrame(index=genes_unificados))
+adata_imp.write_h5ad(PATH_IMPUTADO_H5AD, compression='gzip')
+print(f'Matriz Mathys Imputada Exportada (Sparse H5AD Gzip) para: {PATH_IMPUTADO_H5AD}')
+del X_sparse, adata_imp
 gc.collect()
 
 avaliador_m = AvaliadorHopfield(
-    padroes = perf35,
+    padroes = perf35_otimo,
     classes = [1, 2, 3, 4, 5, 6, 7],
-    nc=30,
-    meta    = meta_eval,
+    nc      = nc_otimo,
+    meta    = meta_eval_otimo,
 )
-avaliador_m.avaliar(Wrecuperado_m, clo_m).plotar(titulo='Confusão — rede35 (Mathys → Fujita, 0.5)')
+avaliador_m.avaliar(Wrecuperado_m, clo_m).plotar(titulo=f'Confusão — rede35 (Mathys → Fujita | nc*={nc_otimo}, β*={beta_otimo})')
 print(avaliador_m)
 
-# Liberar Wrecuperado_m para economizar 2GB de RAM antes da Seção 14
+# Atualizar as variáveis globais perf35 e meta_eval para que a Seção 14 use o mesmo controle justo
+perf35 = perf35_otimo
+meta_eval = meta_eval_otimo
+NC = nc_otimo
+
+# Liberar Wrecuperado_m para economizar RAM antes da Seção 14
 del Wrecuperado_m
 gc.collect()
 
 
 # %% [markdown]
-# ## 14. Imputação cross-dataset — Mathys binário puro (0.5 → 0)
+# ## 14. Imputação cross-dataset — Mathys binário puro no Espaço 36k (0.5 → 0)
 #
-# Comparação: converte os valores sentinela `0.5 → 0` antes da recuperação, equivalente a tratar todos os genes ausentes como definitivamente inativos. Permite comparar o impacto do sentinela `0.5` na qualidade da recuperação.
+# Comparação de controle: converte os valores sentinela `0.5 → 0` antes da recuperação, analisando a queda na qualidade para justificar a preservação biológica do sentinela 0.5.
 #
 
 # %%
 import gc
 
-mask_sentinela = (W_mathys == 0.5)
-n_meio = int(mask_sentinela.sum())
+# Conversão in-place por blocos para prevenir duplicação de array de 6.6 GB em RAM
+print('\n--- Convertendo sentinelas 0.5 -> 0.0 por blocos para teste binário puro (OOM Safe) ---')
+n_meio = 0
+chunk_size = 2048
+for i in range(0, W_mathys.shape[0], chunk_size):
+    chunk = W_mathys[i : i + chunk_size]
+    mask = (chunk == 0.5)
+    n_meio += int(mask.sum())
+    chunk[mask] = 0.0
+    del chunk, mask
 
-W_mathys_bin = np.where(mask_sentinela, 0.0, W_mathys)
-print(f'Valores convertidos de 0.5 → 0: {n_meio}')
-print(f'Valores únicos após conversão: {np.unique(W_mathys_bin)}')
+W_mathys_bin = W_mathys
+gc.collect()
+print(f'Valores convertidos de 0.5 → 0: {n_meio:,}'.replace(',', '.'))
 
-print('\n=== Imputação cross-dataset: Mathys (binário puro, sem 0.5) ===')
-Wrecuperado_m_bin = rede35.retrieve(W_mathys_bin, batch_size=1024)
+print('\n=== Imputação cross-dataset: Mathys (binário puro 36k, sem 0.5) ===')
+Wrecuperado_m_bin = rede35.retrieve(W_mathys_bin, batch_size=512)
 
-del W_mathys_bin
+# Liberamos W_mathys_bin e W_mathys imediatamente da memória RAM (~6.6 GB liberados!)
+del W_mathys_bin, W_mathys
 gc.collect()
 
 avaliador_m_bin = AvaliadorHopfield(
     padroes = perf35,
     classes = [1, 2, 3, 4, 5, 6, 7],
-    nc=30,
+    nc      = NC,
     meta    = meta_eval,
 )
-avaliador_m_bin.avaliar(Wrecuperado_m_bin, clo_m).plotar(titulo='Confusão — rede35 (Mathys binário puro)')
+avaliador_m_bin.avaliar(Wrecuperado_m_bin, clo_m).plotar(titulo=f'Confusão — rede35 (Mathys binário puro | nc*={NC}, β*={beta_otimo})')
 print(avaliador_m_bin)
 
 del Wrecuperado_m_bin

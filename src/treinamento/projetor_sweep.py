@@ -145,6 +145,12 @@ class ProjetorSWeePR:
             self._carregar()
             return self
 
+        if self.path_matriz.endswith('.npy') or self.path_matriz.endswith('.h5ad'):
+            print(f"[ProjetorSWeePR] Matriz binária (.npy/.h5ad) detectada: {self.path_matriz}")
+            print("[ProjetorSWeePR] Executando rSWeeP via motor nativo Python/NumPy QR (otimização OOM sem parser de texto)...")
+            self._fallback_python()
+            return self
+
         print(f"[ProjetorSWeePR] Executando rSWeeP via R...")
         print(f"  entrada : {self.path_matriz}")
         print(f"  saída   : {self.path_saida}")
@@ -171,8 +177,19 @@ class ProjetorSWeePR:
 
     def _fallback_python(self):
         """Fallback: projeção via base ortogonal QR gerada em Python."""
-        print(f"[ProjetorSWeePR] Carregando matriz para fallback: {self.path_matriz}")
-        W = pd.read_csv(self.path_matriz, index_col=0).to_numpy(dtype=np.float32)
+        print(f"[ProjetorSWeePR] Carregando matriz no motor Python/NumPy: {self.path_matriz}")
+        if self.path_matriz.endswith('.npy'):
+            W = np.load(self.path_matriz).astype(np.float32, copy=False)
+        elif self.path_matriz.endswith('.h5ad'):
+            import anndata as ad
+            import scipy.sparse as sp
+            adata_tmp = ad.read_h5ad(self.path_matriz)
+            X = adata_tmp.X
+            W = X.toarray().astype(np.float32, copy=False) if sp.issparse(X) else np.asarray(X, dtype=np.float32)
+            del adata_tmp
+        else:
+            W = pd.read_csv(self.path_matriz, index_col=0).to_numpy(dtype=np.float32)
+            
         print(f"[ProjetorSWeePR] Shape: {W.shape} → projetando para {self.n_componentes} dim...")
         rng = np.random.default_rng(self.seed)
         Q, _ = np.linalg.qr(rng.standard_normal((W.shape[1], self.n_componentes)))
@@ -180,7 +197,7 @@ class ProjetorSWeePR:
         proj = W @ R
         os.makedirs(os.path.dirname(self.path_saida), exist_ok=True)
         pd.DataFrame(proj).to_csv(self.path_saida, index=False)
-        print(f"[ProjetorSWeePR] Fallback salvo: {self.path_saida}")
+        print(f"[ProjetorSWeePR] Projeção SWeeP salva em: {self.path_saida}")
         self._carregar()
 
     def _carregar(self):

@@ -38,7 +38,7 @@ flowchart TD
     subgraph S2["2. Alinhamento & Expansão Gênica"]
         B1 & B2 --> C1["LeitorFeatures & AnalisadorSobreposicao<br/>Mapeamento Ensembl ID"]
         C1 --> C2["Alinhador Canônico<br/>Fujita: 36.5k genes<br/>Mathys: 36.5k genes (Faltantes = 0.5)"]
-        C2 --> C3["SelecionadorGenesFrequentes<br/>Top 5.000 Fujita + ~6.000 Exclusivos Fujita"]
+        C2 --> C3["SelecionadorGenesDiferenciais (χ²)<br/>Top 5.000 Diferenciais + ~6.000 Exclusivos Fujita"]
         C3 --> D1["Matrizes Expandidas (~11.000 genes)<br/>W0 Fujita & W_mathys"]
     end
 
@@ -102,8 +102,8 @@ flowchart TD
 - **Recursos e Gargalos:** Leitura e ordenação de 36.591 genes para 85.000 células combinadas. Ocupa ~4 GB RAM durante o salvamento dos `.h5ad`/`.txt`.
 
 ### Seção 4: Seleção Expandida (~11.000 Genes)
-- **Objetivo:** Selecionar os 5.000 genes mais frequentes do Fujita e somar a eles os ~6.000 genes do Fujita ausentes no Mathys, gerando a matriz filtrada expandida. Veja **[[04_Recursos/adrs/adr_003_expansao_espaco_genico_11k|ADR 003]]**.
-- **Intuição Biológica:** Preserva marcadores de alta frequência e garante que genes específicos nativos do tecido de referência estejam disponíveis para reconstrução.
+- **Objetivo:** Selecionar os 5.000 genes com maior poder discriminatório via teste de Qui-Quadrado ($\chi^2$) entre tipos celulares no Fujita e somar a eles os ~6.000 genes do Fujita ausentes no Mathys, gerando a matriz filtrada expandida sem ruído de genes constitutivos. Veja **[[04_Recursos/adrs/adr_006_selecao_diferencial_genes_chi2|ADR 006]]** e **[[04_Recursos/adrs/adr_003_expansao_espaco_genico_11k|ADR 003]]**.
+- **Intuição Biológica:** Preserva marcadores que verdadeiramente separam as linhagens celulares (alto ganho de informação) e garante que genes específicos nativos do tecido de referência estejam disponíveis para reconstrução na rede Hopfield.
 - **Intuição Técnica:** Escreve as matrizes numpy `.npy` filtradas para Fujita e Mathys.
 - **Sequência:** Ocorre após o alinhamento para garantir que os IDs rastreados correspondem exatamente aos índices da matriz.
 - **Recursos e Gargalos:** Filtragem e escrita dos arquivos `.npy`. Aloca ~1.8 GB para Fujita e ~2.0 GB para Mathys em formato `float32`.
@@ -170,14 +170,14 @@ flowchart TD
 - **Sequência:** Fornece o teto de desempenho (upper bound) para comparar com os testes cross-dataset.
 - **Recursos e Gargalos:** Processa 40.000 células em lotes de 2.048. Aloca ~1.8 GB temporários na recuperação.
 
-### Seção 13: Imputação Cross-Dataset (Mathys com Sentinela 0.5)
-- **Objetivo:** Submeter a matriz do Mathys (com 6.289 genes preenchidos com `0.5`) à rede Hopfield, reconstruindo e imputando a expressão dos genes ausentes. Veja **[[03_Conhecimento/sentinela_meio_genes_ausentes|Conceito Atômico]]**.
-- **Intuição Biológica:** Testa a hipótese central da pesquisa: se a memória associativa da Hopfield consegue preencher lacunas de sequenciamento baseando-se no padrão global dos genes observados.
+### Seção 13: Imputação Cross-Dataset (Modelo Fujita → Dados Mathys com Sentinela 0.5)
+- **Objetivo:** Submeter a matriz do Mathys (com 6.289 genes ausentes preenchidos com a sentinela neutra `0.5`) à rede Hopfield treinada com o Fujita, reconstruindo e imputando a expressão dos genes ausentes no Mathys. Veja **[[03_Conhecimento/sentinela_meio_genes_ausentes|Conceito Atômico]]**.
+- **Intuição Biológica:** Testa a hipótese central da pesquisa: se a memória associativa da Hopfield (treinada com os protótipos do Fujita) consegue preencher lacunas de sequenciamento no dataset Mathys baseando-se no padrão global dos genes observados.
 - **Intuição Técnica:** Executa `rede35.retrieve(W_mathys, batch_size=1024)`. Substitui os valores sentinelas ($0.5$) pelos valores reconstruídos via `np.where(mask_sentinela, Wrecuperado_m, W_mathys)`. Salva o resultado final em `X_mathys_IMPUTADO_rede35.npy`.
 - **Sequência:** Etapa principal de produção do experimento.
 - **Recursos e Gargalos:** Ponto crítico de consumo de RAM. A matriz `Wrecuperado_m` aloca ~2.0 GB. Exige a execução imediata de `del Wrecuperado_m` e `gc.collect()` ao final para evitar estouro de memória.
 
-### Seção 14: Imputação Cross-Dataset Controle (Mathys Binário Puro 0.5 $\rightarrow$ 0)
+### Seção 14: Imputação Cross-Dataset Controle (Modelo Fujita → Dados Mathys Binário Puro 0.5 $\rightarrow$ 0)
 - **Objetivo:** Converter os valores sentinelas de $0.5 \rightarrow 0$ antes da recuperação e comparar a matriz de confusão e acurácia.
 - **Intuição Biológica:** Avalia se assumir que os genes ausentes estão inativos ($0$) prejudica a precisão em comparação com o uso do valor sentinela neutro ($0.5$).
 - **Intuição Técnica:** Cria cópia temporária `W_mathys_bin = np.where(mask_sentinela, 0.0, W_mathys)` e executa a recuperação com `AvaliadorHopfield`.
@@ -185,14 +185,14 @@ flowchart TD
 - **Recursos e Gargalos:** Alocação de ~2.0 GB RAM durante a recuperação do lote, seguida de limpeza `del` + `gc.collect()`.
 
 ### Seção 15: Diagnósticos e Mapeamento Prototípico
-- **Objetivo:** Mapear detalhadamente a frequência com que células de cada tipo do Mathys se associam aos protótipos do Fujita, calculando a fração de genes não-sentinela alterados.
+- **Objetivo:** Mapear detalhadamente a frequência com que células de cada tipo do Mathys se associam aos protótipos do modelo Fujita, calculando a fração de genes não-sentinela alterados.
 - **Intuição Biológica:** Revela se há confusões específicas entre subclasses de neurônios ou entre glia e neurônios.
 - **Intuição Técnica:** Constrói DataFrame Pandas `CM_diag` de dimensão $7 \times 7$ cruzando rótulos reais e preditos.
 - **Sequência:** Consolida os resultados qualitativos das seções 13 e 14.
 - **Recursos e Gargalos:** Leve (cálculos na CPU em milissegundos).
 
 ### Seção 16: Análise Comparativa Integrada e Matrizes de Confusão
-- **Objetivo:** Plotar lado a lado as matrizes de confusão (contagens absolutas e normalizadas) dos três cenários (Fujita$\rightarrow$Fujita, Mathys Sentinela 0.5, e Mathys Binário 0).
+- **Objetivo:** Plotar lado a lado as matrizes de confusão (contagens absolutas e normalizadas) dos três cenários (Fujita$\rightarrow$Fujita, Fujita$\rightarrow$Mathys Sentinela 0.5, e Fujita$\rightarrow$Mathys Binário 0).
 - **Intuição Biológica:** Permite visualização imediata da preservação das diagonalizações biológicas.
 - **Intuição Técnica:** Gera uma figura Matplotlib $3 \times 2$ contendo 6 subplots de matrizes de confusão.
 - **Sequência:** Síntese visual de todas as etapas de avaliação anterior.
@@ -225,8 +225,7 @@ flowchart TD
 
 ### 4.1. Oportunidades do Ponto de Vista Biológico
 1. **Seleção Inteligente de Features por Expressão Diferencial (Ganho de Informação / Chi2):**
-   - *Problema:* Atualmente a seleção de genes utiliza a frequência geral de ativações. Genes de manutenção celular (*housekeeping genes*) ganham alta pontuação mas não ajudam a separar classes biológicas.
-   - *Solução:* Substituir a seleção por frequência simples por pontuação via **Chi-Square ($\chi^2$)** ou **Informação Mútua (Mutual Information)** em relação às classes `clo`, priorizando genes com alto poder de discriminação celular.
+   - *Status:* **[CONCLUÍDO e IMPLEMENTADO via ADR 006]**. A seleção por frequência simples foi substituída pelo `SelecionadorGenesDiferenciais` ($\chi^2$), eliminando o ruído de genes constitutivos (*housekeeping*) e aumentando a precisão da representação espacial para a rede Hopfield.
 2. **Desagrupamento do Garbage Collection (Classe 2):**
    - *Problema:* Células raras (ex: pericitos, células musculares lisas) são mapeadas para a classe `2` (Endothelial), o que polui o F1-score desse grupo.
    - *Solução:* Isolar formalmente os tipos celulares em 9 ou 10 classes limpas, evitando a contaminação da classe endotelial.
@@ -265,7 +264,7 @@ graph LR
         SOBR["analisador_sobreposicao.py (AnalisadorSobreposicao)"]
         ALIN["alinhador.py (Alinhador)"]
         VALI["validador_alinhamento.py (ValidadorAlinhamento)"]
-        SELE["selecionador_genes_frequentes.py (SelecionadorGenesFrequentes)"]
+        SELE["selecionador_genes_diferenciais.py (SelecionadorGenesDiferenciais)"]
         COBE["analisador_cobertura.py (AnalisadorCobertura)"]
     end
 
