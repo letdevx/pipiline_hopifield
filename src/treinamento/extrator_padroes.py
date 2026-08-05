@@ -56,7 +56,6 @@ class ExtratorPadroesSubcluster:
 
         for cls in classes_validas:
             ids_cls = np.where(self.labels == cls)[0]
-            Wk4 = self.W0[ids_cls]
             Wswp_cls = Wswp[ids_cls]
 
             print(f"[ExtratorPadroesSubcluster] Classe {cls}: n={len(ids_cls)} "
@@ -68,18 +67,20 @@ class ExtratorPadroesSubcluster:
             for centroide in centroides:
                 if self.k == 1:
                     idx_local = closervects(Wswp_cls, centroide, k=1)
-                    padroes_list.append(Wk4[idx_local])
-                    meta_list.append((cls, int(ids_cls[idx_local])))
+                    idx_global = ids_cls[idx_local]
+                    padroes_list.append(self.W0[idx_global].astype(np.float32, copy=False))
+                    meta_list.append((cls, int(idx_global)))
                 else:
                     idxs = closervects(Wswp_cls, centroide, k=self.k)
-                    padrao = (Wk4[idxs].mean(axis=0) > 0.5).astype(np.float32)
+                    idxs_global = ids_cls[idxs]
+                    padrao = (self.W0[idxs_global].astype(np.float32, copy=False).mean(axis=0) >= 0.5).astype(np.float32)
                     padroes_list.append(padrao)
                     meta_list.append((cls, int(ids_cls[idxs[0]])))
 
         self.padroes = np.vstack(padroes_list).astype(np.float32)
         self.meta = meta_list
         print(f"[ExtratorPadroesSubcluster] Extração concluída: "
-              f"{self.padroes.shape[0]} padrões ({len(classes_validas)} classes)")
+              f"{self.padroes.shape[0]} padrões ({len(classes_validas)} classes, amostragem k={self.k})")
         return self
 
     def __repr__(self):

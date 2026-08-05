@@ -68,6 +68,13 @@ from config import (
     OUT_TREINAMENTO, OUT_HOPFIELD, OUT_RELATORIO,
 )
 
+import treinamento.hopfield
+import treinamento.extrator_padroes
+import treinamento.avaliador_hopfield
+importlib.reload(treinamento.hopfield)
+importlib.reload(treinamento.extrator_padroes)
+importlib.reload(treinamento.avaliador_hopfield)
+
 from preprocessing import Binarizador
 from alinhamento import (
     LeitorFeatures, AnalisadorSobreposicao, Alinhador,
@@ -300,9 +307,9 @@ print(carregador)
 # %%
 # Mathys — dados para imputação cross-dataset
 # Genes ausentes no Mathys foram preenchidos com 0.5 (sentinela) pelo Alinhador.
-print(f'[Mathys] Carregando matriz expandida ({len(genes_unificados)} genes)...')
+print(f'[Mathys] Carregando matriz expandida ({len(genes_unificados)} genes) via mmap_mode...')
 if str(path_m_expandido).endswith('.npy'):
-    W_mathys = np.load(path_m_expandido).astype(np.float32, copy=False)
+    W_mathys = np.load(path_m_expandido, mmap_mode='r')
 else:
     W_mathys = pl.read_csv(path_m_expandido).to_numpy().astype(np.float32)
 print(f'[Mathys] W_mathys shape: {W_mathys.shape}')
@@ -450,7 +457,7 @@ extrator = ExtratorPadroesSubcluster(
     labels  = clo,
     classes = [1, 2, 3, 4, 5, 6, 7],
     seed    = SEED,
-    k       = 1,
+    k       = 3,
     nc      = 30,
 )
 extrator.extrair(projetor.Wswp)
@@ -467,16 +474,17 @@ print(f'perf35 shape: {perf35.shape}  (esperado: (210, ~11000))')
 # **Regra de armazenamento:** simplesmente guardar os padrões — não há treinamento iterativo.
 #
 # **Parâmetros:**
-# - `beta=50.0`: temperatura inversa do softmax (maior → mais winner-takes-all)
+# - `beta=50.0`: temperatura inversa aguda da softmax garantindo nitidez na atenção no espaço cosseno
 # - `n_iters=1`: uma iteração de atualização já é suficiente
-# - `threshold=0.8`: limiar para binarização da saída da rede
+# - `threshold=0.0`: limiar natural de spin {-1,+1} para binarização da saída da rede
+# - `normalize=True`: atenção normalizada por cosseno (ADR 010)
 #
 # **Persistência:** O modelo (.pt) e seus metadados (.json) são salvos em `outputs/hopfield/` via `salvar_com_metadados`.
 #
 
 # %%
-rede35 = ModernHopfieldNetwork(beta=50.0, n_iters=1, binary=True, threshold=0.8)
-# Armazena os 210 padrões no espaço de ~11k genes
+rede35 = ModernHopfieldNetwork(beta=50.0, n_iters=1, binary=True, threshold=0.0, normalize=True)
+# Armazena os 210 padrões no espaço expandido
 rede35.store(perf35)
 meta_eval = extrator.meta  # mapeamento padrao -> classe
 
@@ -530,15 +538,16 @@ CLASSES_ARR = np.array([1, 2, 3, 4, 5, 6, 7])
 # Agora a query é o espaço W0 Binário Original no dataset expandido (~11k genes)
 Wk4    = wsort(carregador.W0[clo == 3])
 n_test = min(1000, Wk4.shape[0])
-Wtes   = rede35.retrieve(Wk4[:n_test], batch_size=4096)
+Wtes   = rede35.retrieve(Wk4[:n_test], batch_size=256, normalize=True)
 print(f'hopf_ts(Wk4[:{n_test}], rede35): shape {Wtes.shape}')
 
 
 perf35_f = perf35.astype(np.float32, copy=False)
 Wtes_f   = Wtes.astype(np.float32, copy=False)
-a2 = (Wtes_f ** 2).sum(axis=1, keepdims=True)
-b2 = (perf35_f ** 2).sum(axis=1, keepdims=True).T
-idx_proto = (a2 + b2 - 2 * (Wtes_f @ perf35_f.T)).argmin(axis=1)
+Wtes_norm = Wtes_f / (np.linalg.norm(Wtes_f, axis=1, keepdims=True) + 1e-12)
+perf_norm = perf35_f / (np.linalg.norm(perf35_f, axis=1, keepdims=True) + 1e-12)
+sim_cos   = Wtes_norm @ perf_norm.T
+idx_proto = sim_cos.argmax(axis=1)
 pred_sub  = CLASSES_ARR[idx_proto // NC]
 
 acc_sub = (pred_sub == 3).mean()
@@ -570,13 +579,14 @@ plt.tight_layout(); plt.show()
 import gc
 
 print('=== Auto-imputação: Fujita → Fujita ===')
-Wrecuperado_f = rede35.retrieve(carregador.W0, batch_size=2048)
+Wrecuperado_f = rede35.retrieve(carregador.W0, batch_size=256, normalize=True)
 
 avaliador_f = AvaliadorHopfield(
     padroes = perf35,
     classes = [1, 2, 3, 4, 5, 6, 7],
-    nc=30,
+    nc      = 30,
     meta    = meta_eval,
+    metrica = 'cosseno',
 )
 avaliador_f.avaliar(Wrecuperado_f, clo).plotar(titulo='Confusão — rede35 (Fujita → Fujita)')
 print(avaliador_f)
@@ -596,10 +606,20 @@ import gc
 
 print('=== Imputação cross-dataset: Mathys ===')
 
-print('\n--- Processo de Imputação ---')
-print('Usando template Fujita para preencher buracos do Mathys (np.where(== 0.5))')
+# Detecção OOM-Safe do subespaço compartilhado informativo no Mathys (ADR 011)
+print("\n[ADR 011] Calculando máscara de subespaço compartilhado no Mathys...")
+is_not_sentinel = (W_mathys[0, :] != 0.5)
+soma_m = np.zeros(W_mathys.shape[1], dtype=np.float64)
+for idx_start in range(0, W_mathys.shape[0], 5000):
+    soma_m += np.sum(W_mathys[idx_start:idx_start+5000], axis=0, dtype=np.float64)
 
-Wrecuperado_m = rede35.retrieve(W_mathys, batch_size=1024)
+idx_comuns_m = np.where(is_not_sentinel & (soma_m > 0.0))[0]
+print(f"[ADR 011] Subespaço Compartilhado: {len(idx_comuns_m)} genes ativos informativos (ignorando {W_mathys.shape[1] - len(idx_comuns_m)} colunas ruído/sentinelas)")
+
+print('\n--- Processo de Imputação ---')
+print('Usando template Fujita com atenção no subespaço limpo para preencher buracos do Mathys')
+
+Wrecuperado_m = rede35.retrieve(W_mathys, batch_size=256, normalize=True, subspace_mask=idx_comuns_m)
 
 mask_sentinela = (W_mathys == 0.5)
 genes_faltantes_qtd = int(mask_sentinela.sum())
@@ -627,8 +647,9 @@ gc.collect()
 avaliador_m = AvaliadorHopfield(
     padroes = perf35,
     classes = [1, 2, 3, 4, 5, 6, 7],
-    nc=30,
+    nc      = 30,
     meta    = meta_eval,
+    metrica = 'cosseno',
 )
 avaliador_m.avaliar(Wrecuperado_m, clo_m).plotar(titulo='Confusão — rede35 (Mathys → Fujita, 0.5)')
 print(avaliador_m)
@@ -655,7 +676,7 @@ print(f'Valores convertidos de 0.5 → 0: {n_meio}')
 print(f'Valores únicos após conversão: {np.unique(W_mathys_bin)}')
 
 print('\n=== Imputação cross-dataset: Mathys (binário puro, sem 0.5) ===')
-Wrecuperado_m_bin = rede35.retrieve(W_mathys_bin, batch_size=1024)
+Wrecuperado_m_bin = rede35.retrieve(W_mathys_bin, batch_size=256, normalize=True, subspace_mask=idx_comuns_m)
 
 del W_mathys_bin
 gc.collect()
@@ -663,8 +684,9 @@ gc.collect()
 avaliador_m_bin = AvaliadorHopfield(
     padroes = perf35,
     classes = [1, 2, 3, 4, 5, 6, 7],
-    nc=30,
+    nc      = 30,
     meta    = meta_eval,
+    metrica = 'cosseno',
 )
 avaliador_m_bin.avaliar(Wrecuperado_m_bin, clo_m).plotar(titulo='Confusão — rede35 (Mathys binário puro)')
 print(avaliador_m_bin)

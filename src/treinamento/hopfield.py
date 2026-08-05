@@ -21,12 +21,13 @@ class ModernHopfieldNetwork(nn.Module):
     patterns   : tensor com os padrões armazenados
     """
 
-    def __init__(self, beta=8.0, n_iters=1, binary=True, threshold=0.0):
+    def __init__(self, beta=8.0, n_iters=1, binary=True, threshold=0.0, normalize=False):
         super().__init__()
         self.beta = beta
         self.n_iters = n_iters
         self.binary = binary
         self.threshold = threshold
+        self.normalize = normalize
         self.register_buffer("patterns", torch.empty(0))
 
     def store(self, patterns):
@@ -45,14 +46,23 @@ class ModernHopfieldNetwork(nn.Module):
         return self
 
     @torch.no_grad()
-    def retrieve(self, queries, batch_size=1024):
+    def retrieve(self, queries, batch_size=1024, normalize=None, subspace_mask=None):
         """Recupera o padrão mais próximo para cada query."""
         if self.patterns.numel() == 0:
             raise RuntimeError("[ModernHopfieldNetwork] Execute .store() antes de .retrieve().")
 
+        if normalize is None:
+            normalize = getattr(self, "normalize", False)
+
         Xi = self.patterns.to(dtype=torch.float32, device='cpu')
         queries_np = np.asarray(queries, dtype=np.float32)
         n_queries, n_features = queries_np.shape
+
+        if subspace_mask is not None:
+            if isinstance(subspace_mask, np.ndarray):
+                subspace_mask = torch.from_numpy(subspace_mask).to(device='cpu')
+            elif isinstance(subspace_mask, torch.Tensor):
+                subspace_mask = subspace_mask.to(device='cpu')
 
         # Allocate output tensor on CPU
         out = torch.empty((n_queries, n_features), dtype=torch.float32, device='cpu')
@@ -65,7 +75,19 @@ class ModernHopfieldNetwork(nn.Module):
                 x = 2.0 * x - 1.0
 
             for _ in range(self.n_iters):
-                scores = self.beta * (x @ Xi.T)
+                if subspace_mask is not None:
+                    x_att = x[:, subspace_mask]
+                    Xi_att = Xi[:, subspace_mask]
+                else:
+                    x_att = x
+                    Xi_att = Xi
+
+                if normalize:
+                    x_norm = F.normalize(x_att, p=2, dim=-1, eps=1e-8)
+                    Xi_norm = F.normalize(Xi_att, p=2, dim=-1, eps=1e-8)
+                    scores = self.beta * (x_norm @ Xi_norm.T)
+                else:
+                    scores = self.beta * (x_att @ Xi_att.T)
                 weights = torch.softmax(scores, dim=-1)
                 x = weights @ Xi
 
@@ -86,6 +108,7 @@ class ModernHopfieldNetwork(nn.Module):
             "n_iters":   self.n_iters,
             "binary":    self.binary,
             "threshold": self.threshold,
+            "normalize": getattr(self, "normalize", False),
             "patterns":  self.patterns.cpu()
         }, path)
         print(f"[ModernHopfieldNetwork] Rede salva em: {path} "
@@ -99,7 +122,8 @@ class ModernHopfieldNetwork(nn.Module):
             beta      = data["beta"],
             n_iters   = data["n_iters"],
             binary    = data["binary"],
-            threshold = data["threshold"]
+            threshold = data["threshold"],
+            normalize = data.get("normalize", False)
         )
         rede.patterns = data["patterns"]
         print(f"[ModernHopfieldNetwork] Rede carregada de: {path} "
@@ -166,6 +190,7 @@ class ModernHopfieldNetwork(nn.Module):
             f"  n_iters    = {self.n_iters}\n"
             f"  binary     = {self.binary}\n"
             f"  threshold  = {self.threshold}\n"
+            f"  normalize  = {getattr(self, 'normalize', False)}\n"
             f"  patterns   = {n_pad} × {dim}\n"
             f")"
         )

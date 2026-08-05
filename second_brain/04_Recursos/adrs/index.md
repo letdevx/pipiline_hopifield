@@ -23,6 +23,8 @@ Esta pasta armazena o repositório de decisões formais de arquitetura para gara
 * 📜 **[[04_Recursos/adrs/adr_007_pipeline_genoma_completo_36k_esparso|ADR 007: Pipeline com Genoma Completo (36.591 genes) e Serialização Esparsa H5AD]]**
 * 📜 **[[04_Recursos/adrs/adr_008_calibracao_temperatura_consenso_hopfield|ADR 008: Calibração da Temperatura ($\beta$) e Suavização de Consenso em Redes Hopfield Modernas]]**
 * 📜 **[[04_Recursos/adrs/adr_009_otimizacao_granularidade_subclusters_nc|ADR 009: Otimização Empírica da Granularidade de Protótipos ($nc$) e Capacidade Associativa]]**
+* 📜 **[[04_Recursos/adrs/adr_010_harmonizacao_cosseno_e_prototipos_consolidados|ADR 010: Harmonização por Similaridade de Cosseno, Protótipos Consolidados ($k>1$) e Otimização Trans-Dataset]]**
+* 📜 **[[04_Recursos/adrs/adr_011_desacoplamento_atencao_subespaco_e_imputacao_expandida|ADR 011: Desacoplamento entre Atenção em Subespaço Compartilhado e Imputação no Espaço Expandido]]**
 
 ---
 

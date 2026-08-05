@@ -2,7 +2,7 @@
 tipo: indice
 tags: [caixa-de-entrada, triagem, hipoteses, lembretes]
 criado: 2026-07-30
-atualizado: 2026-07-30
+atualizado: 2026-08-04
 resumo: "Ponto de captura e triagem rápida de hipóteses biológicas, leituras e lembretes de documentação."
 ---
 
@@ -14,10 +14,8 @@ Esta pasta funciona como a área de triagem de hipóteses, pré-prints de artigo
 
 ## 📌 Lembretes & Itens Pendentes de Triagem
 
-* 🎓 **[[00_Caixa-de-Entrada/lembrete_proposta_projeto_mestrado|Lembrete: Inserção da Proposta do Projeto de Mestrado]]**
-  * Pendente: Inserir a proposta oficial do mestrado para contextualização global do ecossistema de pesquisa.
-* 📐 **[[00_Caixa-de-Entrada/lembrete_documentacao_sweep|Lembrete: Inserção da Documentação Oficial do SWeeP / rSWeeP]]**
-  * Pendente: Inserir manuais técnicos, equações e especificações dos pacotes R/Python do SWeeP.
+* 🧪 **[[00_Caixa-de-Entrada/lembrete_revisao_conceitual_tecnica_pipeline|Lembrete: Plano de Revisão Conceitual e Técnica do Pipeline (Synthetic Ground Truth)]]**
+  * **Pendente:** Criar e executar plano rigoroso de avaliação conceitual (biológica) e técnica (desempenho/IA) para cada etapa do pipeline com datasets sintéticos (*ground truth* vs *dropouts*) e testes unitários.
 
 ---
 

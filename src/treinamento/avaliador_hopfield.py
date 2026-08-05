@@ -30,11 +30,12 @@ class AvaliadorHopfield:
     y_pred        : rótulos preditos pela rede
     """
 
-    def __init__(self, padroes, classes, nc=10, nomes_classes=None, meta=None):
+    def __init__(self, padroes, classes, nc=10, nomes_classes=None, meta=None, metrica="euclidiana"):
         self.padroes = np.asarray(padroes, dtype=np.float32)
         self.classes = list(classes)
         self.nc = nc
         self.nomes_classes = nomes_classes
+        self.metrica = str(metrica).lower()
         # meta: lista de (classe, idx_célula) gerada pelo ExtratorPadroesSubcluster
         # quando fornecida, substitui o mapeamento por idx_proto // nc
         self._pattern_classes = np.array([m[0] for m in meta]) if meta is not None else None
@@ -58,24 +59,37 @@ class AvaliadorHopfield:
         classes_arr = np.array(self.classes)
         labels = np.asarray(labels, dtype=int)
 
-        print("[AvaliadorHopfield] Mapeando padrões recuperados para classes (processamento em lotes em float32)...")
+        print(f"[AvaliadorHopfield] Mapeando padrões recuperados para classes (métrica: {getattr(self, 'metrica', 'euclidiana')}, lotes em float32)...")
         n_obs = Wrecuperado.shape[0]
         n_genes = Wrecuperado.shape[1]
         perf_f = self.padroes.astype(np.float32, copy=False)
         b2 = (perf_f ** 2).sum(axis=1, keepdims=True).T
+        perf_norms = np.linalg.norm(perf_f, axis=1, keepdims=True)
+        perf_norms[perf_norms == 0] = 1.0
+        perf_f_norm = perf_f / perf_norms
 
         idx_proto_list = []
         hamming_list = []
-        chunk_size = 2000
+        chunk_size = 250
 
         for start in range(0, n_obs, chunk_size):
             end = min(start + chunk_size, n_obs)
             W_chunk_f = np.asarray(Wrecuperado[start:end], dtype=np.float32)
-            a2_chunk = (W_chunk_f ** 2).sum(axis=1, keepdims=True)
-            sq_dist_chunk = a2_chunk + b2 - 2 * (W_chunk_f @ perf_f.T)
-            idx_chunk = sq_dist_chunk.argmin(axis=1)
 
-            min_sq_dist = sq_dist_chunk[np.arange(end - start), idx_chunk]
+            if getattr(self, "metrica", "euclidiana") == "cosseno":
+                w_norms = np.linalg.norm(W_chunk_f, axis=1, keepdims=True)
+                w_norms[w_norms == 0] = 1.0
+                w_norm = W_chunk_f / w_norms
+                sim_matrix = w_norm @ perf_f_norm.T
+                idx_chunk = sim_matrix.argmax(axis=1)
+                diff = W_chunk_f - perf_f[idx_chunk]
+                min_sq_dist = (diff ** 2).sum(axis=1)
+            else:
+                a2_chunk = (W_chunk_f ** 2).sum(axis=1, keepdims=True)
+                sq_dist_chunk = a2_chunk + b2 - 2 * (W_chunk_f @ perf_f.T)
+                idx_chunk = sq_dist_chunk.argmin(axis=1)
+                min_sq_dist = sq_dist_chunk[np.arange(end - start), idx_chunk]
+
             hamming_chunk = np.maximum(0.0, min_sq_dist) / n_genes
 
             idx_proto_list.append(idx_chunk)
@@ -206,6 +220,7 @@ class AvaliadorHopfield:
             f"  padroes            = {self.padroes.shape}\n"
             f"  classes            = {self.classes}\n"
             f"  nc                 = {self.nc}\n"
+            f"  metrica            = {getattr(self, 'metrica', 'euclidiana')}\n"
             f"  acuracia           = {acc}\n"
             f"  f1_macro           = {f1m}\n"
             f"  f1_weighted        = {f1w}\n"

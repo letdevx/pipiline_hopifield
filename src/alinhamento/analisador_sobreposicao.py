@@ -30,7 +30,7 @@ class AnalisadorSobreposicao:
 
         print(f"[AnalisadorSobreposicao] Em comum  : {len(self.ids_comuns)}")
         print(f"[AnalisadorSobreposicao] Só Fujita : {len(self.ids_so_f)}")
-        print(f"[AnalisadorSobreposicao] Só Mathys : {len(self.ids_so_m)}  ← serão excluídos")
+        print(f"[AnalisadorSobreposicao] Só Mathys : {len(self.ids_so_m)}  <- serão excluídos")
         print(f"[AnalisadorSobreposicao] Espaço gênico final: {len(self.genes_ordenados)} genes")
         return self
 

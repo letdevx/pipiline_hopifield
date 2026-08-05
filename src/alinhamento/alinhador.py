@@ -119,7 +119,7 @@ class Alinhador:
         var_novo = pd.DataFrame(index=pd.Index(self.genes_ordenados, name='ensembl_id'))
         return ad.AnnData(X=X_novo, obs=adata.obs.copy(), var=var_novo)
 
-    def salvar_como_txt(self, chunk=5000):
+    def salvar_como_txt(self, chunk=500):
         """Salva os arquivos alinhados em formato TXT (CSV) dentro de suas respectivas pastas.
 
         Usa Polars (escrita Rust) para velocidade máxima. Processa em chunks de memória.
@@ -160,7 +160,7 @@ class Alinhador:
 
             adata.file.close()
             os.rename(path_tmp, path_txt)
-            print(f"  Salvo: {path_txt}  ({total} células × {len(gene_names)} genes)  ✓")
+            print(f"  Salvo: {path_txt}  ({total} células x {len(gene_names)} genes)  [Ok]")
         return self
 
     def gerar_tracking(self, ids_so_f, map_f):

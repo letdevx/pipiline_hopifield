@@ -109,13 +109,13 @@ class SelecionadorGenesDiferenciais:
             colunas_validas = [coluna_celulas] + [c for c in lista_genes if c in header]
 
             if str(out_csv_or_npy).endswith('.npy'):
-                df_filtered = pl.read_csv(in_csv_or_npy, columns=colunas_validas)
+                df_filtered = pl.scan_csv(in_csv_or_npy).select(colunas_validas).collect()
                 if df_filtered.columns[0] == coluna_celulas and not df_filtered.dtypes[0].is_numeric():
                     arr = df_filtered.select(colunas_validas[1:]).to_numpy().astype(np.float32)
                 else:
                     arr = df_filtered.to_numpy().astype(np.float32)
                 np.save(out_csv_or_npy, arr)
-                print(f"[SelecionadorGenesDiferenciais] Matriz filtrada salva em binário: {out_csv_or_npy} ({arr.shape})")
+                print(f"[SelecionadorGenesDiferenciais] Matriz filtrada salva em binário (lazy): {out_csv_or_npy} ({arr.shape})")
             else:
                 pl.scan_csv(in_csv_or_npy).select(colunas_validas).sink_csv(out_csv_or_npy)
                 print(f"[SelecionadorGenesDiferenciais] Matriz filtrada salva em: {out_csv_or_npy}")

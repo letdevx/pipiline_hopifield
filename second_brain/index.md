@@ -2,7 +2,7 @@
 tipo: indice-geral
 tags: [indice-geral, mapa, grafo, segundo-cerebro]
 criado: 2026-07-30
-atualizado: 2026-07-30
+atualizado: 2026-08-04
 resumo: "Ponto de entrada principal e mapa do Grafo de Conhecimento Científico do projeto."
 ---
 
@@ -20,13 +20,17 @@ Cada seção do sistema possui seu arquivo `index.md` interno para consulta ráp
 * 🚀 **[[01_Projetos/index|Projetos]]** — Projetos de pesquisa ativos com metas, código e relatórios de experimentos.
 * 🎯 **[[02_Areas/index|Áreas de Pesquisa]]** — Domínios científicos contínuos (scRNA-seq, Redes Hopfield Modernas).
 * 📚 **[[03_Conhecimento/index|Conceitos Atômicos]]** — Notas atômicas de teoria, modelos matemáticos e princípios biológicos.
-* 🗄️ **[[04_Recursos/index|Recursos & ADRs]]** — Biblioteca de referências externas, ferramentas e decisões formais de arquitetura.
+* 🗄️ **[[04_Recursos/index|Recursos & ADRs]]** — Biblioteca de referências externas, ferramentas, artigos e decisões formais de arquitetura.
 * 📦 **[[05_Arquivos/index|Arquivos]]** — Histórico de marcos concluídos e pipelines encerrados.
 
 ---
 
 ## ⭐️ Acessos Rápidos & Nós Principais
 
+* 🎓 **[[01_Projetos/proposta_mestrado/index|Projeto de Mestrado UFPR (Discente Leticia Astolpho Silvano)]]**
+* 📐 **[[04_Recursos/projecao_sweep/documentacao_oficial_sweep|Documentação Oficial SWeeP / rSWeeP (UFPR / AIBIALab)]]**
+* 📜 **[[04_Recursos/artigos/hopfield_1982_neural_networks_emergent_abilities|Artigo Fundacional: Hopfield (1982) — Modelo Clássico]]**
+* 📜 **[[04_Recursos/artigos/krotov_hopfield_2016_dense_associative_memory|Artigo Fundacional: Krotov & Hopfield (2016) — Redes Hopfield Modernas / DAM]]**
 * 🚀 **[[01_Projetos/pipeline_hopfield_expandido/documentacao_pipeline_hopfield|Documentação Mestre do Pipeline Expandido]]**
 * 📐 **[[01_Projetos/pipeline_hopfield_expandido/arquitetura_do_sistema|Documento de Arquitetura do Sistema]]**
 * 🏛️ **[[04_Recursos/adrs/index|Índice Formais de ADRs (Architecture Decision Records)]]**
@@ -38,8 +42,7 @@ Cada seção do sistema possui seu arquivo `index.md` interno para consulta ráp
 
 ## 📥 Pendências & Lembretes na Caixa de Entrada
 
-* 🎓 **[[00_Caixa-de-Entrada/lembrete_proposta_projeto_mestrado|Lembrete: Proposta do Projeto de Mestrado]]**
-* 📐 **[[00_Caixa-de-Entrada/lembrete_documentacao_sweep|Lembrete: Documentação Oficial do SWeeP / rSWeeP]]**
+* 🧪 **[[00_Caixa-de-Entrada/lembrete_revisao_conceitual_tecnica_pipeline|Lembrete: Plano de Revisão Conceitual e Técnica do Pipeline (Synthetic Ground Truth)]]**
 
 ---
 
