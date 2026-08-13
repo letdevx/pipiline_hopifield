@@ -33,26 +33,37 @@ class SelecionadorGenesDiferenciais:
         if isinstance(self.path_labels, (np.ndarray, list)):
             labels = np.asarray(self.path_labels, dtype=int).ravel()
         else:
-            labels = np.loadtxt(self.path_labels, dtype=int).ravel()
+            try:
+                labels = np.loadtxt(self.path_labels, dtype=int).ravel()
+            except ValueError:
+                labels = np.loadtxt(self.path_labels, dtype=int, skiprows=1).ravel()
 
         # Remapeia classes seguindo a regra clo (classes raras -> 2)
         clo = labels.copy()
         clo[~np.isin(clo, [1, 3, 4, 5, 6, 7, 0])] = 2
         mask_valid = (clo != 0)
 
-        # Leitura da matriz
-        if str(self.path_input).endswith('.h5ad'):
-            adata = ad.read_h5ad(self.path_input)
+        # Leitura da matriz (com detecção inteligente de .h5ad equivalente)
+        path_h5ad = os.path.splitext(str(self.path_input))[0] + ".h5ad"
+        if os.path.exists(path_h5ad) or str(self.path_input).endswith('.h5ad'):
+            target_h5ad = path_h5ad if os.path.exists(path_h5ad) else self.path_input
+            print(f"  Utilizando matriz AnnData para carregamento otimizado: {target_h5ad}")
+            adata = ad.read_h5ad(target_h5ad)
             gene_names = adata.var_names.tolist()
             X = adata.X[mask_valid]
             if sp.issparse(X):
                 X = X.toarray()
+            del adata
+            import gc
+            gc.collect()
         else:
             # Leitura de CSV/TXT binarizado
             df = pd.read_csv(self.path_input, dtype=np.float32)
             gene_names = df.columns.tolist()
             X = df.values[mask_valid]
             del df
+            import gc
+            gc.collect()
 
         y = clo[mask_valid]
 

@@ -18,6 +18,8 @@ Central de documentação, arquitetura e notas do projeto de alinhamento e imput
   * Guia de ponta a ponta com diagrama Mermaid, explicação detalhada das 18 seções do notebook, intuição biológica, técnica e gargalos de RAM/tempo.
 * 📐 **[[01_Projetos/pipeline_hopfield_expandido/arquitetura_do_sistema|Documento de Arquitetura do Sistema]]**
   * Especificação dos módulos em `src/`, fluxo de dados, transformações de matrizes e perfil de consumo de memória.
+* 🧪 **[[01_Projetos/pipeline_hopfield_expandido/plano_auditoria_conceitual_tecnica|Plano de Auditoria Conceitual e Técnica (Synthetic Ground Truth)]]**
+  * Metodologia rigorosa de testes unitários (`pytest`), micro-datasets humano-verificáveis e provas reais de invariância matemática em cada etapa.
 
 ---
 

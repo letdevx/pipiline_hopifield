@@ -80,7 +80,7 @@ class ExtratorPadroesSubcluster:
         self.padroes = np.vstack(padroes_list).astype(np.float32)
         self.meta = meta_list
         print(f"[ExtratorPadroesSubcluster] Extração concluída: "
-              f"{self.padroes.shape[0]} padrões ({len(classes_validas)} classes, amostragem k={self.k})")
+              f"{self.padroes.shape[0]} padrões ({len(classes_validas)} classes, amostragem k={self.k})", flush=True)
         return self
 
     def __repr__(self):

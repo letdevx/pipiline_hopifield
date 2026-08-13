@@ -40,6 +40,12 @@
 
 # %%
 import sys, os
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 import gc
 import importlib
 import numpy as np
@@ -47,11 +53,13 @@ import pandas as pd
 import polars as pl
 import torch
 import anndata as ad
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, f1_score, classification_report
 
-SRC_DIR = os.path.join(os.path.dirname(os.path.abspath('__file__')), 'src')
+SRC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src')
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
@@ -273,13 +281,13 @@ print(carregador)
 # Genes ausentes no Mathys foram preenchidos com 0.5 (sentinela) pelo Alinhador.
 print(f'[Mathys] Carregando matriz expandida ({len(genes_unificados)} genes)...')
 if str(path_m_expandido).endswith('.npy'):
-    W_mathys = np.load(path_m_expandido).astype(np.float32, copy=False)
+    W_mathys = np.load(path_m_expandido, mmap_mode='r')
 else:
     W_mathys = pl.read_csv(path_m_expandido).to_numpy().astype(np.float32)
 print(f'[Mathys] W_mathys shape: {W_mathys.shape}')
 
 print('[Mathys] Carregando rótulos...')
-labels_mathys = np.loadtxt(PATH_LABELS_M, dtype=int, skiprows=1)
+labels_mathys = np.loadtxt(PATH_LABELS_M, dtype=int)
 print(f'[Mathys] labels shape: {labels_mathys.shape}, tipos: {np.unique(labels_mathys)}')
 
 
@@ -541,13 +549,17 @@ from src.treinamento.extrator_padroes import ExtratorPadroesSubcluster
 
 print('=== 13.1 Varredura de Granularidade e Capacidade Associativa (Fator nc) ===\n')
 
+# Pre-alocação de buffer compacto em RAM (float16: 3.29 GB em vez de 6.58 GB)
+# Reutilizado in-place em todas as iterações do Grid Search (zero alocações extras)
+Wrec_buffer = np.empty(W_mathys.shape, dtype=np.float16)
+
 # Candidatos de número de subclusters por classe biológica
 nc_candidatos = [10, 20, 30, 50, 80, 100, 150]
 resultados_nc = []
 
-print(f"[Grid Search - nc] Iniciando varredura empírica de capacidade sobre {len(nc_candidatos)} configurações de subclusters...")
+print(f"[Grid Search - nc] Iniciando varredura empírica sobre {len(nc_candidatos)} configurações (Buffer float16 OOM-Safe)...")
 for n_cl in nc_candidatos:
-    print(f"\n---> Extraindo e avaliando nc = {n_cl} ({n_cl * 7} protótipos totais) no espaço SWeeP...")
+    print(f"\n---> Extraindo e avaliando nc = {n_cl} ({n_cl * 7} protótipos totais) no espaço SWeeP...", flush=True)
     
     # Extração de padrões no espaço 600D do SWeeP
     extrator_temp = ExtratorPadroesSubcluster(
@@ -564,17 +576,17 @@ for n_cl in nc_candidatos:
     rede_temp = ModernHopfieldNetwork(beta=50.0, n_iters=1, binary=True, threshold=0.0)
     rede_temp.store(extrator_temp.padroes)
     
-    # Recuperação em blocos para não sobrecarregar a memória RAM
-    Wrec_nc = rede_temp.retrieve(W_mathys, batch_size=512)
+    # Recuperação gravando diretamente no Wrec_buffer pre-alocado (float16)
+    rede_temp.retrieve(W_mathys, batch_size=2048, out_buffer=Wrec_buffer)
     
-    # Avaliar acurácia e F1 no dataset Mathys
+    # Avaliar acurácia e F1 no dataset Mathys a partir do Wrec_buffer
     aval_nc = AvaliadorHopfield(
         padroes = extrator_temp.padroes,
         classes = [1, 2, 3, 4, 5, 6, 7],
         nc      = n_cl,
         meta    = extrator_temp.meta
     )
-    aval_nc.avaliar(Wrec_nc, clo_m)
+    aval_nc.avaliar(Wrec_buffer, clo_m)
     
     resultados_nc.append({
         'nc': n_cl,
@@ -585,8 +597,7 @@ for n_cl in nc_candidatos:
         'semelhanca_media': float(aval_nc.semelhanca_media)
     })
     
-    # Desaloca imediatamente para manter 100% OOM-Safe
-    del extrator_temp, rede_temp, Wrec_nc, aval_nc
+    del extrator_temp, rede_temp, aval_nc
     gc.collect()
 
 df_nc = pd.DataFrame(resultados_nc)
@@ -635,7 +646,12 @@ extrator_otimo = ExtratorPadroesSubcluster(
 perf35_otimo = extrator_otimo.padroes
 meta_eval_otimo = extrator_otimo.meta
 del extrator_otimo
+
+# Liberar carregador.W0 da memória RAM pois os 210 protótipos já foram extraídos!
+if hasattr(carregador, 'W0'):
+    del carregador.W0
 gc.collect()
+print("[Otimização RAM] carregador.W0 (5.85 GB) liberado da memória RAM com sucesso.")
 
 # Atualizando nosso modelo principal com a base expandida ótima
 rede35 = ModernHopfieldNetwork(beta=50.0, n_iters=1, binary=True, threshold=0.0).store(perf35_otimo)
@@ -654,13 +670,13 @@ print(f'=== 13.2 Calibração da Temperatura (β) na Base de Memória Ótima (nc
 betas_teste = [10.0, 25.0, 50.0, 75.0, 100.0, 150.0, 200.0, 300.0, 500.0]
 resultados_calib = []
 
-print(f"[Grid Search - β] Varredura empírica sobre {len(betas_teste)} valores de temperatura no espaço nc*={nc_otimo}...")
+print(f"[Grid Search - β] Varredura empírica sobre {len(betas_teste)} valores (Reutilizando Wrec_buffer float16)...")
 for b in betas_teste:
-    print(f"\n---> Avaliando β = {b} ...")
+    print(f"\n---> Avaliando β = {b} ...", flush=True)
     rede35.beta = float(b)
     
-    # Recuperação em blocos
-    Wrec_temp = rede35.retrieve(W_mathys, batch_size=512)
+    # Recuperação gravando in-place no mesmo Wrec_buffer
+    rede35.retrieve(W_mathys, batch_size=2048, out_buffer=Wrec_buffer)
     
     aval_temp = AvaliadorHopfield(
         padroes = perf35_otimo,
@@ -668,7 +684,7 @@ for b in betas_teste:
         nc      = nc_otimo,
         meta    = meta_eval_otimo,
     )
-    aval_temp.avaliar(Wrec_temp, clo_m)
+    aval_temp.avaliar(Wrec_buffer, clo_m)
     
     resultados_calib.append({
         'beta': b,
@@ -678,7 +694,7 @@ for b in betas_teste:
         'semelhanca_media': float(aval_temp.semelhanca_media)
     })
     
-    del Wrec_temp, aval_temp
+    del aval_temp
     gc.collect()
 
 df_calib = pd.DataFrame(resultados_calib)
@@ -723,38 +739,52 @@ print(f'=== 13.3 Imputação Definitiva com Par Ótimo (nc* = {nc_otimo}, β* = 
 # Aplicar o beta ótimo na rede Hopfield contendo a memória expandida
 rede35.beta = float(beta_otimo)
 
-# Utiliza batch_size=512 para impedir estouros de VRAM/RAM em 36.591 dimensões
-Wrecuperado_m = rede35.retrieve(W_mathys, batch_size=512)
+# Reutilizar Wrec_buffer (float16) para armazenar os dados recuperados definitivos
+Wrecuperado_m = Wrec_buffer
 
-# OTIMIZAÇÃO OOM-SAFE: Em vez de alocar máscaras booleanas de 5.16 GB e arrays densos simultâneos
-# de 6.6 GB (que somam >25 GB de RAM), processamos em blocos de 2048 linhas e geramos direto a matriz esparsa CSR.
 genes_faltantes_qtd = 0
 genes_resolvidos_qtd = 0
 total_nao_sentinela = 0
 diferencas_nao_sentinela = 0
 recuperados_count = np.zeros(W_mathys.shape[1], dtype=np.int64)
-sparse_blocks = []
+
+# Acumulação incremental direta dos vetores de componentes esparsos (sem sp.vstack em memória)
+indptr = [0]
+data_list = []
+indices_list = []
 
 chunk_size = 2048
 for i in range(0, W_mathys.shape[0], chunk_size):
     w_orig_chunk = W_mathys[i : i + chunk_size]
-    w_rec_chunk  = Wrecuperado_m[i : i + chunk_size]
+    
+    # Retrieval gravando na fatia correspondente do buffer pré-alocado
+    w_rec_chunk = rede35.retrieve(w_orig_chunk, batch_size=2048, out_buffer=Wrecuperado_m[i : i + chunk_size])
     
     mask_sent = (w_orig_chunk == 0.5)
-    mask_nao = ~mask_sent
     
-    genes_faltantes_qtd += int(mask_sent.sum())
-    total_nao_sentinela += int(mask_nao.sum())
-    diferencas_nao_sentinela += int((w_orig_chunk[mask_nao] != w_rec_chunk[mask_nao]).sum())
+    genes_faltantes_qtd_chunk = int(mask_sent.sum())
+    genes_faltantes_qtd += genes_faltantes_qtd_chunk
+    total_nao_sentinela += (mask_sent.size - genes_faltantes_qtd_chunk)
     
-    # Imputação local apenas no bloco (~300 MB de RAM ao invés de 6.6 GB!)
+    diff_mask = (w_orig_chunk != w_rec_chunk)
+    diff_mask[mask_sent] = False
+    diferencas_nao_sentinela += int(diff_mask.sum())
+    del diff_mask
+    
     chunk_imp = np.where(mask_sent, w_rec_chunk, w_orig_chunk).astype(np.float32, copy=False)
     genes_resolvidos_qtd += int((chunk_imp == 0.5).sum())
     recuperados_count += np.sum(chunk_imp != 0.5, axis=0)
     
-    # Converte imediato para esparso e libera bloco denso
-    sparse_blocks.append(sp.csr_matrix(chunk_imp))
-    del w_orig_chunk, w_rec_chunk, mask_sent, mask_nao, chunk_imp
+    # Extrai componentes esparsos CSR leves do chunk local
+    csr_chunk = sp.csr_matrix(chunk_imp)
+    data_list.append(csr_chunk.data)
+    indices_list.append(csr_chunk.indices)
+    
+    last_ptr = indptr[-1]
+    indptr.extend((csr_chunk.indptr[1:] + last_ptr).tolist())
+    
+    del w_orig_chunk, w_rec_chunk, mask_sent, chunk_imp, csr_chunk
+    gc.collect()
     
 diff_frac = float(diferencas_nao_sentinela / max(1, total_nao_sentinela))
 
@@ -763,10 +793,15 @@ print(f'Genes faltantes após Imputação: {genes_resolvidos_qtd:,}'.replace(','
 
 os.makedirs(OUT_TOP_GENES, exist_ok=True)
 PATH_IMPUTADO_H5AD = os.path.join(OUT_TOP_GENES, 'X_mathys_IMPUTADO_completo_36k_rede35.h5ad')
-print(f'[Persistência] Convertendo array de 36k genes para formato esparso CSR comprimido...')
+print(f'[Persistência] Construindo matriz CSR unificada em passagem única sem sp.vstack...')
 
-X_sparse = sp.vstack(sparse_blocks)
-del sparse_blocks
+X_sparse = sp.csr_matrix((
+    np.concatenate(data_list),
+    np.concatenate(indices_list),
+    np.array(indptr, dtype=np.int64)
+), shape=W_mathys.shape)
+
+del data_list, indices_list, indptr
 gc.collect()
 
 # Exportação esparsa ultra-eficiente
@@ -790,8 +825,8 @@ perf35 = perf35_otimo
 meta_eval = meta_eval_otimo
 NC = nc_otimo
 
-# Liberar Wrecuperado_m para economizar RAM antes da Seção 14
-del Wrecuperado_m
+# Liberar Wrecuperado_m e Wrec_buffer
+del Wrecuperado_m, Wrec_buffer
 gc.collect()
 
 
@@ -806,25 +841,35 @@ import gc
 
 # Conversão in-place por blocos para prevenir duplicação de array de 6.6 GB em RAM
 print('\n--- Convertendo sentinelas 0.5 -> 0.0 por blocos para teste binário puro (OOM Safe) ---')
+import os
+path_temp_bin = str(path_m_expandido).replace('.npy', '_bin_temp.npy')
+W_mathys_bin = np.lib.format.open_memmap(path_temp_bin, mode='w+', dtype=W_mathys.dtype, shape=W_mathys.shape)
+
 n_meio = 0
 chunk_size = 2048
 for i in range(0, W_mathys.shape[0], chunk_size):
-    chunk = W_mathys[i : i + chunk_size]
+    chunk = W_mathys[i : i + chunk_size].copy()
     mask = (chunk == 0.5)
     n_meio += int(mask.sum())
     chunk[mask] = 0.0
+    W_mathys_bin[i : i + chunk_size] = chunk
     del chunk, mask
 
-W_mathys_bin = W_mathys
 gc.collect()
 print(f'Valores convertidos de 0.5 → 0: {n_meio:,}'.replace(',', '.'))
 
 print('\n=== Imputação cross-dataset: Mathys (binário puro 36k, sem 0.5) ===')
-Wrecuperado_m_bin = rede35.retrieve(W_mathys_bin, batch_size=512)
+Wrecuperado_m_bin = np.empty(W_mathys_bin.shape, dtype=np.float16)
+rede35.retrieve(W_mathys_bin, batch_size=512, out_buffer=Wrecuperado_m_bin)
 
 # Liberamos W_mathys_bin e W_mathys imediatamente da memória RAM (~6.6 GB liberados!)
 del W_mathys_bin, W_mathys
 gc.collect()
+if os.path.exists(path_temp_bin):
+    try:
+        os.remove(path_temp_bin)
+    except Exception as e:
+        print(f"Não foi possível apagar {path_temp_bin}: {e}")
 
 avaliador_m_bin = AvaliadorHopfield(
     padroes = perf35,
@@ -860,7 +905,7 @@ for true_c, pred_c in zip(clo_m, pred_m):
         CM_diag.loc[true_c, pred_c] += 1
 
 print("Mapeamento Mathys → protótipos Fujita (contagens):")
-display(CM_diag)
+print(CM_diag)
 
 print(f"\nFração de genes não-sentinela alterados após retrieve(): {diff_frac:.4f}")
 

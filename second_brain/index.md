@@ -42,7 +42,7 @@ Cada seção do sistema possui seu arquivo `index.md` interno para consulta ráp
 
 ## 📥 Pendências & Lembretes na Caixa de Entrada
 
-* 🧪 **[[00_Caixa-de-Entrada/lembrete_revisao_conceitual_tecnica_pipeline|Lembrete: Plano de Revisão Conceitual e Técnica do Pipeline (Synthetic Ground Truth)]]**
+* ✅ **[[01_Projetos/pipeline_hopfield_expandido/plano_auditoria_conceitual_tecnica|Concluído: Plano de Auditoria Conceitual e Técnica (Synthetic Ground Truth & Provas Reais)]]**
 
 ---
 

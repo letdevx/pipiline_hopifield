@@ -49,7 +49,7 @@ class EstrategiaKMeansDinamico(EstrategiaClusterizacao):
             return np.array([Wswp_cls.mean(axis=0)])
 
         for k in valid_ks:
-            km = KMeans(n_clusters=k, n_init=5, random_state=self.seed)
+            km = KMeans(n_clusters=k, n_init=1, random_state=self.seed)
             labels = km.fit_predict(Wswp_cls)
             
             # Se apenas um cluster foi encontrado de alguma forma (ou todas as células são muito iguais)
@@ -89,7 +89,7 @@ class EstrategiaKMeansFixo(EstrategiaClusterizacao):
             print(f"[EstrategiaKMeansFixo] Células insuficientes ({n_samples}) para {self.n_clusters} clusters. Retornando todas como centróides.")
             return Wswp_cls
             
-        km = KMeans(n_clusters=self.n_clusters, n_init=5, random_state=self.seed)
+        km = KMeans(n_clusters=self.n_clusters, n_init=1, random_state=self.seed)
         km.fit(Wswp_cls)
         
         return km.cluster_centers_

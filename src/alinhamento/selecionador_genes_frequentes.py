@@ -22,23 +22,53 @@ class SelecionadorGenesFrequentes:
             print(f"[SelecionadorGenesFrequentes] Arquivo já existe, pulando: {out_csv}")
             self.df_resultado = pl.read_csv(out_csv)
             return self
-        print(f"[SelecionadorGenesFrequentes] Lendo: {self.path_txt}")
 
-        with open(self.path_txt, encoding='utf-8') as fh:
-            gene_names = fh.readline().strip().split(',')
-        total_genes = len(gene_names)
+        path_h5ad = os.path.splitext(self.path_txt)[0] + ".h5ad"
+        if os.path.exists(path_h5ad):
+            print(f"[SelecionadorGenesFrequentes] Arquivo .h5ad equivalente detectado: {path_h5ad}")
+            print("  Calculando frequências diretamente via AnnData (OOM-Safe & ultrarrápido)...")
+            import gc
+            import anndata as ad
+            import scipy.sparse as sp
 
-        print(f"  Calculando frequências para {total_genes} genes (streaming por chunks)...")
+            adata = ad.read_h5ad(path_h5ad, backed='r')
+            gene_names = adata.var_names.tolist()
+            total_genes = len(gene_names)
+            somas = np.zeros(total_genes, dtype=np.int64)
+            n_celulas = adata.n_obs
+            chunk_size = 2048
 
-        # Pandas chunked read: ~293 MB per chunk (2000 × 36601 × float32).
-        # Accumulate integer column sums without loading the full 6 GB file.
-        somas = np.zeros(total_genes, dtype=np.int64)
-        n_celulas = 0
-        for chunk in pd.read_csv(self.path_txt, chunksize=2000, dtype=np.float32, header=0):
-            somas += (chunk.values > 0).sum(axis=0).astype(np.int64)
-            n_celulas += len(chunk)
-            if n_celulas % 10000 < 2000:
-                print(f"  {n_celulas} células processadas...")
+            for start in range(0, n_celulas, chunk_size):
+                end = min(start + chunk_size, n_celulas)
+                X = adata.X[start:end]
+                if sp.issparse(X):
+                    somas += (X > 0).sum(axis=0).A.flatten().astype(np.int64)
+                else:
+                    somas += (X > 0).sum(axis=0).astype(np.int64)
+                del X
+                gc.collect()
+                if end % 10000 < chunk_size:
+                    print(f"  {end} células processadas de {n_celulas}...")
+
+            if hasattr(adata, 'file') and adata.file is not None:
+                adata.file.close()
+        else:
+            print(f"[SelecionadorGenesFrequentes] Lendo: {self.path_txt}")
+            with open(self.path_txt, encoding='utf-8') as fh:
+                gene_names = fh.readline().strip().split(',')
+            total_genes = len(gene_names)
+
+            print(f"  Calculando frequências para {total_genes} genes (streaming por chunks em RAM otimizada)...")
+            import gc
+            somas = np.zeros(total_genes, dtype=np.int64)
+            n_celulas = 0
+            for chunk in pd.read_csv(self.path_txt, chunksize=250, dtype=np.float32, header=0, engine='c'):
+                somas += (chunk.values > 0).sum(axis=0).astype(np.int64)
+                n_celulas += len(chunk)
+                del chunk
+                gc.collect()
+                if n_celulas % 5000 < 250:
+                    print(f"  {n_celulas} células processadas...")
 
         df_frequencias = pl.DataFrame({'gene': gene_names, 'frequencia': somas})
 

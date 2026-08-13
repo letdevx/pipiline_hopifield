@@ -63,10 +63,10 @@ class ValidadorAlinhamento:
                 f"[VALIDAÇÃO FALHOU] Fujita e Mathys divergem em {len(divs_fm)} posição(ões):\n  {msg}"
             )
 
-        print(f"✓ Número de genes idêntico: {len(self.genes_ordenados)}")
-        print(f"✓ Fujita alinhado == ordem de referência")
-        print(f"✓ Mathys alinhado == ordem de referência")
-        print(f"✓ Fujita alinhado == Mathys alinhado")
+        print(f"[OK] Número de genes idêntico: {len(self.genes_ordenados)}")
+        print(f"[OK] Fujita alinhado == ordem de referência")
+        print(f"[OK] Mathys alinhado == ordem de referência")
+        print(f"[OK] Fujita alinhado == Mathys alinhado")
         print("[ValidadorAlinhamento] Validação concluída com sucesso.")
         return self
 

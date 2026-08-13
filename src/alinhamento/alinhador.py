@@ -47,7 +47,7 @@ class Alinhador:
             print(f"  shape final: {adataf_alinhado.shape}")
             del adataf_alinhado
             gc.collect()
-            print(f"  salvo em {self.path_f_alinhado}  ✓\n")
+            print(f"  salvo em {self.path_f_alinhado}  [OK]\n")
 
         if os.path.exists(self.path_m_alinhado):
             print(f"[Alinhador] Mathys já alinhado, pulando: {self.path_m_alinhado}")
@@ -64,7 +64,7 @@ class Alinhador:
             print(f"  shape final: {adatam_alinhado.shape}")
             del adatam_alinhado
             gc.collect()
-            print(f"  salvo em {self.path_m_alinhado}  ✓")
+            print(f"  salvo em {self.path_m_alinhado}  [OK]")
 
         print("\n[Alinhador] Concluído.")
         return self
@@ -73,45 +73,81 @@ class Alinhador:
         n_celulas = adata.n_obs
         n_genes   = len(self.genes_ordenados)
 
-        old_col_map      = np.full(adata.n_vars, -1, dtype=np.intp)
+        old_idx = []
+        new_idx = []
         present_new_cols = set()
         for old_i, gene_name in enumerate(adata.var_names):
             eid = ensembl_map.get(gene_name, gene_name)
             if eid in self.gene_alvo_idx:
                 new_col = self.gene_alvo_idx[eid]
-                old_col_map[old_i] = new_col
+                old_idx.append(old_i)
+                new_idx.append(new_col)
                 present_new_cols.add(new_col)
 
-        X_coo        = adata.X.tocoo() if sp.issparse(adata.X) else sp.coo_matrix(adata.X)
-        new_cols_arr = old_col_map[X_coo.col]
-        mask         = new_cols_arr >= 0
+        # Matriz de projeção P (old_vars -> new_genes)
+        P_data = np.ones(len(old_idx), dtype=np.float32)
+        P = sp.csr_matrix((P_data, (old_idx, new_idx)), shape=(adata.n_vars, n_genes))
 
-        X_novo = sp.csr_matrix(
-            (X_coo.data[mask].astype(np.float32),
-             (X_coo.row[mask], new_cols_arr[mask])),
-            shape=(n_celulas, n_genes),
-            dtype=np.float32,
-        )
-        del X_coo, new_cols_arr, mask
+        print("  Multiplicando matrizes (projeção)...")
+        # Multiplicação é extremamente rápida e consome pouca memória
+        X_novo = (adata.X.dot(P)).astype(np.float32)
+        if sp.issparse(X_novo):
+            X_novo = X_novo.tocsr()
+        else:
+            X_novo = sp.csr_matrix(X_novo)
+        del P
+        gc.collect()
 
         if fill_value != 0.0:
             missing_cols = np.array(
-                sorted(set(range(n_genes)) - present_new_cols), dtype=np.intp
+                sorted(set(range(n_genes)) - present_new_cols), dtype=np.int32
             )
             if len(missing_cols) > 0:
                 print(f"  Preenchendo {len(missing_cols)} colunas ausentes com {fill_value}...")
-                n_fill        = len(missing_cols) * n_celulas
-                fill_rows     = np.tile(np.arange(n_celulas, dtype=np.int32), len(missing_cols))
-                fill_cols_arr = np.repeat(missing_cols.astype(np.int32), n_celulas)
-                fill_data     = np.full(n_fill, fill_value, dtype=np.float32)
-                X_fill = sp.csr_matrix(
-                    (fill_data, (fill_rows, fill_cols_arr)),
-                    shape=(n_celulas, n_genes),
-                    dtype=np.float32,
-                )
-                del fill_rows, fill_cols_arr, fill_data
-                X_novo = X_novo + X_fill
-                del X_fill
+                print("  Mesclando colunas ausentes (otimizado para baixa memória)...")
+                n_miss = len(missing_cols)
+                n_novo = X_novo.nnz
+                n_total = n_novo + n_celulas * n_miss
+                
+                final_indices = np.empty(n_total, dtype=np.int32)
+                final_data = np.empty(n_total, dtype=np.float32)
+                final_indptr = np.empty(n_celulas + 1, dtype=np.int64)
+                final_indptr[0] = 0
+                
+                novo_indptr = X_novo.indptr
+                novo_indices = X_novo.indices
+                novo_data = X_novo.data
+                
+                idx_ptr = 0
+                fill_dat_arr = np.full(n_miss, fill_value, dtype=np.float32)
+                
+                for i in range(n_celulas):
+                    start = novo_indptr[i]
+                    end = novo_indptr[i+1]
+                    ex_idx = novo_indices[start:end]
+                    ex_dat = novo_data[start:end]
+                    
+                    if len(ex_idx) == 0:
+                        row_idx = missing_cols
+                        row_dat = fill_dat_arr
+                    else:
+                        row_idx = np.concatenate([ex_idx, missing_cols])
+                        row_dat = np.concatenate([ex_dat, fill_dat_arr])
+                        sort_mask = np.argsort(row_idx)
+                        row_idx = row_idx[sort_mask]
+                        row_dat = row_dat[sort_mask]
+                        
+                    n_elem = len(row_idx)
+                    end_ptr = idx_ptr + n_elem
+                    
+                    final_indices[idx_ptr:end_ptr] = row_idx
+                    final_data[idx_ptr:end_ptr] = row_dat
+                    
+                    idx_ptr = end_ptr
+                    final_indptr[i+1] = idx_ptr
+
+                X_novo = sp.csr_matrix((final_data, final_indices, final_indptr), shape=(n_celulas, n_genes))
+                del final_data, final_indices, final_indptr
                 gc.collect()
                 print(f"  Preenchimento concluído.")
 

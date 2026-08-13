@@ -74,7 +74,10 @@ class CarregadorDadosFujita:
 
     def _carregar_labels(self):
         print(f"[CarregadorDadosFujita] Carregando rótulos: {self.path_labels}")
-        self.labels = np.loadtxt(self.path_labels, dtype=int).ravel()
+        try:
+            self.labels = np.loadtxt(self.path_labels, dtype=int).ravel()
+        except ValueError:
+            self.labels = np.loadtxt(self.path_labels, dtype=int, skiprows=1).ravel()
         tipos = np.unique(self.labels)
         print(f"[CarregadorDadosFujita] Rótulos shape: {self.labels.shape}, tipos: {tipos}")
 

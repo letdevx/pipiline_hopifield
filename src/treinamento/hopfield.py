@@ -46,8 +46,13 @@ class ModernHopfieldNetwork(nn.Module):
         return self
 
     @torch.no_grad()
-    def retrieve(self, queries, batch_size=1024, normalize=None, subspace_mask=None):
-        """Recupera o padrão mais próximo para cada query."""
+    def retrieve(self, queries, batch_size=1024, normalize=None, subspace_mask=None, out_buffer=None):
+        """Recupera o padrão mais próximo para cada query.
+        
+        Se out_buffer for fornecido (ex: np.ndarray em float16/float32 ou np.memmap),
+        o resultado de cada batch é escrito diretamente em out_buffer[s:s+batch_size],
+        evitando a alocação de matrizes temporárias gigantes em RAM.
+        """
         if self.patterns.numel() == 0:
             raise RuntimeError("[ModernHopfieldNetwork] Execute .store() antes de .retrieve().")
 
@@ -55,7 +60,7 @@ class ModernHopfieldNetwork(nn.Module):
             normalize = getattr(self, "normalize", False)
 
         Xi = self.patterns.to(dtype=torch.float32, device='cpu')
-        queries_np = np.asarray(queries, dtype=np.float32)
+        queries_np = np.asarray(queries)
         n_queries, n_features = queries_np.shape
 
         if subspace_mask is not None:
@@ -64,11 +69,12 @@ class ModernHopfieldNetwork(nn.Module):
             elif isinstance(subspace_mask, torch.Tensor):
                 subspace_mask = subspace_mask.to(device='cpu')
 
-        # Allocate output tensor on CPU
-        out = torch.empty((n_queries, n_features), dtype=torch.float32, device='cpu')
+        if out_buffer is None:
+            target_dtype = queries_np.dtype if queries_np.dtype in (np.float16, np.float32) else np.float32
+            out_buffer = np.empty((n_queries, n_features), dtype=target_dtype)
 
         for s in range(0, n_queries, batch_size):
-            chunk_np = queries_np[s:s + batch_size]
+            chunk_np = queries_np[s:s + batch_size].astype(np.float32, copy=False)
             x = torch.from_numpy(chunk_np).to(device='cpu')
 
             if self.binary:
@@ -94,10 +100,13 @@ class ModernHopfieldNetwork(nn.Module):
             if self.binary:
                 x = (x > self.threshold).float()
 
-            out[s:s + batch_size] = x
+            res_np = x.numpy()
+            if out_buffer.dtype != res_np.dtype:
+                res_np = res_np.astype(out_buffer.dtype, copy=False)
+            out_buffer[s:s + batch_size] = res_np
 
-        print(f"[ModernHopfieldNetwork] Recuperação concluída: {out.shape}")
-        return out.numpy()
+        print(f"[ModernHopfieldNetwork] Recuperação concluída: {out_buffer.shape} (dtype={out_buffer.dtype})")
+        return out_buffer
 
     def salvar(self, path):
         if self.patterns.numel() == 0:

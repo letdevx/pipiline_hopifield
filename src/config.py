@@ -6,10 +6,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # ---------------------------------------------------------------------------
 # Entradas — ajuste os caminhos conforme o ambiente
 # ---------------------------------------------------------------------------
-PATH_M = r"C:\Users\Leticia\Documents\Letworkspace\pipiline_hopifield\imputs\matrizFiltradaeNormalizadaMParcial.h5ad"
+PATH_M = r"C:\Users\Leticia\Documents\Letworkspace\pipiline_hopifield\imputs\matriz_anotada_finalM.h5ad"
 PATH_F = r"C:\Users\Leticia\Documents\Letworkspace\Sweep-Harmonization\Meus_testes\Controle_qualidade\dataF\MatrizfiltradaenormalizadaF\matrizFiltradaeNormalizadaF.h5ad"
 
-PATH_FEATURES_M = r"C:\Users\Leticia\Documents\Letworkspace\Sweep-Harmonization\Meus_testes\Controle_qualidade\dataM\featuresM.tsv.gz"
+PATH_FEATURES_M = r"C:\Users\Leticia\Documents\Letworkspace\Sweep-Harmonization\Meus_testes\Controle_qualidade\dataM\MatrizH5 com tipo celular\matriz_seurat_10x\features.tsv.gz"
 PATH_FEATURES_F = r"C:\Users\Leticia\Documents\Letworkspace\Sweep-Harmonization\Meus_testes\Controle_qualidade\dataF\dados_combinados\features.tsv\features.tsv"
 
 PATH_TOP5000 = r"C:\Users\Leticia\Documents\Letworkspace\Sweep-Harmonization\Meus_testes\Testes Hopifild\top_5000_frequentes.csv"
@@ -19,7 +19,7 @@ PATH_SWEEP_F  = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
 PATH_SWEEP_M  = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                              "outputs", "treinamento", "matriz_reduzida_sweepM.csv")
 PATH_LABELS_F = os.path.join(ROOT, "imputs", "cell_types_binarioF.txt")
-PATH_LABELS_M = os.path.join(ROOT, "imputs", "tipo_celular_binarioM.txt")
+PATH_LABELS_M = os.path.join(ROOT, "imputs", "tipos_celulares_numericoMs.txt")
 
 # ---------------------------------------------------------------------------
 # Saídas — geradas automaticamente dentro da raiz do projeto

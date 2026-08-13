@@ -59,7 +59,7 @@ class AvaliadorHopfield:
         classes_arr = np.array(self.classes)
         labels = np.asarray(labels, dtype=int)
 
-        print(f"[AvaliadorHopfield] Mapeando padrões recuperados para classes (métrica: {getattr(self, 'metrica', 'euclidiana')}, lotes em float32)...")
+        print(f"[AvaliadorHopfield] Mapeando padrões recuperados para classes (métrica: {getattr(self, 'metrica', 'euclidiana')}, lotes em float32)...", flush=True)
         n_obs = Wrecuperado.shape[0]
         n_genes = Wrecuperado.shape[1]
         perf_f = self.padroes.astype(np.float32, copy=False)
@@ -70,7 +70,7 @@ class AvaliadorHopfield:
 
         idx_proto_list = []
         hamming_list = []
-        chunk_size = 250
+        chunk_size = 4096
 
         for start in range(0, n_obs, chunk_size):
             end = min(start + chunk_size, n_obs)
