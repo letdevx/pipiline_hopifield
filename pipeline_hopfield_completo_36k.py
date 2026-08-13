@@ -54,12 +54,14 @@ import polars as pl
 import torch
 import anndata as ad
 import matplotlib
-matplotlib.use('Agg')
+if 'ipykernel' not in sys.modules and '__file__' in globals():
+    matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, f1_score, classification_report
 
-SRC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+SRC_DIR = os.path.join(BASE_DIR, 'src')
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
@@ -212,6 +214,7 @@ for path_h5ad, path_npy, label in [
         X_mat = adata_tmp.X
         if sp.issparse(X_mat):
             X_mat = X_mat.toarray()
+        os.makedirs(os.path.dirname(path_npy), exist_ok=True)
         np.save(path_npy, X_mat.astype(np.float32, copy=False))
         del adata_tmp, X_mat
         gc.collect()
@@ -1045,11 +1048,11 @@ from treinamento.gerador_relatorio import GeradorRelatorio
 
 relatorio = GeradorRelatorio(
     out_dir          = OUT_RELATORIO,
-    nome_experimento = 'experimento_dataset_expandido_11k',
+    nome_experimento = 'experimento_dataset_completo_36k',
 )
 
 relatorio.adicionar_metadados(
-    titulo           = 'Pipeline Hopfield Dataset Expandido (~11.000 genes)',
+    titulo           = 'Pipeline Hopfield Dataset Completo (36.591 genes)',
     modelo           = 'Modern Hopfield Network (Ramsauer et al., 2020)',
     beta             = rede35.beta,
     n_iters          = rede35.n_iters,

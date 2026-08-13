@@ -31,3 +31,6 @@ OUT_TOP_GENES   = os.path.join(OUTPUTS, "top_genes")
 OUT_TREINAMENTO = os.path.join(OUTPUTS, "treinamento")
 OUT_HOPFIELD    = os.path.join(OUTPUTS, "hopfield")
 OUT_RELATORIO   = os.path.join(OUTPUTS, "relatorio")
+
+for _d in [OUTPUTS, OUT_BINARIZACAO, OUT_ALINHAMENTO, OUT_TOP_GENES, OUT_TREINAMENTO, OUT_HOPFIELD, OUT_RELATORIO]:
+    os.makedirs(_d, exist_ok=True)
