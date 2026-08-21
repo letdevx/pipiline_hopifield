@@ -1,5 +1,19 @@
-#!/usr/bin/env python
-# coding: utf-8
+# ---
+# jupyter:
+#   jupytext:
+#     formats: ipynb,py:percent
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.19.5
+#   kernelspec:
+#     display_name: .venv
+#     language: python
+#     name: python3
+# ---
+
+# %%
 
 # # `pipeline_hopfield_v2` — Pipeline Completo com Classes `src/`
 # 
@@ -28,7 +42,7 @@
 
 # ## 1. Imports e configuração
 
-# In[1]:
+# %%
 
 
 import sys, os
@@ -81,7 +95,7 @@ print(f'Dispositivo: {device}')
 # zeros → 0). O `Binarizador` detecta automaticamente se o arquivo já existe e
 # pula o processamento nesse caso.
 
-# In[2]:
+# %%
 
 
 binarizador_f = Binarizador(path_h5ad=PATH_F, out_dir=OUT_BINARIZACAO)
@@ -105,7 +119,7 @@ print('Mathys binarizado em:', binarizador_m.path_binarizada)
 #    - Genes ausentes no **Mathys** são preenchidos com `0.5` como sentinela.
 # 4. Valida que as duas matrizes resultantes têm genes na mesma ordem.
 
-# In[3]:
+# %%
 
 
 # Passo 1 — Leitura dos arquivos de features
@@ -114,7 +128,7 @@ leitor.ler()
 print(leitor)
 
 
-# In[4]:
+# %%
 
 
 # Passo 2 — Análise de sobreposição dos espaços gênicos
@@ -129,7 +143,7 @@ analisador.analisar()
 print(analisador)
 
 
-# In[5]:
+# %%
 
 
 # Passo 3 — Alinhamento dos dois h5ad binarizados
@@ -148,7 +162,7 @@ alinhador.gerar_tracking(analisador.ids_so_f, leitor.map_f)
 print(alinhador)
 
 
-# In[6]:
+# %%
 
 
 # Passo 4 — Validação da ordem de genes
@@ -166,7 +180,7 @@ validador.validar()
 # Em seguida verifica quantos desses genes estão presentes no Mathys e gera
 # os conjuntos filtrados para treinamento.
 
-# In[7]:
+# %%
 
 
 path_top5k   = os.path.join(OUT_TOP_GENES,   'top5000_frequentes.csv')
@@ -182,7 +196,7 @@ selecionador.calcular(out_csv=path_top5k).salvar(path_top5k)
 print(selecionador)
 
 
-# In[8]:
+# %%
 
 
 # Cobertura dos top-5000 genes do Fujita no Mathys
@@ -190,7 +204,7 @@ cobertura = AnalisadorCobertura(path_top5k, leitor.map_f, leitor.map_m)
 cobertura.analisar(out_csv=os.path.join(OUT_ALINHAMENTO, 'top5000_cobertura_mathys.csv'))
 
 
-# In[9]:
+# %%
 
 
 # Conjuntos de treinamento filtrados (Fujita + Mathys)
@@ -213,7 +227,7 @@ print(gerador)
 # Wswp = W0 @ R5k        (células × 600)
 # ```
 
-# In[10]:
+# %%
 
 
 projetor_r = ProjetorSWeePR(
@@ -232,7 +246,7 @@ projetor_r.projetar()
 # - `labels`: rótulos inteiros de tipo celular por célula.
 # - `Wswp`: projeções SWeeP pré-computadas (células × 600) — usadas para K-means.
 
-# In[11]:
+# %%
 
 
 # Fujita — padrões de treinamento
@@ -247,7 +261,7 @@ carregador.carregar()
 print(carregador)
 
 
-# In[12]:
+# %%
 
 
 # Mathys — dados para imputação cross-dataset
@@ -274,7 +288,7 @@ print(f'[Mathys] labels shape: {labels_mathys.shape}, tipos: {np.unique(labels_m
 # clo(~ismember(clo,[1 3 4 5 6 7 0])) = 2;
 # ```
 
-# In[13]:
+# %%
 
 
 clo = carregador.labels.copy()
@@ -300,7 +314,7 @@ for v, c in zip(vals_m, counts_m):
 # `pca(W, 'Centered', false)` do MATLAB. Os scores resultantes `Wpc`
 # são usados como espaço auxiliar para visualizações e análises.
 
-# In[14]:
+# %%
 
 
 projetor = ProjetorSWeP(n_features=5000, n_componentes=600, seed=SEED)
@@ -317,7 +331,7 @@ print(projetor)
 # 
 # `projetor.Wpc` já está calculado na célula anterior; nenhum novo cálculo é necessário.
 
-# In[15]:
+# %%
 
 
 # PCA scatter — PC1 × PC2 colorido por tipo celular (amostra 5 000 células)
@@ -358,7 +372,7 @@ plt.tight_layout(); plt.show()
 #         perf35.append(W0[clo==ii][idx])
 # ```
 
-# In[16]:
+# %%
 
 
 extrator = ExtratorPadroesSubcluster(
@@ -387,7 +401,7 @@ print(f'perf35 shape: {perf35.shape}  (esperado: (70, 5000))')
 # - `threshold=0.5`: genes preenchidos com 0.5 (sentinela Mathys) são tratados
 #   como ausentes (< 0.5 → 0) na binarização da query
 
-# In[17]:
+# %%
 
 
 rede35 = ModernHopfieldNetwork(beta=30.0, n_iters=1, binary=True, threshold=0.0)
@@ -405,7 +419,7 @@ print(rede35)
 # 
 # Se treinou aqui (secoes 9 e 10), **pule esta celula**.
 
-# In[18]:
+# %%
 
 
 import json as _json
@@ -440,7 +454,7 @@ print(f'Classes: {_meta_json["classes"]}  nc={_meta_json["nc"]}  padroes={_meta_
 # Wtes = hopf_ts(Wk4(1:1000,:), rede35);
 # ```
 
-# In[19]:
+# %%
 
 
 NC   = 10
@@ -463,7 +477,7 @@ acc_sub = (pred_sub == 3).mean()
 print(f'\nAcurácia subclasse clo==3: {acc_sub * 100:.2f}%')
 
 
-# In[20]:
+# %%
 
 
 y_true_sub = np.full(n_test, 3)
@@ -484,7 +498,7 @@ plt.tight_layout(); plt.show()
 # Baseline interno: a rede treinada em Fujita recebe as próprias células Fujita.
 # Esperamos alta taxa de reconstrução e classificação.
 
-# In[21]:
+# %%
 
 
 print('=== Auto-imputação: Fujita → Fujita ===')
@@ -506,7 +520,7 @@ print(avaliador_f)
 # no Mathys foram preenchidos com `0.5` pelo `Alinhador` — o limiar `threshold=0.5`
 # da rede os trata como ausentes (0) na binarização da query.
 
-# In[22]:
+# %%
 
 
 print('=== Imputação cross-dataset: Mathys ===')
@@ -546,7 +560,7 @@ print(avaliador_m)# ## 14. Imputação cross-dataset — Mathys binário puro (0
 # equivalente a tratar todos os genes ausentes como definitivamente inativos.
 # Permite comparar o impacto do sentinela `0.5` na qualidade da recuperação.
 
-# In[23]:
+# %%
 
 
 W_mathys_bin = W_mathys.copy()
@@ -568,7 +582,7 @@ avaliador_m_bin.avaliar(Wrecuperado_m_bin, clo_m).plotar(titulo='Confusão — r
 print(avaliador_m_bin)
 
 
-# In[24]:
+# %%
 
 
 # --- Diagnóstico: mapeamento de classes Mathys → protótipos Fujita ---
@@ -605,7 +619,7 @@ print("  > 0 → a rede está realizando a recuperação corretamente")
 
 # ## 15. Persistência da rede
 
-# In[25]:
+# %%
 
 
 import json as _json
@@ -663,7 +677,7 @@ print('Para carregar: rede = ModernHopfieldNetwork.carregar(path)')
 # Consolida as matrizes de confusão e as métricas de reconstrução dos três cenários
 # avaliados nas seções 12, 13 e 14 para facilitar a comparação direta.
 
-# In[26]:
+# %%
 
 
 # Matrizes de confusão — contagens e normalizadas (todos os cenários)
@@ -693,7 +707,7 @@ plt.show()
 # pela Hopfield Network preservou as identidades celulares. Divergência = sinal de
 # perda de informação no alinhamento cross-dataset.
 
-# In[27]:
+# %%
 
 
 from sklearn.manifold import TSNE
@@ -769,7 +783,7 @@ plt.tight_layout(); plt.show()
 #   ARI ≈ 1 → clusters não-supervisionados capturam os tipos celulares.
 #   ARI ≈ 0 → resultado aleatório.
 
-# In[28]:
+# %%
 
 
 from sklearn.cluster import DBSCAN
@@ -835,7 +849,7 @@ plt.suptitle('Validação de clusters — DBSCAN vs rótulos biológicos', fonts
 plt.tight_layout(); plt.show()
 
 
-# In[29]:
+# %%
 
 
 # Tabela de métricas globais — comparação entre os três cenários
@@ -859,7 +873,7 @@ display(df_resumo.style
 )
 
 
-# In[30]:
+# %%
 
 
 # Métricas por classe — precision, recall e F1 para cada dataset
@@ -883,7 +897,7 @@ display(avaliador_m_bin.metricas_por_classe())
 # 
 # **Referência:** taxa de ativação desses mesmos genes nas células Fujita (ground truth).
 
-# In[31]:
+# %%
 
 
 # --- Identificação dos genes ausentes e métricas por gene ---
@@ -933,7 +947,7 @@ df_ausentes = pd.DataFrame({
 display(df_ausentes.sort_values('frequencia', ascending=False).reset_index(drop=True))
 
 
-# In[32]:
+# %%
 
 
 # --- Visualizações: reconstrução dos genes ausentes ---
@@ -996,7 +1010,7 @@ plt.show()
 # - `metricas_por_classe.csv`
 # - `relatorio_teste_5mil_genes_binario_intermediario_0.5.html`
 
-# In[33]:
+# %%
 
 
 import importlib

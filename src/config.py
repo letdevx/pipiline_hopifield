@@ -6,20 +6,32 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # ---------------------------------------------------------------------------
 # Entradas — ajuste os caminhos conforme o ambiente
 # ---------------------------------------------------------------------------
-PATH_M = r"C:\Users\Leticia\Documents\Letworkspace\pipiline_hopifield\imputs\matriz_anotada_finalM.h5ad"
-PATH_F = r"C:\Users\Leticia\Documents\Letworkspace\pipiline_hopifield\imputs\matrizFiltradaeNormalizadaF.h5ad"
+# Entrada Mathys (PATH_M)
+_PATH_M_DEFAULT = os.path.join(ROOT, "imputs", "matriz_anotada_finalM.h5ad")
+_PATH_M_SWEEP   = r"C:\Users\Leticia\Documents\Letworkspace\Sweep-Harmonization\Meus_testes\Controle_qualidade\dataM\matrizFiltradaeNormalizadaMParcial.h5ad"
+PATH_M = _PATH_M_SWEEP if os.path.exists(_PATH_M_SWEEP) else _PATH_M_DEFAULT
 
-PATH_FEATURES_M = r":\Users\Leticia\Documents\Letworkspace\Sweep-Harmonization\Meus_testes\Controle_qualidade\dataM\MatrizH5 com tipo celular\matriz_seurat_10x\featuresM.tsv.gz"
-PATH_FEATURES_F = r"C:\Users\Leticia\Documents\Letworkspace\pipiline_hopifield\imputs\features.tsv"
+# Entrada Fujita (PATH_F)
+PATH_F = os.path.join(ROOT, "imputs", "pan_anotado.h5ad")
+
+# Features
+_PATH_FEAT_M_DEFAULT = os.path.join(ROOT, "imputs", "featuresM.tsv.gz")
+_PATH_FEAT_M_SWEEP   = r"C:\Users\Leticia\Documents\Letworkspace\Sweep-Harmonization\Meus_testes\Controle_qualidade\dataM\featuresM.tsv.gz"
+PATH_FEATURES_M = _PATH_FEAT_M_SWEEP if os.path.exists(_PATH_FEAT_M_SWEEP) else _PATH_FEAT_M_DEFAULT
+
+_PATH_FEAT_F_DEFAULT = os.path.join(ROOT, "imputs", "features.tsv")
+_PATH_FEAT_F_ROOT    = os.path.join(ROOT, "featuresPAN.tsv")
+PATH_FEATURES_F = _PATH_FEAT_F_ROOT if os.path.exists(_PATH_FEAT_F_ROOT) else _PATH_FEAT_F_DEFAULT
 
 PATH_TOP5000 = r"C:\Users\Leticia\Documents\Letworkspace\Sweep-Harmonization\Meus_testes\Testes Hopifild\top_5000_frequentes.csv"
 
-PATH_SWEEP_F  = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                             "outputs", "treinamento", "matriz_reduzida_sweepF.csv")
-PATH_SWEEP_M  = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                             "outputs", "treinamento", "matriz_reduzida_sweepM.csv")
-PATH_LABELS_F = os.path.join(ROOT, "imputs", "cell_types_binarioF.txt")
-PATH_LABELS_M = os.path.join(ROOT, "imputs", "tipos_celulares_numericoMs.txt")
+PATH_SWEEP_F  = os.path.join(ROOT, "outputs", "treinamento", "matriz_reduzida_sweepF.csv")
+PATH_SWEEP_M  = os.path.join(ROOT, "outputs", "treinamento", "matriz_reduzida_sweepM.csv")
+PATH_LABELS_F = os.path.join(ROOT, "imputs", "PanNumerico.csv")
+
+_PATH_LABELS_M_PARCIAL = os.path.join(ROOT, "imputs", "celltypeBinMparcial.csv")
+_PATH_LABELS_M_TXT     = os.path.join(ROOT, "imputs", "tipos_celulares_numericoMs.txt")
+PATH_LABELS_M = _PATH_LABELS_M_PARCIAL if os.path.exists(_PATH_LABELS_M_PARCIAL) else _PATH_LABELS_M_TXT
 
 # ---------------------------------------------------------------------------
 # Saídas — geradas automaticamente dentro da raiz do projeto
@@ -32,5 +44,3 @@ OUT_TREINAMENTO = os.path.join(OUTPUTS, "treinamento")
 OUT_HOPFIELD    = os.path.join(OUTPUTS, "hopfield")
 OUT_RELATORIO   = os.path.join(OUTPUTS, "relatorio")
 
-for _d in [OUTPUTS, OUT_BINARIZACAO, OUT_ALINHAMENTO, OUT_TOP_GENES, OUT_TREINAMENTO, OUT_HOPFIELD, OUT_RELATORIO]:
-    os.makedirs(_d, exist_ok=True)
