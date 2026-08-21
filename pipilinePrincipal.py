@@ -240,7 +240,7 @@ extrator = ExtratorPadroesSubcluster(
     W0      = carregador.W0,
     labels  = carregador.labels,
     classes = [1, 3, 4, 5, 6, 7],
-    nc      = 10,
+    nc      = 210,
     seed    = 42,
 )
 extrator.extrair(projetor.Wswp)
@@ -265,7 +265,7 @@ from treinamento import ModernHopfieldNetwork
 # Passo 4d — Treino com padrões Fujita + reconstrução com Mathys
 # threshold=0.5: genes ausentes no Mathys (preenchidos com 0.5 pelo alinhador)
 # tratados como ausentes (0) na binarização da query
-rede35 = ModernHopfieldNetwork(beta=8.0, n_iters=1, binary=True, threshold=0.5)
+rede35 = ModernHopfieldNetwork(beta=10, n_iters=1, binary=True, threshold=0.5)
 rede35.store(extrator.padroes)   # treino: padrões extraídos do Fujita
 
 # Salva rede treinada (transferível entre máquinas)
@@ -334,7 +334,7 @@ from treinamento import AvaliadorHopfield
 avaliador = AvaliadorHopfield(
     padroes = extrator.padroes,
     classes = [1, 3, 4, 5, 6, 7],
-    nc      = 10,
+    nc      = 210,
 )
 avaliador.avaliar(Wrecuperado, labels_mathys).plotar()
 print(avaliador)
@@ -391,7 +391,7 @@ Wrecuperado_fujita = rede35.retrieve(carregador.W0, batch_size=4096)
 avaliador_fujita = AvaliadorHopfield(
     padroes = extrator.padroes,
     classes = [1, 3, 4, 5, 6, 7],
-    nc      = 10,
+    nc      = 210,
 )
 avaliador_fujita.avaliar(Wrecuperado_fujita, carregador.labels).plotar()
 print(avaliador_fujita)
@@ -405,7 +405,7 @@ Wrecuperado_mathys_bin = rede35.retrieve(W_mathys_bin, batch_size=4096)
 avaliador_mathys_bin = AvaliadorHopfield(
     padroes = extrator.padroes,
     classes = [1, 3, 4, 5, 6, 7],
-    nc      = 10,
+    nc      = 210
 )
 avaliador_mathys_bin.avaliar(Wrecuperado_mathys_bin, labels_mathys_bin).plotar()
 print(avaliador_mathys_bin)
