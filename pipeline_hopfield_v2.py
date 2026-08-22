@@ -8,7 +8,7 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.19.5
 #   kernelspec:
-#     display_name: .venv
+#     display_name: Python 3 (ipykernel)
 #     language: python
 #     name: python3
 # ---
@@ -41,6 +41,47 @@
 # de *attention* (`softmax(β · Ξ · ξ) · Ξᵀ`).
 
 # ## 1. Imports e configuração
+
+# %%
+try:
+    import anndata
+    import scanpy
+except ImportError:
+    print("Instalando dependências compatíveis com o ambiente do Colab...")
+    # Mantém o pandas travado na versão esperada pelo Colab (2.2.3)
+    # !pip install -q "pandas==2.2.3" anndata scanpy
+
+# %%
+import os
+import sys
+
+REPO_NAME = "pipiline_hopifield"  # Nome do seu repo
+REPO_URL = "https://github.com/letdevx/pipiline_hopifield.git"
+DEST_PATH = f"/content/{REPO_NAME}"
+
+# Clona ou atualiza o código na VM
+if not os.path.exists(DEST_PATH):
+    print("Clonando código para a VM...")
+    # !git clone {REPO_URL} {DEST_PATH}
+else:
+    print("Atualizando código na VM...")
+    # !cd {DEST_PATH} && git pull
+
+# !cd {DEST_PATH} && git checkout Teste_sem_binarização_dados_brutos
+
+# Adiciona a pasta 'src' da VM ao path do Python
+SRC_PATH = os.path.join(DEST_PATH, "src")
+if SRC_PATH not in sys.path:
+    sys.path.insert(0, SRC_PATH)
+
+print("Módulos prontos para importação!")
+
+# %%
+from google.colab import drive
+drive.mount('/content/drive')
+
+DRIVE_INPUTS = '/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs'
+# !ls "{DRIVE_INPUTS}"
 
 # %%
 
@@ -84,9 +125,18 @@ from treinamento.hopfield_utils import wsort, closervects
 SEED = 42
 np.random.seed(SEED)
 torch.manual_seed(SEED)
-device = torch.device('cpu')
-print(f'Dispositivo: {device}')
-# GPU configuracao removida
+
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+    torch.cuda.manual_seed_all(SEED)
+    # Garante determinismo em operações CUDA (útil para reprodutibilidade)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    print(f'Dispositivo: {device} ({torch.cuda.get_device_name(0)})')
+    print(f'VRAM disponível: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB')
+else:
+    device = torch.device('cpu')
+    print(f'Dispositivo: {device} (GPU não disponível)')
 
 
 # ## 2. Binarização

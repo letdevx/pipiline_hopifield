@@ -1,0 +1,6 @@
+[tool.pyright]
+include = ["src"]
+extraPaths = ["src"]
+executionEnvironments = [
+  { root = "src" }
+]
