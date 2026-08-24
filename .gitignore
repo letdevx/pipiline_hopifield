@@ -65,3 +65,4 @@ logs/
 *txt
 *.parquet
 *.h5ad
+*.tsv
