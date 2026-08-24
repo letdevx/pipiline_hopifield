@@ -86,11 +86,7 @@ PATH_REFERENCIA = _resolver_caminho(
     "pan_anotado.h5ad",
     os.path.join(INPUTS_DIR, "pan_anotado.h5ad"),
     r"/content/drive/Other computers/Meu laptop/Documents/Letworkspace/Teste hop/imputs/pan_anotado.h5ad",
-    r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs/pan_anotado.h5ad",
-    r"/content/drive/Other computers/Meu laptop/Documents/Letworkspace/pipiline_hopifield/imputs/pan_anotado.h5ad",
-    r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/pipiline_hopifield/imputs/pan_anotado.h5ad",
-    r"/content/drive/MyDrive/pan_anotado.h5ad",
-    r"C:\Users\Leticia\Documents\Letworkspace\pipiline_hopifield\imputs\pan_anotado.h5ad",
+    r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs/pan_anotado.h5ad"
 )
 
 # Entrada Conjunto Alvo (PATH_ALVO)
@@ -111,7 +107,7 @@ PATH_FEATURES_ALVO = _resolver_caminho(
 )
 
 PATH_FEATURES_REFERENCIA = _resolver_caminho(
-    "features.tsv",
+    "featuresPAN.tsv",
     os.path.join(ROOT, "featuresPAN.tsv"),
     os.path.join(INPUTS_DIR, "features.tsv"),
 )
