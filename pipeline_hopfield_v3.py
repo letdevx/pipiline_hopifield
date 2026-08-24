@@ -105,14 +105,14 @@ if device.type == 'cuda':
 # pula o processamento nesse caso.
 
 # %%
-binarizador_f = Binarizador(path_h5ad=PATH_REFERENCIA, out_dir=OUT_BINARIZACAO)
-binarizador_m = Binarizador(path_h5ad=PATH_ALVO, out_dir=OUT_BINARIZACAO)
+binarizador_ref = Binarizador(path_h5ad=PATH_REFERENCIA, out_dir=OUT_BINARIZACAO)
+binarizador_alvo = Binarizador(path_h5ad=PATH_ALVO, out_dir=OUT_BINARIZACAO)
 
-binarizador_f.binarizar()
-binarizador_m.binarizar()
+binarizador_ref.binarizar()
+binarizador_alvo.binarizar()
 
-print('Fujita binarizado em:', binarizador_f.path_binarizada)
-print('Mathys binarizado em:', binarizador_m.path_binarizada)
+print('Referência binarizada em:', binarizador_ref.path_binarizada)
+print('Alvo binarizado em:', binarizador_alvo.path_binarizada)
 
 
 # ## 3. Alinhamento de espaços gênicos
