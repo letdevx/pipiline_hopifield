@@ -52,6 +52,9 @@ except ImportError:
     # !pip install -q "pandas==2.2.3" anndata scanpy
 
 # %%
+# !git push origin Teste_sem_binarização_dados_brutos
+
+# %%
 import os
 import sys
 
