@@ -30,12 +30,12 @@ if SRC_DIR not in sys.path:
 import config, preprocessing
 importlib.reload(config)
 importlib.reload(preprocessing)
-from config import PATH_M, PATH_F, OUT_BINARIZACAO
+from config import PATH_ALVO, PATH_REFERENCIA, OUT_BINARIZACAO
 from preprocessing import Binarizador
 
 # --- Binarização dos dois datasets ---
-binarizador_m = Binarizador(path_h5ad=PATH_M, out_dir=OUT_BINARIZACAO)
-binarizador_f = Binarizador(path_h5ad=PATH_F, out_dir=OUT_BINARIZACAO)
+binarizador_m = Binarizador(path_h5ad=PATH_ALVO, out_dir=OUT_BINARIZACAO)
+binarizador_f = Binarizador(path_h5ad=PATH_REFERENCIA, out_dir=OUT_BINARIZACAO)
 
 binarizador_m.binarizar()
 binarizador_f.binarizar()
@@ -57,23 +57,23 @@ if SRC_DIR not in sys.path:
 import config, alinhamento
 importlib.reload(config)
 importlib.reload(alinhamento)
-from config import PATH_FEATURES_F, PATH_FEATURES_M, PATH_TOP5000, OUT_ALINHAMENTO, OUT_TOP_GENES
+from config import PATH_FEATURES_REFERENCIA, PATH_FEATURES_ALVO, PATH_TOP5000, OUT_ALINHAMENTO, OUT_TOP_GENES
 from alinhamento import (LeitorFeatures, AnalisadorSobreposicao, Alinhador,
                           ValidadorAlinhamento, AnalisadorCobertura,
                           SelecionadorGenesFrequentes)
 
 # %%
 # Passo 1 — Leitura dos arquivos de features
-leitor = LeitorFeatures(PATH_FEATURES_F, PATH_FEATURES_M)
+leitor = LeitorFeatures(PATH_FEATURES_REFERENCIA, PATH_FEATURES_ALVO)
 leitor.ler()
 print(leitor)
 
 # %%
 # Passo 2 — Análise de sobreposição
-from config import PATH_F
+from config import PATH_REFERENCIA
 
 # var_names são idênticos no original e no binarizado — lemos direto do original
-_f = ad.read_h5ad(PATH_F, backed='r')
+_f = ad.read_h5ad(PATH_REFERENCIA, backed='r')
 var_names_f_original = _f.var_names.tolist()
 _f.file.close()
 del _f
@@ -135,7 +135,7 @@ importlib.reload(config)
 importlib.reload(alinhamento)
 importlib.reload(treinamento)
 
-from config import OUT_TOP_GENES, OUT_TREINAMENTO, PATH_SWEEP_F
+from config import OUT_TOP_GENES, OUT_TREINAMENTO, PATH_SWEEP_REFERENCIA
 from alinhamento import SelecionadorGenesFrequentes
 from treinamento import GeradorConjuntoTreinamento, ProjetorSWeePR
 
@@ -161,7 +161,7 @@ gerador.gerar(alinhador.path_m_alinhado.replace('.h5ad', '.txt'))
 # — Passo 3c: Projeção SWeeP via R (células × 600 dim) —
 projetor_r = ProjetorSWeePR(
     path_matriz   = path_f_top5k,
-    path_saida    = PATH_SWEEP_F,
+    path_saida    = PATH_SWEEP_REFERENCIA,
     n_componentes = 600,
     seed          = 42,
 )
@@ -172,7 +172,7 @@ for label, path in [
     ("top5000_frequentes.csv            ", path_top5k),
     ("adataF_binarizado_alinhado_top5000", path_f_top5k),
     ("adataM_binarizado_alinhado_top5000", path_m_top5k),
-    ("matriz_reduzida_sweepF.csv        ", PATH_SWEEP_F),
+    ("matriz_reduzida_sweepF.csv        ", PATH_SWEEP_REFERENCIA),
 ]:
     status = "✓" if os.path.exists(path) else "✗ NÃO ENCONTRADO"
     print(f"  {label} : {status}")
@@ -195,7 +195,7 @@ importlib.reload(_cdf_mod)
 importlib.reload(config)
 importlib.reload(treinamento)
 
-from config import PATH_SWEEP_F, PATH_LABELS_F, PATH_LABELS_M, OUT_TREINAMENTO, OUT_TOP_GENES
+from config import PATH_SWEEP_REFERENCIA, PATH_LABELS_REFERENCIA, PATH_LABELS_ALVO, OUT_TREINAMENTO, OUT_TOP_GENES
 from treinamento import CarregadorDadosFujita
 
 # Passo 4a — Carregamento dos dados Fujita (padrões para treino da rede)
@@ -205,8 +205,8 @@ path_genes    = os.path.join(OUT_TOP_GENES,   "top5000_frequentes.csv")
 carregador = CarregadorDadosFujita(
     path_matriz = path_matriz_f,
     path_genes  = path_genes,
-    path_labels = PATH_LABELS_F,
-    path_sweep  = PATH_SWEEP_F,
+    path_labels = PATH_LABELS_REFERENCIA,
+    path_sweep  = PATH_SWEEP_REFERENCIA,
     n_genes     = 5000,
 )
 carregador.carregar()
@@ -220,7 +220,7 @@ W_mathys = pd.read_csv(path_matriz_m).to_numpy(dtype=np.float32)
 print(f"[Mathys] W_mathys shape: {W_mathys.shape}")
 
 print("[Mathys] Carregando rótulos binários...")
-labels_mathys = np.loadtxt(PATH_LABELS_M, dtype=int)
+labels_mathys = np.loadtxt(PATH_LABELS_ALVO, dtype=int)
 print(f"[Mathys] labels shape: {labels_mathys.shape}, tipos: {np.unique(labels_mathys)}")
 
 # %%

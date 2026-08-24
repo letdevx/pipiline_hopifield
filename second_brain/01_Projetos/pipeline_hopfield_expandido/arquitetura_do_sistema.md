@@ -84,7 +84,7 @@ Define os caminhos absolutos e relativos para arquivos de dados brutos (`.h5ad`)
 
 | Estágio | Tipo de Dado | Formato de Arquivo | Localização / Artefato | Função no Sistema |
 | :--- | :--- | :--- | :--- | :--- |
-| **Entrada Bruta** | Expressão Contínua | `.h5ad` (AnnData) | `PATH_F`, `PATH_M` | Leituras originais do sequenciamento scRNA-seq |
+| **Entrada Bruta** | Expressão Contínua | `.h5ad` (AnnData) | `PATH_REFERENCIA`, `PATH_ALVO` | Leituras originais do sequenciamento scRNA-seq |
 | **Binarização** | Matriz Binária $\{0, 1\}$ | `.h5ad` | `outputs/binarizacao/` | Preservação de assinaturas ON/OFF de expressão |
 | **Alinhamento** | Genes Alinhados | `.h5ad` / `.txt` | `outputs/alinhamento/` | Referência Ensembl unificada |
 | **Expansão Gênica** | Top 5k + Exclusivos | `.csv` / `.npy` | `outputs/top_genes/` | Matrizes filtradas no espaço de ~11.000 genes |

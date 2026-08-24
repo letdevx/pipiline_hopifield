@@ -60,8 +60,8 @@ if SRC_DIR not in sys.path:
 import config
 importlib.reload(config)
 from config import (
-    PATH_M, PATH_F, PATH_FEATURES_F, PATH_FEATURES_M,
-    PATH_SWEEP_F, PATH_SWEEP_M, PATH_LABELS_F, PATH_LABELS_M,
+    PATH_REFERENCIA, PATH_ALVO, PATH_FEATURES_REFERENCIA, PATH_FEATURES_ALVO,
+    PATH_SWEEP_REFERENCIA, PATH_SWEEP_ALVO, PATH_LABELS_REFERENCIA, PATH_LABELS_ALVO,
     OUT_BINARIZACAO, OUT_ALINHAMENTO, OUT_TOP_GENES,
     OUT_TREINAMENTO, OUT_HOPFIELD, OUT_RELATORIO,
 )
@@ -105,8 +105,8 @@ if device.type == 'cuda':
 # pula o processamento nesse caso.
 
 # %%
-binarizador_f = Binarizador(path_h5ad=PATH_F, out_dir=OUT_BINARIZACAO)
-binarizador_m = Binarizador(path_h5ad=PATH_M, out_dir=OUT_BINARIZACAO)
+binarizador_f = Binarizador(path_h5ad=PATH_REFERENCIA, out_dir=OUT_BINARIZACAO)
+binarizador_m = Binarizador(path_h5ad=PATH_ALVO, out_dir=OUT_BINARIZACAO)
 
 binarizador_f.binarizar()
 binarizador_m.binarizar()
@@ -142,7 +142,7 @@ print('Mathys binarizado em:', binarizador_m.path_binarizada)
 
 # %%
 # Passo 1 — Leitura dos arquivos de features
-leitor = LeitorFeatures(PATH_FEATURES_F, PATH_FEATURES_M)
+leitor = LeitorFeatures(PATH_FEATURES_REFERENCIA, PATH_FEATURES_ALVO)
 leitor.ler()
 print(leitor)
 
@@ -152,7 +152,7 @@ print(leitor)
 # %%
 # Passo 2 — Análise de sobreposição dos espaços gênicos
 # var_names idênticos no original e no binarizado — lemos direto do original
-_f = ad.read_h5ad(PATH_F, backed='r')
+_f = ad.read_h5ad(PATH_REFERENCIA, backed='r')
 var_names_f_original = _f.var_names.tolist()
 _f.file.close()
 del _f
@@ -269,7 +269,7 @@ print(gerador)
 # %%
 projetor_r = ProjetorSWeePR(
     path_matriz   = path_f_top5k,
-    path_saida    = PATH_SWEEP_F,
+    path_saida    = PATH_SWEEP_REFERENCIA,
     n_componentes = 600,
     seed          = SEED,
 )
@@ -298,8 +298,8 @@ projetor_r.projetar()
 carregador = CarregadorDadosFujita(
     path_matriz = path_f_top5k,
     path_genes  = path_top5k,
-    path_labels = PATH_LABELS_F,
-    path_sweep  = PATH_SWEEP_F,
+    path_labels = PATH_LABELS_REFERENCIA,
+    path_sweep  = PATH_SWEEP_REFERENCIA,
     n_genes     = 5000,
 )
 carregador.carregar()
@@ -316,7 +316,7 @@ W_mathys = pd.read_csv(path_m_top5k).to_numpy(dtype=np.float32)
 print(f'[Mathys] W_mathys shape: {W_mathys.shape}')
 
 print('[Mathys] Carregando rótulos...')
-labels_mathys = np.loadtxt(PATH_LABELS_M, dtype=int, skiprows=1)
+labels_mathys = np.loadtxt(PATH_LABELS_ALVO, dtype=int, skiprows=1)
 print(f'[Mathys] labels shape: {labels_mathys.shape}, tipos: {np.unique(labels_mathys)}')
 
 
