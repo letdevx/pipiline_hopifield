@@ -107,8 +107,8 @@ PATH_FEATURES_ALVO = _resolver_caminho(
 )
 
 PATH_FEATURES_REFERENCIA = _resolver_caminho(
-    "featuresPAN.tsv",
-    os.path.join(ROOT, "featuresPAN.tsv")
+    "featuresPANcorrigido.tsv",
+    os.path.join(ROOT, "featuresPANcorrigido.tsv")
 )
 
 PATH_TOP5000 = _resolver_caminho(
