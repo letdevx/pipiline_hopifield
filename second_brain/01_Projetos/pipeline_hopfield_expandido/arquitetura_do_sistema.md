@@ -62,7 +62,7 @@ Define os caminhos absolutos e relativos para arquivos de dados brutos (`.h5ad`)
 - **`binarizador.py` (`Binarizador`)**: Converte matrizes contínuas/contagens de arquivos `.h5ad` para matrizes de presença/ausência binária ($x > 0 \rightarrow 1$, $x \le 0 \rightarrow 0$). Veja **[[03_Conhecimento/binarizacao_expressao_genica|Conceito Atômico]]** e **[[04_Recursos/adrs/adr_001_binarizacao_expressao_genica|ADR 001]]**.
 
 ### 2.3. `src/alinhamento/` — Harmonização Canônica de Espaços Gênicos
-- **`leitor_features.py` (`LeitorFeatures`)**: Lê arquivos TSV/CSV de features (`gene_name` $\rightarrow$ `ensembl_id`) dos datasets Fujita e Mathys.
+- **`leitor_features.py` (`LeitorFeatures`)**: Lê arquivos TSV/CSV de features (`gene_name` $\rightarrow$ `ensembl_id`) dos datasets de Referência e Alvo (com suporte e fallback às configurações do `src/config.py`).
 - **`analisador_sobreposicao.py` (`AnalisadorSobreposicao`)**: Mapeia a interseção e os genes exclusivos de cada dataset baseando-se no Ensembl ID.
 - **`alinhador.py` (`Alinhador`)**: Realinha as matrizes binarizadas para a ordem de genes canônica do Fujita. Para o dataset Mathys, genes inexistentes no seu genoma nativo recebem o **[[03_Conhecimento/sentinela_meio_genes_ausentes|valor sentinela neutro 0.5]]**. Veja **[[04_Recursos/adrs/adr_002_sentinela_meio_genes_ausentes|ADR 002]]**.
 - **`validador_alinhamento.py` (`ValidadorAlinhamento`)**: Valida programaticamente se os genes alinhados em ambos os datasets estão na mesma ordem Ensembl.
