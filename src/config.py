@@ -122,8 +122,8 @@ PATH_SWEEP_ALVO        = os.path.join(ROOT, "outputs", "treinamento", "matriz_re
 PATH_LABELS_REFERENCIA = _resolver_caminho("PanNumerico.csv", os.path.join(INPUTS_DIR, "PanNumerico.csv"))
 
 PATH_LABELS_ALVO = _resolver_caminho(
-    "celltypeBinMparcial.csv",
-    os.path.join(INPUTS_DIR, "celltypeBinMparcial.csv"),
+    "tipos_celulares_numericoMs.txt",
+    os.path.join(INPUTS_DIR, "tipos_celulares_numericoMs.txt"),
     os.path.join(INPUTS_DIR, "tipos_celulares_numericoMs.txt"),
 )
 

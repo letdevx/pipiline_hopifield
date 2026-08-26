@@ -92,9 +92,11 @@ DRIVE_INPUTS = '/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/
 # !ls "{DRIVE_INPUTS}"
 
 # %%
-
+# %load_ext autoreload
+# %autoreload 2
 
 import sys, os
+
 import importlib
 import numpy as np
 import pandas as pd
@@ -104,9 +106,18 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, f1_score, classification_report
 
-SRC_DIR = os.path.join(os.path.dirname(os.path.abspath('__file__')), 'src')
-if SRC_DIR not in sys.path:
-    sys.path.insert(0, SRC_DIR)
+# Detecção robusta do diretório raiz e de src/ para Jupyter, Scripts e Colab
+if '__file__' in globals():
+    ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+else:
+    ROOT_DIR = os.path.abspath(os.getcwd())
+    if not os.path.exists(os.path.join(ROOT_DIR, 'src')) and os.path.exists(os.path.join(os.path.dirname(ROOT_DIR), 'src')):
+        ROOT_DIR = os.path.dirname(ROOT_DIR)
+
+SRC_DIR = os.path.join(ROOT_DIR, 'src')
+for p in (ROOT_DIR, SRC_DIR):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 import config
 importlib.reload(config)
@@ -117,9 +128,12 @@ from config import (
     OUT_TREINAMENTO, OUT_HOPFIELD, OUT_RELATORIO,
 )
 
+import alinhamento
+importlib.reload(alinhamento)
+
 from preprocessing import Binarizador
 from alinhamento import (
-    LeitorFeatures, AnalisadorSobreposicao, Alinhador,
+    LeitorFeatures, AnalisadorSobreposicao, Alinhador, AlinhadorEsparso,
     ValidadorAlinhamento, SelecionadorGenesFrequentes, AnalisadorCobertura,
 )
 from treinamento import (
@@ -129,6 +143,7 @@ from treinamento import (
     GeradorRelatorio,
 )
 from treinamento.hopfield_utils import wsort, closervects
+
 
 SEED = 42
 np.random.seed(SEED)
@@ -202,8 +217,8 @@ print(analisador)
 # %%
 
 
-# Passo 3 — Alinhamento dos dois h5ad binarizados
-alinhador = Alinhador(
+# Passo 3 — Alinhamento dos dois h5ad binarizados (100% Esparso & OOM-Safe)
+alinhador = AlinhadorEsparso(
     path_binarizada_m = binarizador_alvo.path_binarizada,
     path_binarizada_f = binarizador_ref.path_binarizada,
     out_dir           = OUT_ALINHAMENTO,
@@ -213,7 +228,6 @@ alinhador = Alinhador(
     genes_ordenados   = analisador.genes_ordenados,
 )
 alinhador.alinhar()
-alinhador.salvar_como_txt()
 alinhador.gerar_tracking(analisador.ids_so_f, leitor.map_f)
 print(alinhador)
 
@@ -240,14 +254,9 @@ validador.validar()
 
 
 path_top5k   = os.path.join(OUT_TOP_GENES,   'top5000_frequentes.csv')
-path_f_top5k = os.path.join(OUT_TREINAMENTO, 'adataF_binarizado_alinhado_top5000.txt')
-path_m_top5k = os.path.join(OUT_TREINAMENTO, 'adataM_binarizado_alinhado_top5000.txt')
 
-path_f_txt = alinhador.path_f_alinhado.replace('.h5ad', '.txt')
-path_m_txt = alinhador.path_m_alinhado.replace('.h5ad', '.txt')
-
-# Top 5000 genes mais frequentes do Fujita
-selecionador = SelecionadorGenesFrequentes(path_txt=path_f_txt, n=5000)
+# Top 5000 genes mais frequentes do Fujita (calculado direto do .h5ad esparso)
+selecionador = SelecionadorGenesFrequentes(path_h5ad=alinhador.path_f_alinhado, n=5000)
 selecionador.calcular(out_csv=path_top5k).salvar(path_top5k)
 print(selecionador)
 
@@ -263,14 +272,16 @@ cobertura.analisar(out_csv=os.path.join(OUT_ALINHAMENTO, 'top5000_cobertura_math
 # %%
 
 
-# Conjuntos de treinamento filtrados (Fujita + Mathys)
-gerador = GeradorConjuntoTreinamento(
-    path_top_genes_csv = path_top5k,
+# Conjuntos de treinamento filtrados (Fujita + Mathys com Sentinela 0.5 OOM-Safe)
+res_extracao = alinhador.extrair_subconjunto(
+    lista_genes_ou_csv = path_top5k,
     out_dir            = OUT_TREINAMENTO,
+    fill_value_mathys  = 0.5,
+    exportar_npy       = True,
+    exportar_h5ad      = True,
 )
-gerador.gerar(path_f_txt)
-gerador.gerar(path_m_txt)
-print(gerador)
+path_f_top5k = res_extracao['path_f_npy']
+path_m_top5k = res_extracao['path_m_npy']
 
 
 # ## 5. Projeção SWeeP (rSWeeP via R / fallback Python)
@@ -323,7 +334,10 @@ print(carregador)
 # Mathys — dados para imputação cross-dataset
 # Genes ausentes no Mathys foram preenchidos com 0.5 (sentinela) pelo Alinhador.
 print('[Mathys] Carregando matriz top5000...')
-W_mathys = pd.read_csv(path_m_top5k).to_numpy(dtype=np.float32)
+if path_m_top5k.endswith('.npy'):
+    W_mathys = np.load(path_m_top5k)
+else:
+    W_mathys = pd.read_csv(path_m_top5k).to_numpy(dtype=np.float32)
 print(f'[Mathys] W_mathys shape: {W_mathys.shape}')
 
 print('[Mathys] Carregando rótulos...')

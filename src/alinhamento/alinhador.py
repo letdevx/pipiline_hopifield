@@ -90,13 +90,17 @@ class Alinhador:
 
         print("  Multiplicando matrizes (projeção)...")
         # Multiplicação é extremamente rápida e consome pouca memória
-        X_novo = (adata.X.dot(P)).astype(np.float32)
+        if sp.issparse(adata.X):
+            X_novo = adata.X.dot(P).astype(np.float32)
+        else:
+            X_novo = sp.csr_matrix(adata.X).dot(P).astype(np.float32)
         if sp.issparse(X_novo):
             X_novo = X_novo.tocsr()
         else:
             X_novo = sp.csr_matrix(X_novo)
         del P
         gc.collect()
+
 
         if fill_value != 0.0:
             missing_cols = np.array(

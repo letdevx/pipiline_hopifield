@@ -1,3 +1,4 @@
+import gc
 import os
 
 import numpy as np
@@ -5,15 +6,17 @@ import pandas as pd
 import polars as pl
 
 
+
 class SelecionadorGenesFrequentes:
-    """Calcula os N genes mais frequentes a partir de um arquivo CSV/TXT binarizado.
+    """Calcula os N genes mais frequentes a partir de um arquivo .h5ad ou CSV/TXT binarizado.
 
     Frequência = soma da coluna (equivalente a células com valor > 0 em dados binarizados).
     O arquivo não contém coluna de cell_id — todas as colunas são genes.
     """
 
-    def __init__(self, path_txt, n=5000):
+    def __init__(self, path_txt=None, path_h5ad=None, n=5000):
         self.path_txt     = path_txt
+        self.path_h5ad    = path_h5ad or (os.path.splitext(path_txt)[0] + ".h5ad" if path_txt and path_txt.endswith(('.txt', '.csv')) else path_txt)
         self.n            = n
         self.df_resultado = None
 
@@ -23,44 +26,41 @@ class SelecionadorGenesFrequentes:
             self.df_resultado = pl.read_csv(out_csv)
             return self
 
-        path_h5ad = os.path.splitext(self.path_txt)[0] + ".h5ad"
-        if os.path.exists(path_h5ad):
-            print(f"[SelecionadorGenesFrequentes] Arquivo .h5ad equivalente detectado: {path_h5ad}")
-            print("  Calculando frequências diretamente via AnnData (OOM-Safe & ultrarrápido)...")
-            import gc
+        # 1. Tenta carregar diretamente via .h5ad (rápido e OOM-Safe)
+        path_h5ad_alvo = self.path_h5ad if (self.path_h5ad and os.path.exists(self.path_h5ad)) else None
+        if path_h5ad_alvo is None and self.path_txt:
+            candidato_h5ad = os.path.splitext(self.path_txt)[0] + ".h5ad"
+            if os.path.exists(candidato_h5ad):
+                path_h5ad_alvo = candidato_h5ad
+
+        if path_h5ad_alvo and os.path.exists(path_h5ad_alvo):
+            print(f"[SelecionadorGenesFrequentes] Arquivo .h5ad detectado: {path_h5ad_alvo}")
+            print("  Calculando frequências diretamente via AnnData esparso (OOM-Safe & ultrarrápido)...")
             import anndata as ad
             import scipy.sparse as sp
 
-            adata = ad.read_h5ad(path_h5ad, backed='r')
+            adata = ad.read_h5ad(path_h5ad_alvo)
             gene_names = adata.var_names.tolist()
             total_genes = len(gene_names)
-            somas = np.zeros(total_genes, dtype=np.int64)
-            n_celulas = adata.n_obs
-            chunk_size = 2048
+            
+            if sp.issparse(adata.X):
+                somas = np.asarray((adata.X > 0).sum(axis=0)).ravel().astype(np.int64)
+            else:
+                somas = (adata.X > 0).sum(axis=0).astype(np.int64)
 
-            for start in range(0, n_celulas, chunk_size):
-                end = min(start + chunk_size, n_celulas)
-                X = adata.X[start:end]
-                if sp.issparse(X):
-                    somas += (X > 0).sum(axis=0).A.flatten().astype(np.int64)
-                else:
-                    somas += (X > 0).sum(axis=0).astype(np.int64)
-                del X
-                gc.collect()
-                if end % 10000 < chunk_size:
-                    print(f"  {end} células processadas de {n_celulas}...")
-
-            if hasattr(adata, 'file') and adata.file is not None:
-                adata.file.close()
+            del adata
+            gc.collect()
         else:
-            print(f"[SelecionadorGenesFrequentes] Lendo: {self.path_txt}")
-            with open(self.path_txt, encoding='utf-8') as fh:
+            path_txt_alvo = self.path_txt or self.path_h5ad
+            print(f"[SelecionadorGenesFrequentes] Lendo arquivo texto: {path_txt_alvo}")
+            with open(path_txt_alvo, encoding='utf-8') as fh:
                 gene_names = fh.readline().strip().split(',')
             total_genes = len(gene_names)
 
+
             print(f"  Calculando frequências para {total_genes} genes (streaming por chunks em RAM otimizada)...")
-            import gc
             somas = np.zeros(total_genes, dtype=np.int64)
+
             n_celulas = 0
             for chunk in pd.read_csv(self.path_txt, chunksize=250, dtype=np.float32, header=0, engine='c'):
                 somas += (chunk.values > 0).sum(axis=0).astype(np.int64)

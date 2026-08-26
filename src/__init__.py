@@ -3,6 +3,7 @@ from .alinhamento import (
     LeitorFeatures,
     AnalisadorSobreposicao,
     Alinhador,
+    AlinhadorEsparso,
     ValidadorAlinhamento,
     SelecionadorGenesFrequentes,
     AnalisadorCobertura,
@@ -14,8 +15,10 @@ __all__ = [
     "LeitorFeatures",
     "AnalisadorSobreposicao",
     "Alinhador",
+    "AlinhadorEsparso",
     "ValidadorAlinhamento",
     "SelecionadorGenesFrequentes",
     "AnalisadorCobertura",
     "GeradorConjuntoTreinamento",
 ]
+
