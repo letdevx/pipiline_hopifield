@@ -16,8 +16,21 @@ PATH_REFERENCIA = os.path.join(PATH_BASE, "pan_anotado.h5ad")
 PATH_ALVO = os.path.join(PATH_BASE, "matriz_anotada_finalM.h5ad")
 
 # Features
-PATH_FEATURES_REFERENCIA = PATH_BASE, "featuresPANcorrigido.tsv"
-PATH_FEATURES_ALVO       = PATH_BASE, "featuresM.tsv.gz/featuresM.tsv"
+_feat_ref = os.path.join(PATH_BASE, "featuresPANcorrigido.tsv")
+if not os.path.exists(_feat_ref):
+    for _fn in ["featuresPAN.tsv", "features.tsv"]:
+        _p = os.path.join(PATH_BASE, _fn)
+        if os.path.exists(_p):
+            _feat_ref = _p
+            break
+PATH_FEATURES_REFERENCIA = _feat_ref
+
+_feat_alvo = os.path.join(PATH_BASE, "featuresM.tsv.gz")
+if not os.path.exists(_feat_alvo):
+    _p = os.path.join(PATH_BASE, "featuresM.tsv")
+    if os.path.exists(_p):
+        _feat_alvo = _p
+PATH_FEATURES_ALVO = _feat_alvo
 
 #
 
