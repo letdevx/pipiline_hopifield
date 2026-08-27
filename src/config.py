@@ -13,7 +13,7 @@ PATH_BASE = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Te
 PATH_REFERENCIA = os.path.join(PATH_BASE, "pan_anotado.h5ad")
 
 # Entrada Conjunto Alvo
-PATH_ALVO = os.path.join(PATH_BASE, "matrizFiltradaeNormalizadaM.h5ad")
+PATH_ALVO = os.path.join(PATH_BASE, "matriz_anotada_finalM.h5ad")
 
 # Features
 PATH_FEATURES_REFERENCIA = PATH_BASE, "featuresPANcorrigido.tsv"
