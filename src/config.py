@@ -4,34 +4,39 @@ import os
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ---------------------------------------------------------------------------
-# Entradas — ajuste os caminhos conforme o ambiente
+# Entradas — busca dinâmica (Local Windows / Linux / Google Drive Colab)
 # ---------------------------------------------------------------------------
-# Entrada Conjunto de Referência (PATH_REFERENCIA)
-PATH_REFERENCIA = os.path.join(ROOT, "imputs", "pan_anotado.h5ad")
+_POSSIVEIS_DIRETORIOS_INPUT = [
+    os.path.join(ROOT, "imputs"),
+    r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/pipiline_hopifield/imputs",
+]
 
-# Entrada Conjunto Alvo (PATH_ALVO)
-_PATH_ALVO_DEFAULT = os.path.join(ROOT, "imputs", "matriz_anotada_finalM.h5ad")
-_PATH_ALVO_SWEEP   = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs/matrizFiltradaeNormalizadaMParcial.h5ad"
-PATH_ALVO = _PATH_ALVO_SWEEP if os.path.exists(_PATH_ALVO_SWEEP) else _PATH_ALVO_DEFAULT
+def _encontrar_arquivo(nomes, default_relativo="imputs"):
+    if isinstance(nomes, str):
+        nomes = [nomes]
+    for d in _POSSIVEIS_DIRETORIOS_INPUT:
+        for n in nomes:
+            p = os.path.join(d, n)
+            if os.path.exists(p):
+                return p
+    return os.path.join(ROOT, default_relativo, nomes[0])
+
+# Entrada Conjunto de Referência
+PATH_REFERENCIA = _encontrar_arquivo(["pan_anotado.h5ad", "MatrizfiltradaenormalizadaF.h5ad", "matrizFiltradaeNormalizadaF.h5ad"])
+
+# Entrada Conjunto Alvo
+PATH_ALVO = _encontrar_arquivo(["matriz_anotada_finalM.h5ad", "matrizFiltradaeNormalizadaMParcial.h5ad", "matrizFiltradaeNormalizadaM.h5ad"])
 
 # Features
-_PATH_FEAT_ALVO_DEFAULT = os.path.join(ROOT, "imputs", "featuresM.tsv.gz")
-_PATH_FEAT_ALVO_SWEEP   = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs/featuresM.tsv.gz"
-PATH_FEATURES_ALVO = _PATH_FEAT_ALVO_SWEEP if os.path.exists(_PATH_FEAT_ALVO_SWEEP) else _PATH_FEAT_ALVO_DEFAULT
+PATH_FEATURES_REFERENCIA = _encontrar_arquivo(["featuresPANcorrigido.tsv", "featuresPAN.tsv", "features.tsv"], default_relativo="")
+PATH_FEATURES_ALVO       = _encontrar_arquivo(["featuresM.tsv.gz", "featuresM.tsv"])
 
-_PATH_FEAT_REF_DEFAULT = os.path.join(ROOT, "imputs", "features.tsv")
-_PATH_FEAT_REF_ROOT    = os.path.join(ROOT, "featuresPAN.tsv")
-PATH_FEATURES_REFERENCIA = _PATH_FEAT_REF_ROOT if os.path.exists(_PATH_FEAT_REF_ROOT) else _PATH_FEAT_REF_DEFAULT
-
-PATH_TOP5000 = r"C:\Users\Leticia\Documents\Letworkspace\Sweep-Harmonization\Meus_testes\Testes Hopifild\top_5000_frequentes.csv"
+PATH_TOP5000 = _encontrar_arquivo(["top_5000_frequentes.csv", "top5000_frequentes.csv"])
 
 PATH_SWEEP_REFERENCIA  = os.path.join(ROOT, "outputs", "treinamento", "matriz_reduzida_sweepF.csv")
 PATH_SWEEP_ALVO        = os.path.join(ROOT, "outputs", "treinamento", "matriz_reduzida_sweepM.csv")
-PATH_LABELS_REFERENCIA = os.path.join(ROOT, "imputs", "PanNumerico.csv")
-
-_PATH_LABELS_ALVO_PARCIAL = os.path.join(ROOT, "imputs", "celltypeBinMparcial.csv")
-_PATH_LABELS_ALVO_TXT     = os.path.join(ROOT, "imputs", "tipos_celulares_numericoMs.txt")
-PATH_LABELS_ALVO = _PATH_LABELS_ALVO_PARCIAL if os.path.exists(_PATH_LABELS_ALVO_PARCIAL) else _PATH_LABELS_ALVO_TXT
+PATH_LABELS_REFERENCIA = _encontrar_arquivo(["PanNumerico.csv", "cell_types_binarioF.txt", "celltypeBinF_eceltypename.csv"])
+PATH_LABELS_ALVO       = _encontrar_arquivo(["tipos_celulares_numericoMs.txt", "celltypeBinMparcial.csv"])
 
 # ---------------------------------------------------------------------------
 # Saídas — geradas automaticamente dentro da raiz do projeto
