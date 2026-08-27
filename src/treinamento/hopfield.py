@@ -59,9 +59,17 @@ class ModernHopfieldNetwork(nn.Module):
         if normalize is None:
             normalize = getattr(self, "normalize", False)
 
+        import scipy.sparse as sp
+
         Xi = self.patterns.to(dtype=torch.float32, device='cpu')
-        queries_np = np.asarray(queries)
-        n_queries, n_features = queries_np.shape
+        if sp.issparse(queries):
+            n_queries, n_features = queries.shape
+            is_sparse = True
+            queries_np = None
+        else:
+            queries_np = np.asarray(queries)
+            n_queries, n_features = queries_np.shape
+            is_sparse = False
 
         if subspace_mask is not None:
             if isinstance(subspace_mask, np.ndarray):
@@ -70,11 +78,14 @@ class ModernHopfieldNetwork(nn.Module):
                 subspace_mask = subspace_mask.to(device='cpu')
 
         if out_buffer is None:
-            target_dtype = queries_np.dtype if queries_np.dtype in (np.float16, np.float32) else np.float32
+            target_dtype = np.float32 if is_sparse else (queries_np.dtype if queries_np.dtype in (np.float16, np.float32) else np.float32)
             out_buffer = np.empty((n_queries, n_features), dtype=target_dtype)
 
         for s in range(0, n_queries, batch_size):
-            chunk_np = queries_np[s:s + batch_size].astype(np.float32, copy=False)
+            if is_sparse:
+                chunk_np = queries[s:s + batch_size].toarray().astype(np.float32)
+            else:
+                chunk_np = queries_np[s:s + batch_size].astype(np.float32, copy=False)
             x = torch.from_numpy(chunk_np).to(device='cpu')
 
             if self.binary:

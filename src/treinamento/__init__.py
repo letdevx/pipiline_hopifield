@@ -1,6 +1,6 @@
 from .gerador_conjunto_treinamento import GeradorConjuntoTreinamento
 from .hopfield import ModernHopfieldNetwork
-from .carregador_dados_fujita import CarregadorDadosFujita
+from .carregador_dados_fujita import CarregadorDados, CarregadorDadosFujita, carregar_labels
 from .projetor_sweep import ProjetorSWeP, ProjetorSWeePR
 from .extrator_padroes import ExtratorPadroesSubcluster
 from .avaliador_hopfield import AvaliadorHopfield
@@ -10,7 +10,9 @@ from .estrategias_clusterizacao import EstrategiaKMeansDinamico, EstrategiaHDBSC
 __all__ = [
     "GeradorConjuntoTreinamento",
     "ModernHopfieldNetwork",
+    "CarregadorDados",
     "CarregadorDadosFujita",
+    "carregar_labels",
     "ProjetorSWeP",
     "ProjetorSWeePR",
     "ExtratorPadroesSubcluster",
@@ -20,3 +22,4 @@ __all__ = [
     "EstrategiaHDBSCAN",
     "EstrategiaKMeansFixo",
 ]
+

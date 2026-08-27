@@ -80,12 +80,24 @@ def mat2celllines(M):
     return [M[i] for i in range(M.shape[0])]
 
 
+import scipy.sparse as sp
+
+
 def wsort(W, return_perm=False, rng=None):
     """Embaralha aleatoriamente as linhas de W (equivalente a wsort.m).
 
     Equivale a [~, id] = sort(rand(N,1)); W = W(id,:) do MATLAB.
     Não confundir com ordenação por conteúdo.
     """
+    if sp.issparse(W):
+        if rng is None:
+            rng = np.random.default_rng()
+        perm = rng.permutation(W.shape[0])
+        out = W[perm]
+        if sp.issparse(out):
+            out = out.toarray().astype(np.float32)
+        return (out, perm) if return_perm else out
+
     W = np.asarray(W)
     if rng is None:
         rng = np.random.default_rng()

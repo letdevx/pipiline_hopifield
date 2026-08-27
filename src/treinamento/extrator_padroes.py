@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.sparse as sp
 from sklearn.cluster import KMeans
 
 from .hopfield_utils import closervects
@@ -23,7 +24,10 @@ class ExtratorPadroesSubcluster:
     """
 
     def __init__(self, W0, labels, classes=None, estrategia=None, seed=42, k=1, nc=None):
-        self.W0 = np.asarray(W0, dtype=np.float32)
+        if sp.issparse(W0):
+            self.W0 = W0.tocsr()
+        else:
+            self.W0 = np.asarray(W0, dtype=np.float32)
         self.labels = np.asarray(labels, dtype=int)
         self.classes = classes if classes is not None else [1, 3, 4, 5, 6, 7, 2]
         
@@ -68,12 +72,18 @@ class ExtratorPadroesSubcluster:
                 if self.k == 1:
                     idx_local = closervects(Wswp_cls, centroide, k=1)
                     idx_global = ids_cls[idx_local]
-                    padroes_list.append(self.W0[idx_global].astype(np.float32, copy=False))
+                    row = self.W0[idx_global]
+                    if sp.issparse(row):
+                        row = row.toarray().ravel()
+                    padroes_list.append(row.astype(np.float32, copy=False))
                     meta_list.append((cls, int(idx_global)))
                 else:
                     idxs = closervects(Wswp_cls, centroide, k=self.k)
                     idxs_global = ids_cls[idxs]
-                    padrao = (self.W0[idxs_global].astype(np.float32, copy=False).mean(axis=0) >= 0.5).astype(np.float32)
+                    sub = self.W0[idxs_global]
+                    if sp.issparse(sub):
+                        sub = sub.toarray()
+                    padrao = (sub.astype(np.float32, copy=False).mean(axis=0) >= 0.5).astype(np.float32)
                     padroes_list.append(padrao)
                     meta_list.append((cls, int(ids_cls[idxs[0]])))
 
