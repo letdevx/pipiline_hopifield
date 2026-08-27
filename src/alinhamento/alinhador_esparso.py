@@ -142,16 +142,31 @@ class AlinhadorEsparso:
         inv_map_f = {v: k for k, v in map_f.items()}
         tracking_rows = []
         for eid in sorted(ids_so_f):
-            if eid in self.gene_alvo_idx:
+            gene_name = inv_map_f.get(eid, eid)
+            col_idx = self.gene_alvo_idx.get(eid, self.gene_alvo_idx.get(gene_name, None))
+            if col_idx is not None:
                 tracking_rows.append({
-                    'gene_name': inv_map_f.get(eid, eid),
+                    'gene_name': gene_name,
                     'ensembl_id': eid,
-                    'posicao_coluna': self.gene_alvo_idx[eid],
+                    'posicao_coluna': int(col_idx),
                     'valor_inserido': 0.5,
                     'presente_fujita': True,
                     'presente_mathys': False,
                 })
-        df_tracking = pl.DataFrame(tracking_rows).sort('posicao_coluna')
+
+        if not tracking_rows:
+            schema = {
+                'gene_name': pl.Utf8,
+                'ensembl_id': pl.Utf8,
+                'posicao_coluna': pl.Int64,
+                'valor_inserido': pl.Float64,
+                'presente_fujita': pl.Boolean,
+                'presente_mathys': pl.Boolean,
+            }
+            df_tracking = pl.DataFrame(schema=schema)
+        else:
+            df_tracking = pl.DataFrame(tracking_rows).sort('posicao_coluna')
+
         df_tracking.write_csv(out_tracking)
         print(f"[AlinhadorEsparso] Tracking salvo em: {out_tracking} ({len(df_tracking)} genes)")
         return df_tracking
