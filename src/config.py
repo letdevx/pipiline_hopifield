@@ -7,26 +7,26 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Entradas — busca dinâmica (Local Windows / Linux / Google Drive Colab)
 # ---------------------------------------------------------------------------
 
-
+PATH_BASE = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs"
 
 # Entrada Conjunto de Referência
-PATH_REFERENCIA = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/pipiline_hopifield/imputs/pan_anotado.h5ad"
+PATH_REFERENCIA = os.path.join(PATH_BASE, "pan_anotado.h5ad")
 
 # Entrada Conjunto Alvo
-PATH_ALVO = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/pipiline_hopifield/imputs/matrizFiltradaeNormalizadaM.h5ad"
+PATH_ALVO = os.path.join(PATH_BASE, "matrizFiltradaeNormalizadaM.h5ad")
 
 # Features
-PATH_FEATURES_REFERENCIA = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/pipiline_hopifield/imputs/featuresPANcorrigido.tsv"
-PATH_FEATURES_ALVO       = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/pipiline_hopifield/imputs/featuresM.tsv.gz/featuresM.tsv"
+PATH_FEATURES_REFERENCIA = PATH_BASE, "featuresPANcorrigido.tsv"
+PATH_FEATURES_ALVO       = PATH_BASE, "featuresM.tsv.gz/featuresM.tsv"
 
 #
 
 PATH_SWEEP_REFERENCIA  = os.path.join(ROOT, "outputs", "treinamento", "matriz_reduzida_sweepF.csv")
 PATH_SWEEP_ALVO        = os.path.join(ROOT, "outputs", "treinamento", "matriz_reduzida_sweepM.csv")
-PATH_LABELS_REFERENCIA = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/pipiline_hopifield/imputs/PanNumerico.csv"
-PATH_LABELS_ALVO       = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/pipiline_hopifield/imputs/tipos_celulares_numericoMs.txt"
+PATH_LABELS_REFERENCIA = os.path.join(PATH_BASE, "PanNumerico.csv")
+PATH_LABELS_ALVO       = os.path.join(PATH_BASE, "tipos_celulares_numericoMs.txt")
 
-# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------as
 # Saídas — geradas automaticamente dentro da raiz do projeto
 # ---------------------------------------------------------------------------
 OUTPUTS         = os.path.join(ROOT, "outputs")
