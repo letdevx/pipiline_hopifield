@@ -16,7 +16,7 @@ PATH_REFERENCIA = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworksp
 PATH_ALVO = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/pipiline_hopifield/imputs/matrizFiltradaeNormalizadaM.h5ad"
 
 # Features
-PATH_FEATURES_REFERENCIA = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/pipiline_hopifield/imputs/featuresPANcorrigido.tsv")
+PATH_FEATURES_REFERENCIA = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/pipiline_hopifield/imputs/featuresPANcorrigido.tsv"
 PATH_FEATURES_ALVO       = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/pipiline_hopifield/imputs/featuresM.tsv.gz/featuresM.tsv"
 
 #
