@@ -176,28 +176,37 @@ class ProjetorSWeePR:
         return self
 
     def _fallback_python(self):
-        """Fallback: projeção via base ortogonal QR gerada em Python."""
+        """Fallback: projeção via base ortogonal QR gerada em Python (100% OOM-Safe)."""
         print(f"[ProjetorSWeePR] Carregando matriz no motor Python/NumPy: {self.path_matriz}")
+        import scipy.sparse as sp
+
         if self.path_matriz.endswith('.npy'):
-            W = np.load(self.path_matriz).astype(np.float32, copy=False)
+            W = np.load(self.path_matriz, mmap_mode='r')
+            n_features = W.shape[1]
         elif self.path_matriz.endswith('.h5ad'):
             import anndata as ad
-            import scipy.sparse as sp
             adata_tmp = ad.read_h5ad(self.path_matriz)
-            X = adata_tmp.X
-            W = X.toarray().astype(np.float32, copy=False) if sp.issparse(X) else np.asarray(X, dtype=np.float32)
+            W = adata_tmp.X  # Mantém formato esparso CSR se disponível
+            n_features = adata_tmp.n_vars
             del adata_tmp
         else:
             W = pd.read_csv(self.path_matriz, index_col=0).to_numpy(dtype=np.float32)
-            
-        print(f"[ProjetorSWeePR] Shape: {W.shape} → projetando para {self.n_componentes} dim...")
+            n_features = W.shape[1]
+
+        print(f"[ProjetorSWeePR] Matriz {W.shape} → projetando para {self.n_componentes} componentes (QR)...")
         rng = np.random.default_rng(self.seed)
-        Q, _ = np.linalg.qr(rng.standard_normal((W.shape[1], self.n_componentes)))
+        Q, _ = np.linalg.qr(rng.standard_normal((n_features, self.n_componentes)))
         R = Q.astype(np.float32)
-        proj = W @ R
+
+        # Multiplicação esparsa direta (CSR @ Denso) evita alocar matriz densa de 6+ GB em RAM
+        if sp.issparse(W):
+            proj = W.dot(R).astype(np.float32, copy=False)
+        else:
+            proj = (W @ R).astype(np.float32, copy=False)
+
         os.makedirs(os.path.dirname(self.path_saida), exist_ok=True)
         pd.DataFrame(proj).to_csv(self.path_saida, index=False)
-        print(f"[ProjetorSWeePR] Projeção SWeeP salva em: {self.path_saida}")
+        print(f"[ProjetorSWeePR] Projeção SWeeP salva com sucesso em: {self.path_saida}")
         self._carregar()
 
     def _carregar(self):
@@ -215,3 +224,8 @@ class ProjetorSWeePR:
             f"  Wswp          = {wswp}\n"
             f")"
         )
+
+
+# Alias para tolerância a grafias com 1 ou 2 'e's
+ProjetorSWePR = ProjetorSWeePR
+

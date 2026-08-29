@@ -134,7 +134,7 @@ importlib.reload(alinhamento)
 from preprocessing import Binarizador
 from alinhamento import (
     LeitorFeatures, AnalisadorSobreposicao, Alinhador, AlinhadorEsparso,
-    ValidadorAlinhamento, SelecionadorGenesFrequentes, AnalisadorCobertura,
+    ValidadorAlinhamento, ValidadorFeatures, SelecionadorGenesFrequentes, AnalisadorCobertura,
 )
 from treinamento import (
     GeradorConjuntoTreinamento, CarregadorDadosFujita,
@@ -185,10 +185,11 @@ print('Alvo binarizado em:', binarizador_alvo.path_binarizada)
 # 32 643 no Mathys, ~30 312 em comum). O alinhamento:
 # 
 # 1. Lê os mapeamentos `gene_name → Ensembl ID` de cada dataset.
-# 2. Define a ordem canônica dos genes baseada no Fujita (referência).
-# 3. Realinha ambas as matrizes para esse espaço canônico.
+# 2. Valida a integridade dos arquivos de features e a compatibilidade com as matrizes AnnData.
+# 3. Define a ordem canônica dos genes baseada no Fujita (referência).
+# 4. Realinha ambas as matrizes para esse espaço canônico.
 #    - Genes ausentes no **Mathys** são preenchidos com `0.5` como sentinela.
-# 4. Valida que as duas matrizes resultantes têm genes na mesma ordem.
+# 5. Valida que as duas matrizes resultantes têm genes na mesma ordem.
 
 # %%
 
@@ -197,6 +198,21 @@ print('Alvo binarizado em:', binarizador_alvo.path_binarizada)
 leitor = LeitorFeatures(PATH_FEATURES_REFERENCIA, PATH_FEATURES_ALVO)
 leitor.ler()
 print(leitor)
+
+
+# %%
+
+
+# Passo 1.5 — Validação Prévia de Compatibilidade e Ordem de Colunas (Fail-Fast)
+validador_feat = ValidadorFeatures(min_match_pct=50.0, min_genes_comuns=1000)
+validador_feat.validar_tudo(
+    path_features_ref=PATH_FEATURES_REFERENCIA,
+    path_features_alvo=PATH_FEATURES_ALVO,
+    path_h5ad_ref=binarizador_ref.path_binarizada,
+    path_h5ad_alvo=binarizador_alvo.path_binarizada,
+    map_f=leitor.map_f,
+    map_m=leitor.map_m,
+)
 
 
 # %%

@@ -1,7 +1,7 @@
 from .gerador_conjunto_treinamento import GeradorConjuntoTreinamento
 from .hopfield import ModernHopfieldNetwork
 from .carregador_dados_fujita import CarregadorDados, CarregadorDadosFujita, carregar_labels
-from .projetor_sweep import ProjetorSWeP, ProjetorSWeePR
+from .projetor_sweep import ProjetorSWeP, ProjetorSWeePR, ProjetorSWePR
 from .extrator_padroes import ExtratorPadroesSubcluster
 from .avaliador_hopfield import AvaliadorHopfield
 from .gerador_relatorio import GeradorRelatorio
@@ -15,6 +15,7 @@ __all__ = [
     "carregar_labels",
     "ProjetorSWeP",
     "ProjetorSWeePR",
+    "ProjetorSWePR",
     "ExtratorPadroesSubcluster",
     "AvaliadorHopfield",
     "GeradorRelatorio",

@@ -171,6 +171,28 @@ class AlinhadorEsparso:
         print(f"[AlinhadorEsparso] Tracking salvo em: {out_tracking} ({len(df_tracking)} genes)")
         return df_tracking
 
+    def obter_mascara_ausentes(self, path_mathys=None):
+        """Retorna máscara booleana (True = gene ausente no Mathys) de forma eficiente sem carregar matriz X."""
+        path_m = path_mathys if path_mathys is not None else self.path_m_alinhado
+        if not os.path.exists(path_m):
+            raise FileNotFoundError(f"Arquivo alinhado do Mathys não encontrado: {path_m}")
+
+        adata = ad.read_h5ad(path_m, backed='r')
+        if 'presente_no_dataset' in adata.var:
+            mask = ~adata.var['presente_no_dataset'].to_numpy()
+        else:
+            out_tracking = os.path.join(self.out_dir, "tracking_genes_adicionados_mathys.csv")
+            if os.path.exists(out_tracking):
+                df_track = pl.read_csv(out_tracking)
+                col_indices = df_track['posicao_coluna'].to_numpy()
+                mask = np.zeros(adata.n_vars, dtype=bool)
+                mask[col_indices] = True
+            else:
+                mask = np.zeros(adata.n_vars, dtype=bool)
+        adata.file.close()
+        return mask
+
+
     def extrair_subconjunto(self, lista_genes_ou_csv, out_dir=None, exportar_npy=True, exportar_h5ad=True, fill_value_mathys=0.5):
         """Extrai um subconjunto ordenado de genes (ex: Top 5000) e injeta sentinela 0.5 no Mathys de forma OOM-Safe.
         

@@ -80,3 +80,36 @@ def test_alinhador_direto_preenche_ausentes():
     # Coluna G2 (índice 2) deve estar preenchida integralmente com 0.5
     np.testing.assert_array_equal(matriz_final[:, 2], np.array([0.5, 0.5]), 
                                   err_msg="A coluna do gene ausente deve receber o valor sentinela 0.5.")
+
+
+def test_retrieve_com_mascara_sentinela_ausentes():
+    """Testa se o método retrieve injeta o valor 0.5 nos genes ausentes sob demanda em lotes OOM-Safe."""
+    import scipy.sparse as sp
+    
+    # 2 protótipos em 4 genes:
+    # Protótipo 0 (Classe A): [1, 1, 0, 0]
+    # Protótipo 1 (Classe B): [0, 0, 1, 1]
+    prototipos = np.array([
+        [1.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 1.0],
+    ], dtype=np.float32)
+    
+    rede = ModernHopfieldNetwork(beta=20.0, n_iters=1, binary=True)
+    rede.store(prototipos)
+    
+    # Query esparsa CSR: G0 ativo (1.0), G1 ausente (0.0 na matriz esparsa, mas marcado em mask_ausentes)
+    queries = sp.csr_matrix(np.array([
+        [1.0, 0.0, 0.0, 0.0],  # Deve reconhecer Classe A e reconstruir G1=1.0
+        [0.0, 0.0, 1.0, 0.0],  # Deve reconhecer Classe B e reconstruir G3=1.0
+    ], dtype=np.float32))
+    
+    mask_ausentes = np.array([False, True, False, True]) # G1 e G3 são ausentes na plataforma alvo
+    
+    recuperado = rede.retrieve(queries, batch_size=1, mask_sentinela_ausentes=mask_ausentes, fill_value=0.5)
+    
+    # Validações:
+    # A query 0 deve reconstruir perfeitamente o protótipo 0 [1, 1, 0, 0]
+    np.testing.assert_array_equal(recuperado[0], np.array([1.0, 1.0, 0.0, 0.0]))
+    # A query 1 deve reconstruir perfeitamente o protótipo 1 [0, 0, 1, 1]
+    np.testing.assert_array_equal(recuperado[1], np.array([0.0, 0.0, 1.0, 1.0]))
+

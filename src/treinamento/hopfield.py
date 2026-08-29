@@ -46,12 +46,20 @@ class ModernHopfieldNetwork(nn.Module):
         return self
 
     @torch.no_grad()
-    def retrieve(self, queries, batch_size=1024, normalize=None, subspace_mask=None, out_buffer=None):
+    def retrieve(self, queries, batch_size=1024, normalize=None, subspace_mask=None,
+                 mask_sentinela_ausentes=None, fill_value=0.5, out_buffer=None):
         """Recupera o padrão mais próximo para cada query.
         
-        Se out_buffer for fornecido (ex: np.ndarray em float16/float32 ou np.memmap),
-        o resultado de cada batch é escrito diretamente em out_buffer[s:s+batch_size],
-        evitando a alocação de matrizes temporárias gigantes em RAM.
+        Parâmetros
+        ----------
+        queries                 : matriz de entrada (esparsa CSR ou densa numpy)
+        batch_size              : tamanho do lote de processamento OOM-Safe
+        normalize               : se True, aplica normalização L2 nos vetores
+        subspace_mask           : máscara de colunas para cálculo da atenção
+        mask_sentinela_ausentes : máscara booleana ou lista de índices de genes ausentes.
+                                  Se fornecida, atribui fill_value (0.5) a essas colunas em cada lote.
+        fill_value              : valor atribuído aos genes ausentes (padrão 0.5 -> 0.0 no espaço bipolar)
+        out_buffer              : buffer pré-alocado opcional para escrita direta
         """
         if self.patterns.numel() == 0:
             raise RuntimeError("[ModernHopfieldNetwork] Execute .store() antes de .retrieve().")
@@ -85,7 +93,11 @@ class ModernHopfieldNetwork(nn.Module):
             if is_sparse:
                 chunk_np = queries[s:s + batch_size].toarray().astype(np.float32)
             else:
-                chunk_np = queries_np[s:s + batch_size].astype(np.float32, copy=False)
+                chunk_np = queries_np[s:s + batch_size].astype(np.float32, copy=True if mask_sentinela_ausentes is not None else False)
+
+            if mask_sentinela_ausentes is not None:
+                chunk_np[:, mask_sentinela_ausentes] = fill_value
+
             x = torch.from_numpy(chunk_np).to(device='cpu')
 
             if self.binary:

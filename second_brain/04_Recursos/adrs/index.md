@@ -26,6 +26,7 @@ Esta pasta armazena o repositório de decisões formais de arquitetura para gara
 * 📜 **[[04_Recursos/adrs/adr_010_harmonizacao_cosseno_e_prototipos_consolidados|ADR 010: Harmonização por Similaridade de Cosseno, Protótipos Consolidados ($k>1$) e Otimização Trans-Dataset]]**
 * 📜 **[[04_Recursos/adrs/adr_011_desacoplamento_atencao_subespaco_e_imputacao_expandida|ADR 011: Desacoplamento entre Atenção em Subespaço Compartilhado e Imputação no Espaço Expandido]]**
 * 📜 **[[04_Recursos/adrs/adr_012_experimento_amostragem_consenso_k5_210padroes_v3|ADR 012: Experimento com Amostragem por Consenso ($k=5$) e 210 Padrões no Pipeline v3]]**
+* 📜 **[[04_Recursos/adrs/adr_013_validacao_estrita_features_pre_alinhamento|ADR 013: Validação Estrita de Features e Identificadores Genômicos Pré-Alinhamento]]**
 
 ---
 
