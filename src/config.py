@@ -19,7 +19,7 @@ PATH_ALVO = os.path.join(PATH_BASE, "matriz_anotada_finalM.h5ad")
 
 PATH_FEATURES_REFERENCIA = os.path.join(PATH_BASE, "featuresPANcorrigido.tsv")
 
-PATH_FEATURES_ALVO = os.path.join(PATH_BASE, "featuresM.tsv")
+PATH_FEATURES_ALVO = os.path.join(PATH_BASE, "features.tsv")
 
 #
 
