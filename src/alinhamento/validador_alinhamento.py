@@ -1,22 +1,74 @@
+"""Módulo de Validação Pós-Alinhamento Dimensional.
+
+Garante que duas matrizes scRNA-seq alinhadas compartilhem rigorosamente
+a mesma contagem, nomes e ordem posicional exata de genes.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Sequence, Union
+
 import anndata as ad
+
+PathType = Union[str, os.PathLike[str]]
 
 
 class ValidadorAlinhamento:
-    """Valida que dois AnnData alinhados possuem exatamente a mesma lista de genes na mesma ordem."""
+    """Valida que dois arquivos AnnData alinhados possuem a mesma lista e ordem exata de genes.
 
-    def __init__(self, path_f_alinhado, path_m_alinhado, genes_ordenados):
-        self.path_f_alinhado = path_f_alinhado
-        self.path_m_alinhado = path_m_alinhado
-        self.genes_ordenados = genes_ordenados
+    Parameters
+    ----------
+    path_f_alinhado : str | os.PathLike[str]
+        Caminho para o .h5ad alinhado de referência (Fujita).
+    path_m_alinhado : str | os.PathLike[str]
+        Caminho para o .h5ad alinhado do conjunto alvo (Mathys).
+    genes_ordenados : Sequence[str]
+        Lista esperada de genes na ordem canônica.
 
-    def validar(self):
+    Attributes
+    ----------
+    path_f_alinhado : str
+        Caminho do arquivo de referência.
+    path_m_alinhado : str
+        Caminho do arquivo alvo.
+    genes_ordenados : list[str]
+        Vetor canônico de genes.
+    """
+
+    def __init__(
+        self,
+        path_f_alinhado: PathType,
+        path_m_alinhado: PathType,
+        genes_ordenados: Sequence[str],
+    ) -> None:
+        self.path_f_alinhado: str = str(path_f_alinhado)
+        self.path_m_alinhado: str = str(path_m_alinhado)
+        self.genes_ordenados: list[str] = list(genes_ordenados)
+
+    def validar(self) -> ValidadorAlinhamento:
+        """Verifica a paridade dimensional e posicional exata entre os datasets.
+
+        Returns
+        -------
+        ValidadorAlinhamento
+            A própria instância se validado com sucesso.
+
+        Raises
+        ------
+        ValueError
+            Se houver divergência de contagem ou ordem gênica.
+        """
         print("[ValidadorAlinhamento] Carregando metadados...")
-        _f = ad.read_h5ad(self.path_f_alinhado, backed='r')
-        _m = ad.read_h5ad(self.path_m_alinhado, backed='r')
-        genes_f = _f.var_names.tolist()
-        genes_m = _m.var_names.tolist()
-        _f.file.close()
-        _m.file.close()
+        _f: ad.AnnData = ad.read_h5ad(self.path_f_alinhado, backed="r")
+        _m: ad.AnnData = ad.read_h5ad(self.path_m_alinhado, backed="r")
+        genes_f: list[str] = list(_f.var_names)
+        genes_m: list[str] = list(_m.var_names)
+        if hasattr(_f, "file") and _f.file is not None:
+            _f.file.close()
+        if hasattr(_m, "file") and _m.file is not None:
+            _m.file.close()
         del _f, _m
 
         if len(genes_f) != len(self.genes_ordenados):
@@ -30,9 +82,11 @@ class ValidadorAlinhamento:
                 f"esperado {len(self.genes_ordenados)}."
             )
 
-        divs_f = [(i, self.genes_ordenados[i], genes_f[i])
-                  for i in range(len(self.genes_ordenados))
-                  if genes_f[i] != self.genes_ordenados[i]]
+        divs_f = [
+            (i, self.genes_ordenados[i], genes_f[i])
+            for i in range(len(self.genes_ordenados))
+            if genes_f[i] != self.genes_ordenados[i]
+        ]
         if divs_f:
             msg = "\n  ".join(
                 f"pos {i}: esperado={e!r} encontrado={e2!r}" for i, e, e2 in divs_f[:5]
@@ -41,9 +95,11 @@ class ValidadorAlinhamento:
                 f"[VALIDAÇÃO FALHOU] Fujita diverge em {len(divs_f)} posição(ões):\n  {msg}"
             )
 
-        divs_m = [(i, self.genes_ordenados[i], genes_m[i])
-                  for i in range(len(self.genes_ordenados))
-                  if genes_m[i] != self.genes_ordenados[i]]
+        divs_m = [
+            (i, self.genes_ordenados[i], genes_m[i])
+            for i in range(len(self.genes_ordenados))
+            if genes_m[i] != self.genes_ordenados[i]
+        ]
         if divs_m:
             msg = "\n  ".join(
                 f"pos {i}: esperado={e!r} encontrado={e2!r}" for i, e, e2 in divs_m[:5]
@@ -52,9 +108,11 @@ class ValidadorAlinhamento:
                 f"[VALIDAÇÃO FALHOU] Mathys diverge em {len(divs_m)} posição(ões):\n  {msg}"
             )
 
-        divs_fm = [(i, genes_f[i], genes_m[i])
-                   for i in range(len(genes_f))
-                   if genes_f[i] != genes_m[i]]
+        divs_fm = [
+            (i, genes_f[i], genes_m[i])
+            for i in range(len(genes_f))
+            if genes_f[i] != genes_m[i]
+        ]
         if divs_fm:
             msg = "\n  ".join(
                 f"pos {i}: F={gf!r} M={gm!r}" for i, gf, gm in divs_fm[:5]
@@ -64,13 +122,14 @@ class ValidadorAlinhamento:
             )
 
         print(f"[OK] Número de genes idêntico: {len(self.genes_ordenados)}")
-        print(f"[OK] Fujita alinhado == ordem de referência")
-        print(f"[OK] Mathys alinhado == ordem de referência")
-        print(f"[OK] Fujita alinhado == Mathys alinhado")
+        print("[OK] Fujita alinhado == ordem de referência")
+        print("[OK] Mathys alinhado == ordem de referência")
+        print("[OK] Fujita alinhado == Mathys alinhado")
         print("[ValidadorAlinhamento] Validação concluída com sucesso.")
         return self
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Representação textual do validador de alinhamento."""
         return (
             f"ValidadorAlinhamento(\n"
             f"  path_f_alinhado  = {self.path_f_alinhado}\n"

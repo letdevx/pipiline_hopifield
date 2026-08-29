@@ -10,8 +10,8 @@ executionEnvironments = [
 ]
 
 [tool.pyrefly]
-project-includes = ["src"]
-search-path = ["."]
+project-includes = ["src", "pipeline_generico.py"]
+search-path = [".", "src"]
 infer-with-first-use = false
 check-unannotated-defs = true
 infer-return-types = "never"

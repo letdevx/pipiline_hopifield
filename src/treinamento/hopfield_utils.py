@@ -1,122 +1,210 @@
+"""Funções utilitárias e rotinas matemáticas para redes Hopfield e clustering.
+
+Implementa funções compatíveis com a toolbox legado em MATLAB (sorti, princomp_,
+closervects, contaocorr, mat2celllines, wsort, indexa).
+"""
+
+from __future__ import annotations
+
+from typing import Any, Literal, Sequence, Tuple, Union
+
 import numpy as np
+from numpy.typing import NDArray
+import scipy.sparse as sp
 
 
-def sorti(x, mode="ascend"):
-    """Retorna os índices que ordenam x (equivalente a sorti.m).
+def sorti(x: Sequence[Any] | NDArray[Any], mode: Literal["ascend", "descend"] = "ascend") -> NDArray[np.intp]:
+    """Retorna os índices que ordenam o vetor x (equivalente a sorti.m).
 
-    mode: "ascend" (padrão) ou "descend".
+    Parameters
+    ----------
+    x : Sequence | NDArray
+        Vetor numérico de entrada.
+    mode : {"ascend", "descend"}, default="ascend"
+        Direção da ordenação.
+
+    Returns
+    -------
+    NDArray[np.intp]
+        Vetor de índices ordenados.
     """
-    x = np.asarray(x).ravel()
-    idx = np.argsort(x)
+    arr: NDArray[Any] = np.asarray(x).ravel()
+    idx: NDArray[np.intp] = np.argsort(arr)
     if str(mode).lower().startswith("desc"):
         idx = idx[::-1]
     return idx.copy()
 
 
-def princomp_(W):
-    """PCA sem centralização via SVD (equivalente a princomp_.m).
+def princomp_(W: Union[NDArray[np.float32], Sequence[Sequence[float]]]) -> NDArray[np.float32]:
+    """Calcula PCA sem centralização via decomposição em valores singulares (SVD).
 
-    Equivale a pca(W, 'Centered', false, 'Algorithm', 'svd') do MATLAB.
-    Retorna a matriz de loadings (d x d) com componentes nas colunas,
-    em ordem decrescente de variância explicada.
+    Equivale a `pca(W, 'Centered', false, 'Algorithm', 'svd')` do MATLAB.
+
+    Parameters
+    ----------
+    W : NDArray[np.float32] | Sequence
+        Matriz de dados (n_amostras × n_features).
+
+    Returns
+    -------
+    NDArray[np.float32]
+        Matriz de loadings (d × d) com autovetores nas colunas ordenados por variância.
     """
-    W = np.asarray(W, dtype=np.float32)
-    _, _, Vt = np.linalg.svd(W, full_matrices=False)
-    return Vt.T
+    W_arr: NDArray[np.float32] = np.asarray(W, dtype=np.float32)
+    _, _, Vt = np.linalg.svd(W_arr, full_matrices=False)
+    return Vt.T.astype(np.float32)
 
 
-def closervects(W, Wi, k, distance="euclidean"):
-    """Índices dos k vetores em W mais próximos de Wi (equivalente a closervects.m).
+def closervects(
+    W: Union[NDArray[np.float32], Sequence[Sequence[float]]],
+    Wi: Union[NDArray[np.float32], Sequence[float], Sequence[int]],
+    k: int,
+    distance: Union[Literal["euclidean"], float, int, str] = "euclidean",
+) -> Union[int, NDArray[np.intp]]:
+    """Identifica os índices dos k vetores em W mais próximos de Wi (equivalente a closervects.m).
 
-    Wi pode ser:
-      - vetor(es) com mesma dimensão das linhas de W → toma a média;
-      - vetor de índices em W → busca em torno da média de W[indices].
+    Parameters
+    ----------
+    W : NDArray[np.float32] | Sequence
+        Matriz base contendo os vetores candidatos.
+    Wi : NDArray[np.float32] | Sequence
+        Vetor de consulta ou índices para cálculo de centróide.
+    k : int
+        Número de vizinhos mais próximos a retornar.
+    distance : {"euclidean"} | float | int | str, default="euclidean"
+        Métrica de distância ou norma L-k.
 
-    distance: "euclidean" (padrão) ou número para Lk-norm.
+    Returns
+    -------
+    int | NDArray[np.intp]
+        Índice mais próximo (se k=1) ou array com os k índices.
     """
-    W = np.asarray(W, dtype=np.float32)
-    Wi = np.asarray(Wi, dtype=np.float32)
-    if Wi.ndim == 1:
-        Wi = Wi[None, :]
-    _, mm = W.shape
-    _, q = Wi.shape
+    W_arr: NDArray[np.float32] = np.asarray(W, dtype=np.float32)
+    Wi_arr: NDArray[np.float32] = np.asarray(Wi, dtype=np.float32)
+    if Wi_arr.ndim == 1:
+        Wi_arr = Wi_arr[None, :]
+    _, mm = W_arr.shape
+    _, q = Wi_arr.shape
 
+    query: NDArray[np.float32]
     if q == mm:
-        query = Wi.mean(axis=0)
+        query = np.asarray(Wi_arr.mean(axis=0), dtype=np.float32)
     else:
-        idx = Wi.ravel().astype(int) - 1
-        query = W[idx].mean(axis=0)
+        idx: NDArray[np.int_] = Wi_arr.ravel().astype(int) - 1
+        query = np.asarray(W_arr[idx].mean(axis=0), dtype=np.float32)
 
+    u: NDArray[np.float32]
     if isinstance(distance, str) and distance.lower() == "euclidean":
-        diff = W - query[None, :]
-        u = np.sqrt(np.einsum("ij,ij->i", diff, diff))
+        diff = W_arr - query[None, :]
+        u = np.sqrt(np.einsum("ij,ij->i", diff, diff)).astype(np.float32)
     else:
-        kp = float(distance)
-        diff = np.abs(W - query[None, :])
-        u = np.sum(diff ** kp, axis=1)
+        kp: float = float(distance)
+        diff_abs = np.abs(W_arr - query[None, :])
+        u_sum = np.sum(diff_abs ** kp, axis=1)
         if kp >= 1:
-            u = u ** (1.0 / kp)
+            u = (u_sum ** (1.0 / kp)).astype(np.float32)
+        else:
+            u = u_sum.astype(np.float32)
 
-    ii = np.argsort(u)[:k]
+    ii: NDArray[np.intp] = np.argsort(u)[:k]
     return int(ii[0]) if k == 1 else ii
 
 
-def contaocorr(v, ordby_max=True):
+def contaocorr(v: Union[NDArray[Any], Sequence[Any]], ordby_max: bool = True) -> NDArray[Any]:
     """Conta ocorrências de cada valor distinto em v (equivalente a contaocorr.m).
 
-    Retorna matriz [valor, contagem]:
-      - ordenada por contagem decrescente se ordby_max=True (padrão);
-      - ordenada por valor crescente se ordby_max=False.
+    Parameters
+    ----------
+    v : NDArray | Sequence
+        Vetor com elementos discretos.
+    ordby_max : bool, default=True
+        Se True, ordena decrescente por frequência; se False, crescente pelo valor.
+
+    Returns
+    -------
+    NDArray[Any]
+        Matriz (N × 2) onde a coluna 0 é o valor e a coluna 1 é a contagem.
     """
-    v = np.asarray(v).ravel()
-    vals, counts = np.unique(v, return_counts=True)
+    arr: NDArray[Any] = np.asarray(v).ravel()
+    vals, counts = np.unique(arr, return_counts=True)
     order = np.argsort(-counts, kind="stable") if ordby_max else np.argsort(vals)
     return np.column_stack([vals[order], counts[order]])
 
 
-def mat2celllines(M):
-    """Converte as linhas de M em lista de vetores 1D (equivalente a mat2celllines.m)."""
-    M = np.asarray(M)
-    return [M[i] for i in range(M.shape[0])]
+def mat2celllines(M: Union[NDArray[Any], Sequence[Sequence[Any]]]) -> list[NDArray[Any]]:
+    """Converte as linhas de uma matriz em lista de vetores 1D (equivalente a mat2celllines.m).
 
+    Parameters
+    ----------
+    M : NDArray | Sequence
+        Matriz 2D de entrada.
 
-import scipy.sparse as sp
-
-
-def wsort(W, return_perm=False, rng=None):
-    """Embaralha aleatoriamente as linhas de W (equivalente a wsort.m).
-
-    Equivale a [~, id] = sort(rand(N,1)); W = W(id,:) do MATLAB.
-    Não confundir com ordenação por conteúdo.
+    Returns
+    -------
+    list[NDArray]
+        Lista onde cada elemento é uma linha da matriz.
     """
-    if sp.issparse(W):
-        if rng is None:
-            rng = np.random.default_rng()
-        perm = rng.permutation(W.shape[0])
-        out = W[perm]
-        if sp.issparse(out):
-            out = out.toarray().astype(np.float32)
-        return (out, perm) if return_perm else out
+    arr: NDArray[Any] = np.asarray(M)
+    return [arr[i] for i in range(arr.shape[0])]
 
-    W = np.asarray(W)
-    if rng is None:
-        rng = np.random.default_rng()
-    perm = rng.permutation(W.shape[0])
-    out = W[perm]
+
+def wsort(
+    W: Union[NDArray[Any], sp.spmatrix],
+    return_perm: bool = False,
+    rng: np.random.Generator | None = None,
+) -> Union[NDArray[Any], Tuple[NDArray[Any], NDArray[np.intp]]]:
+    """Embaralha pseudoaleatoriamente as linhas da matriz W (equivalente a wsort.m).
+
+    Parameters
+    ----------
+    W : NDArray | sp.spmatrix
+        Matriz de dados a ser permutada por linhas.
+    return_perm : bool, default=False
+        Se True, retorna tupla (matriz_embaralhada, permutacao_indices).
+    rng : np.random.Generator | None, optional
+        Gerador de números pseudoaleatórios.
+
+    Returns
+    -------
+    NDArray | Tuple[NDArray, NDArray[np.intp]]
+        Matriz com linhas embaralhadas.
+    """
+    generator: np.random.Generator = rng if rng is not None else np.random.default_rng()
+    n_rows: int = int(W.shape[0])
+    perm: NDArray[np.intp] = generator.permutation(n_rows)
+
+    out: NDArray[Any]
+    if sp.issparse(W):
+        out = sp.csr_matrix(W)[perm].toarray().astype(np.float32)
+    else:
+        out = np.asarray(W)[perm]
+
     return (out, perm) if return_perm else out
 
 
-def indexa(X, xinds):
-    """Indexação estilo MATLAB X(xinds) (equivalente a indexa.m).
+def indexa(X: Union[NDArray[Any], Sequence[Any]], xinds: Union[str, int, Sequence[int], NDArray[np.int_]]) -> Any:
+    """Indexação estilo MATLAB 1-based `X(xinds)` (equivalente a indexa.m).
 
-    Aceita também a string 'SECOND' para retornar o segundo elemento.
+    Parameters
+    ----------
+    X : NDArray | Sequence
+        Array a ser indexado.
+    xinds : str | int | Sequence[int] | NDArray
+        Índices 1-based ou a string 'SECOND'.
+
+    Returns
+    -------
+    Any
+        Elemento ou subconjunto indexado.
     """
-    X = np.asarray(X)
+    arr: NDArray[Any] = np.asarray(X)
     if isinstance(xinds, str):
         if xinds.upper() == "SECOND":
-            return X.ravel()[1] if X.size > 1 else np.array([])
+            return arr.ravel()[1] if arr.size > 1 else np.array([])
         raise NotImplementedError(f"indexa: modo '{xinds}' não implementado.")
-    inds = np.asarray(
-        list(xinds) if hasattr(xinds, "__iter__") else [xinds], dtype=int
-    ).ravel() - 1
-    return X[inds]
+    inds: NDArray[np.int_]
+    if isinstance(xinds, (int, np.integer)):
+        inds = np.array([int(xinds)], dtype=int) - 1
+    else:
+        inds = np.asarray(xinds, dtype=int).ravel() - 1
+    return arr[inds]

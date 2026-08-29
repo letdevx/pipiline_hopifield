@@ -1,85 +1,143 @@
+"""Módulo de Seleção de Genes Diferenciais por Qui-Quadrado (Chi2).
+
+Mede o Ganho de Informação Biológica entre a presença/ausência binária do gene
+e os tipos celulares anotados, isolando marcadores informativos e descartando
+genes constitutivos (housekeeping) sem poder de discriminação celular.
+"""
+
+from __future__ import annotations
+
+import gc
 import os
+from pathlib import Path
+from typing import Any, Sequence, Union
+
+import anndata as ad
 import numpy as np
+from numpy.typing import NDArray
 import pandas as pd
 import polars as pl
-import anndata as ad
 import scipy.sparse as sp
 from sklearn.feature_selection import chi2
 
+PathType = Union[str, os.PathLike[str]]
+LabelsType = Union[PathType, Sequence[int], NDArray[np.int_]]
+
 
 class SelecionadorGenesDiferenciais:
-    """Calcula os N genes com maior valor de Chi-Square (qui-quadrado) em relação aos rótulos de tipo celular.
+    """Calcula os N genes com maior valor de Chi-Square (qui-quadrado) em relação aos rótulos celulares.
 
-    Filtra a expressão de expressão gênica binarizada medindo o Ganho de Informação Biológica
-    entre a presença/ausência do gene (0 ou 1) e o tipo celular (clo), eliminando o ruído
-    de genes constitutivos (housekeeping genes) que são ativos em todas as células.
+    Parameters
+    ----------
+    path_input : str | os.PathLike[str]
+        Caminho da matriz binária de entrada (AnnData .h5ad, CSV ou TXT).
+    path_labels : str | os.PathLike[str] | Sequence[int] | NDArray
+        Vetor ou arquivo contendo os rótulos de tipo celular (ex: clo_ref).
+    n : int, default=5000
+        Número de genes marcadores a selecionar.
+
+    Attributes
+    ----------
+    path_input : str
+        Caminho do arquivo de entrada.
+    path_labels : LabelsType
+        Rótulos das células.
+    n : int
+        Quantidade de genes alvo.
+    df_resultado : pl.DataFrame | None
+        Tabela com genes e pontuações Chi2 ordenadas.
     """
 
-    def __init__(self, path_txt_or_h5ad, path_labels, n=5000):
-        self.path_input   = path_txt_or_h5ad
-        self.path_labels  = path_labels
-        self.n            = n
-        self.df_resultado = None
+    def __init__(
+        self,
+        path_input: PathType,
+        path_labels: LabelsType,
+        n: int = 5000,
+    ) -> None:
+        self.path_input: str = str(path_input)
+        self.path_labels: LabelsType = path_labels
+        self.n: int = int(n)
+        self.df_resultado: pl.DataFrame | None = None
 
-    def calcular(self, out_csv=None):
-        if out_csv and os.path.exists(out_csv):
-            print(f"[SelecionadorGenesDiferenciais] Arquivo já existe, pulando: {out_csv}")
-            self.df_resultado = pl.read_csv(out_csv)
-            return self
+    def calcular(
+        self,
+        path_h5ad: str = "",
+        classes_validas: Sequence[int] | None = None,
+        out_csv: PathType | None = None,
+    ) -> SelecionadorGenesDiferenciais:
+        """Executa o cálculo do teste qui-quadrado gene a gene contra os rótulos.
 
-        print(f"[SelecionadorGenesDiferenciais] Lendo matriz e rótulos para o cálculo de Chi2...")
-        
-        # Carrega rótulos das células
-        if isinstance(self.path_labels, (np.ndarray, list)):
-            labels = np.asarray(self.path_labels, dtype=int).ravel()
+        Parameters
+        ----------
+        path_h5ad : str, default=""
+            Caminho alternativo AnnData se path_input for texto.
+        classes_validas : Sequence[int] | None, optional
+            Subconjunto de classes para inclusão no cálculo (ex: descarta classe 0).
+        out_csv : str | os.PathLike[str] | None, optional
+            Caminho para salvar o CSV com a pontuação imediatamente.
+
+        Returns
+        -------
+        SelecionadorGenesDiferenciais
+            A própria instância.
+        """
+        print(f"[SelecionadorGenesDiferenciais] Iniciando seleção dos Top {self.n} genes marcadores...")
+
+        # 1. Carregamento dos rótulos
+        clo: NDArray[np.int_]
+        if isinstance(self.path_labels, (str, os.PathLike)):
+            clo = np.loadtxt(str(self.path_labels), dtype=int)
+        elif isinstance(self.path_labels, np.ndarray):
+            clo = self.path_labels.astype(int)
         else:
-            try:
-                labels = np.loadtxt(self.path_labels, dtype=int).ravel()
-            except ValueError:
-                labels = np.loadtxt(self.path_labels, dtype=int, skiprows=1).ravel()
+            clo = np.array(list(self.path_labels), dtype=int)
 
-        # Remapeia classes seguindo a regra clo (classes raras -> 2)
-        clo = labels.copy()
-        clo[~np.isin(clo, [1, 3, 4, 5, 6, 7, 0])] = 2
-        mask_valid = (clo != 0)
+        mask_valid: NDArray[np.bool_]
+        if classes_validas is not None:
+            mask_valid = np.isin(clo, list(classes_validas))
+            print(f"  Filtrando classes válidas {list(classes_validas)}: {mask_valid.sum()} de {len(clo)} células.")
+        else:
+            mask_valid = np.ones(len(clo), dtype=bool)
 
-        # Leitura da matriz (com detecção inteligente de .h5ad equivalente)
-        path_h5ad = os.path.splitext(str(self.path_input))[0] + ".h5ad"
-        if os.path.exists(path_h5ad) or str(self.path_input).endswith('.h5ad'):
-            target_h5ad = path_h5ad if os.path.exists(path_h5ad) else self.path_input
+        # 2. Carregamento da Matriz de Expressão Binária
+        gene_names: list[str]
+        X: NDArray[np.float32]
+
+        if os.path.exists(path_h5ad) or self.path_input.endswith(".h5ad"):
+            target_h5ad: str = path_h5ad if os.path.exists(path_h5ad) else self.path_input
             print(f"  Utilizando matriz AnnData para carregamento otimizado: {target_h5ad}")
-            adata = ad.read_h5ad(target_h5ad)
-            gene_names = adata.var_names.tolist()
-            X = adata.X[mask_valid]
-            if sp.issparse(X):
-                X = X.toarray()
+            adata: ad.AnnData = ad.read_h5ad(target_h5ad)
+            gene_names = list(adata.var_names)
+            mat_slice = adata.X[mask_valid]
+            if sp.issparse(mat_slice):
+                X = sp.csr_matrix(mat_slice).toarray().astype(np.float32)
+            else:
+                X = np.asarray(mat_slice, dtype=np.float32)
             del adata
-            import gc
             gc.collect()
         else:
             # Leitura de CSV/TXT binarizado
-            df = pd.read_csv(self.path_input, dtype=np.float32)
-            gene_names = df.columns.tolist()
-            X = df.values[mask_valid]
+            df: pd.DataFrame = pd.read_csv(self.path_input, dtype=np.float32)
+            gene_names = list(df.columns)
+            X = np.asarray(df.values[mask_valid], dtype=np.float32)
             del df
-            import gc
             gc.collect()
 
-        y = clo[mask_valid]
+        y: NDArray[np.int_] = clo[mask_valid]
 
         print(f"  Executando Chi-Square em {X.shape[1]} genes para {X.shape[0]} células...")
-        scores, pvalues = chi2(X, y)
-        scores = np.nan_to_num(scores, nan=0.0)
+        scores, _ = chi2(X, y)
+        scores_arr: NDArray[np.float64] = np.asarray(np.nan_to_num(scores, nan=0.0), dtype=np.float64)
 
-        n_real = min(self.n, len(gene_names))
-        idx_top = np.argsort(scores)[-n_real:][::-1]
+        n_real: int = min(self.n, len(gene_names))
+        idx_top: NDArray[np.intp] = np.argsort(scores_arr)[-n_real:][::-1]
 
-        top_genes = [gene_names[i] for i in idx_top]
-        top_scores = [float(scores[i]) for i in idx_top]
+        top_genes: list[str] = [gene_names[i] for i in idx_top]
+        top_scores: list[float] = [float(scores_arr[i]) for i in idx_top]
 
         self.df_resultado = pl.DataFrame({
-            'gene': top_genes,
-            'chi2_score': top_scores
+            "gene": top_genes,
+            "chi2_score": top_scores,
         })
 
         print(f"[SelecionadorGenesDiferenciais] Concluído. Top {n_real} genes discriminativos selecionados por Chi2.")
@@ -91,47 +149,76 @@ class SelecionadorGenesDiferenciais:
 
         return self
 
-    def salvar(self, out_csv):
+    def salvar(self, out_csv: PathType) -> SelecionadorGenesDiferenciais:
+        """Persiste os resultados em formato CSV.
+
+        Parameters
+        ----------
+        out_csv : str | os.PathLike[str]
+            Caminho do CSV de destino.
+
+        Returns
+        -------
+        SelecionadorGenesDiferenciais
+            A própria instância.
+        """
         if self.df_resultado is None:
             raise RuntimeError("Execute .calcular() antes de salvar.")
-        os.makedirs(os.path.dirname(out_csv), exist_ok=True)
-        self.df_resultado.write_csv(out_csv)
-        print(f"[SelecionadorGenesDiferenciais] Salvo em: {out_csv}")
+        out_csv_str: str = str(out_csv)
+        os.makedirs(os.path.dirname(os.path.abspath(out_csv_str)), exist_ok=True)
+        self.df_resultado.write_csv(out_csv_str)
+        print(f"[SelecionadorGenesDiferenciais] Salvo em: {out_csv_str}")
         return self
 
-    def filtrar_matriz(self, in_csv_or_npy, out_csv_or_npy):
-        """Salva nova matriz contendo apenas as colunas dos genes selecionados por Chi2."""
+    def filtrar_matriz(self, in_csv_or_npy: PathType, out_csv_or_npy: PathType) -> SelecionadorGenesDiferenciais:
+        """Salva nova matriz contendo apenas as colunas dos genes selecionados por Chi2.
+
+        Parameters
+        ----------
+        in_csv_or_npy : str | os.PathLike[str]
+            Matriz de entrada (.csv, .txt ou .npy).
+        out_csv_or_npy : str | os.PathLike[str]
+            Matriz filtrada de saída (.csv ou .npy).
+
+        Returns
+        -------
+        SelecionadorGenesDiferenciais
+            A própria instância.
+        """
         if self.df_resultado is None:
             raise RuntimeError("Execute .calcular() antes de filtrar.")
 
-        lista_genes = self.df_resultado["gene"].to_list()
-        os.makedirs(os.path.dirname(out_csv_or_npy), exist_ok=True)
+        lista_genes: list[str] = self.df_resultado["gene"].to_list()
+        in_str: str = str(in_csv_or_npy)
+        out_str: str = str(out_csv_or_npy)
+        os.makedirs(os.path.dirname(os.path.abspath(out_str)), exist_ok=True)
 
-        if str(in_csv_or_npy).endswith('.npy'):
-            # Se for array npy, assume que as colunas já estão ordenadas ou lê via dataframe
-            arr = np.load(in_csv_or_npy)
-            np.save(out_csv_or_npy, arr)
-            print(f"[SelecionadorGenesDiferenciais] Matriz salva: {out_csv_or_npy}")
+        if in_str.endswith(".npy"):
+            arr: NDArray[Any] = np.load(in_str)
+            np.save(out_str, arr)
+            print(f"[SelecionadorGenesDiferenciais] Matriz salva: {out_str}")
         else:
-            with open(in_csv_or_npy, encoding='utf-8') as fh:
-                header = fh.readline().strip('\n').strip('\r').split(',')
+            with open(in_str, encoding="utf-8") as fh:
+                header: list[str] = fh.readline().strip("\n").strip("\r").split(",")
 
-            coluna_celulas = header[0]
-            colunas_validas = [coluna_celulas] + [c for c in lista_genes if c in header]
+            coluna_celulas: str = header[0]
+            colunas_validas: list[str] = [coluna_celulas] + [c for c in lista_genes if c in header]
 
-            if str(out_csv_or_npy).endswith('.npy'):
-                df_filtered = pl.scan_csv(in_csv_or_npy).select(colunas_validas).collect()
+            if out_str.endswith(".npy"):
+                df_filtered: pl.DataFrame = pl.scan_csv(in_str).select(colunas_validas).collect()
+                arr_f32: NDArray[np.float32]
                 if df_filtered.columns[0] == coluna_celulas and not df_filtered.dtypes[0].is_numeric():
-                    arr = df_filtered.select(colunas_validas[1:]).to_numpy().astype(np.float32)
+                    arr_f32 = df_filtered.select(colunas_validas[1:]).to_numpy().astype(np.float32)
                 else:
-                    arr = df_filtered.to_numpy().astype(np.float32)
-                np.save(out_csv_or_npy, arr)
-                print(f"[SelecionadorGenesDiferenciais] Matriz filtrada salva em binário (lazy): {out_csv_or_npy} ({arr.shape})")
+                    arr_f32 = df_filtered.to_numpy().astype(np.float32)
+                np.save(out_str, arr_f32)
+                print(f"[SelecionadorGenesDiferenciais] Matriz filtrada salva em binário (lazy): {out_str} ({arr_f32.shape})")
             else:
-                pl.scan_csv(in_csv_or_npy).select(colunas_validas).sink_csv(out_csv_or_npy)
-                print(f"[SelecionadorGenesDiferenciais] Matriz filtrada salva em: {out_csv_or_npy}")
+                pl.scan_csv(in_str).select(colunas_validas).sink_csv(out_str)
+                print(f"[SelecionadorGenesDiferenciais] Matriz filtrada salva em: {out_str}")
         return self
 
-    def __repr__(self):
-        n = len(self.df_resultado) if self.df_resultado is not None else 'não calculado'
+    def __repr__(self) -> str:
+        """Representação textual do selecionador de genes diferenciais."""
+        n: str = str(len(self.df_resultado)) if self.df_resultado is not None else "não calculado"
         return f"SelecionadorGenesDiferenciais(input={self.path_input}, n={self.n}, resultado={n} genes)"

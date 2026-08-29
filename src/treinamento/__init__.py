@@ -1,3 +1,5 @@
+"""Módulo de Treinamento, Redes Hopfield Modernas e Avaliação de Imputação."""
+
 from .gerador_conjunto_treinamento import GeradorConjuntoTreinamento
 from .hopfield import ModernHopfieldNetwork
 from .carregador_dados_fujita import CarregadorDados, CarregadorDadosFujita, carregar_labels

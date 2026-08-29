@@ -1,93 +1,139 @@
+"""Módulo de Leitura e Mapeamento de Features Genômicas (10x Genomics).
+
+Lê arquivos de anotação de features (TSV/CSV) e extrai dicionários bidirecionais
+para conversão entre símbolos de genes (Gene Symbols) e identificadores Ensembl ID.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Union
+
 import polars as pl
 
 try:
     from src.config import PATH_FEATURES_REFERENCIA, PATH_FEATURES_ALVO
 except ImportError:
-    from config import PATH_FEATURES_REFERENCIA, PATH_FEATURES_ALVO
+    from config import PATH_FEATURES_REFERENCIA, PATH_FEATURES_ALVO  # type: ignore[import-not-found]
+
+PathType = Union[str, os.PathLike[str]]
 
 
 class LeitorFeatures:
-    """Lê arquivos TSV de features do 10x Genomics e mapeia gene_name → Ensembl ID."""
+    """Lê arquivos TSV de features do 10x Genomics e mapeia gene_name → Ensembl ID.
+
+    Parameters
+    ----------
+    path_features_referencia : str | os.PathLike[str] | None, optional
+        Caminho do arquivo de features do conjunto de referência.
+    path_features_alvo : str | os.PathLike[str] | None, optional
+        Caminho do arquivo de features do conjunto alvo.
+    path_features_f : str | os.PathLike[str] | None, optional
+        Alias legado para `path_features_referencia`.
+    path_features_m : str | os.PathLike[str] | None, optional
+        Alias legado para `path_features_alvo`.
+
+    Attributes
+    ----------
+    path_features_referencia : str
+        Caminho normalizado das features de referência.
+    path_features_alvo : str
+        Caminho normalizado das features do conjunto alvo.
+    map_referencia : dict[str, str] | None
+        Dicionário mapeando {Gene Symbol: Ensembl ID} da referência.
+    map_alvo : dict[str, str] | None
+        Dicionário mapeando {Gene Symbol: Ensembl ID} do alvo.
+    """
 
     def __init__(
         self,
-        path_features_referencia=None,
-        path_features_alvo=None,
-        path_features_f=None,
-        path_features_m=None,
-    ):
-        self.path_features_referencia = (
-            path_features_referencia
-            or path_features_f
-            or PATH_FEATURES_REFERENCIA
+        path_features_referencia: PathType | None = None,
+        path_features_alvo: PathType | None = None,
+        path_features_f: PathType | None = None,
+        path_features_m: PathType | None = None,
+    ) -> None:
+        self.path_features_referencia: str = str(
+            path_features_referencia or path_features_f or PATH_FEATURES_REFERENCIA
         )
-        self.path_features_alvo = (
-            path_features_alvo
-            or path_features_m
-            or PATH_FEATURES_ALVO
+        self.path_features_alvo: str = str(
+            path_features_alvo or path_features_m or PATH_FEATURES_ALVO
         )
-        self.map_referencia = None
-        self.map_alvo = None
+        self.map_referencia: dict[str, str] | None = None
+        self.map_alvo: dict[str, str] | None = None
 
     @property
-    def path_features_f(self):
+    def path_features_f(self) -> str:
+        """Alias de compatibilidade para path_features_referencia."""
         return self.path_features_referencia
 
     @path_features_f.setter
-    def path_features_f(self, val):
-        self.path_features_referencia = val
+    def path_features_f(self, val: PathType) -> None:
+        self.path_features_referencia = str(val)
 
     @property
-    def path_features_m(self):
+    def path_features_m(self) -> str:
+        """Alias de compatibilidade para path_features_alvo."""
         return self.path_features_alvo
 
     @path_features_m.setter
-    def path_features_m(self, val):
-        self.path_features_alvo = val
+    def path_features_m(self, val: PathType) -> None:
+        self.path_features_alvo = str(val)
 
     @property
-    def map_f(self):
+    def map_f(self) -> dict[str, str] | None:
+        """Alias de compatibilidade para map_referencia."""
         return self.map_referencia
 
     @map_f.setter
-    def map_f(self, val):
+    def map_f(self, val: dict[str, str] | None) -> None:
         self.map_referencia = val
 
     @property
-    def map_m(self):
+    def map_m(self) -> dict[str, str] | None:
+        """Alias de compatibilidade para map_alvo."""
         return self.map_alvo
 
     @map_m.setter
-    def map_m(self, val):
+    def map_m(self, val: dict[str, str] | None) -> None:
         self.map_alvo = val
 
-    def ler(self):
+    def ler(self) -> LeitorFeatures:
+        """Carrega e indexa os mapeamentos genômicos de ambos os conjuntos de features.
+
+        Returns
+        -------
+        LeitorFeatures
+            A própria instância após a leitura dos mapeamentos.
+        """
         self.map_referencia = self._ler_features(self.path_features_referencia)
         self.map_alvo = self._ler_features(self.path_features_alvo)
         print(f"[LeitorFeatures] Referência : {len(self.map_referencia)} genes mapeados")
         print(f"[LeitorFeatures] Alvo       : {len(self.map_alvo)} genes mapeados")
         return self
 
-    def _ler_features(self, path):
-        df = (
+    def _ler_features(self, path: PathType) -> dict[str, str]:
+        """Lê o arquivo TSV/CSV de features utilizando Polars em alta velocidade."""
+        df: pl.DataFrame = (
             pl.read_csv(
-                path,
-                separator='\t',
+                str(path),
+                separator="\t",
                 has_header=False,
-                new_columns=['ensembl_id', 'gene_name'],
+                new_columns=["ensembl_id", "gene_name"],
                 columns=[0, 1],
             )
             .with_columns([
-                pl.col('ensembl_id').cast(pl.Utf8).str.strip_chars(),
-                pl.col('gene_name').cast(pl.Utf8).str.strip_chars(),
+                pl.col("ensembl_id").cast(pl.Utf8).str.strip_chars(),
+                pl.col("gene_name").cast(pl.Utf8).str.strip_chars(),
             ])
-            .unique(subset=['gene_name'], keep='first')
+            .unique(subset=["gene_name"], keep="first")
         )
-        return dict(zip(df['gene_name'].to_list(), df['ensembl_id'].to_list()))
+        return dict(zip(df["gene_name"].to_list(), df["ensembl_id"].to_list()))
 
-    def __repr__(self):
-        n_ref = len(self.map_referencia) if self.map_referencia is not None else 'não carregado'
-        n_alvo = len(self.map_alvo) if self.map_alvo is not None else 'não carregado'
+    def __repr__(self) -> str:
+        """Representação textual do leitor de features."""
+        n_ref: str = str(len(self.map_referencia)) if self.map_referencia is not None else "não carregado"
+        n_alvo: str = str(len(self.map_alvo)) if self.map_alvo is not None else "não carregado"
         return (
             f"LeitorFeatures(\n"
             f"  path_features_referencia = {self.path_features_referencia}\n"

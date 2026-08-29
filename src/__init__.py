@@ -1,3 +1,9 @@
+"""Pacote principal do Pipeline Hopfield Expandido para scRNA-Seq.
+
+Exporta as classes centrais de pré-processamento, alinhamento genômico,
+projeção dimensional e redes associativas Modern Hopfield.
+"""
+
 from .preprocessing import Binarizador
 from .alinhamento import (
     LeitorFeatures,

@@ -14,6 +14,33 @@
 # ---
 
 # %%
+"""Notebook executável do Pipeline Genérico Hopfield para scRNA-seq.
+
+Executa o fluxo fim a fim:
+1. Binarização de matrizes scRNA-seq
+2. Alinhamento de espaços gênicos com sentinela neutra (0.5)
+3. Projeção dimensional compacta (SWeeP / rSWeeP)
+4. Extração de padrões de subclusters por classe biológica
+5. Treinamento e avaliação da Rede de Hopfield Moderna
+6. Imputação e classificação cross-dataset
+"""
+
+from __future__ import annotations
+
+import importlib
+import os
+import sys
+from typing import Any, Sequence, Union
+
+import anndata as ad
+import matplotlib.pyplot as plt
+import numpy as np
+from numpy.typing import NDArray
+import pandas as pd
+import scipy.sparse as sp
+import seaborn as sns
+from sklearn.metrics import classification_report, confusion_matrix, f1_score
+import torch
 
 # %%
 try:
@@ -28,9 +55,6 @@ except ImportError:
 # !git push origin Teste_sem_binarização_dados_brutos
 
 # %%
-import os
-import sys
-
 REPO_NAME = "pipiline_hopifield"  # Nome do seu repo
 REPO_URL = "https://github.com/letdevx/pipiline_hopifield.git"
 DEST_PATH = f"/content/{REPO_NAME}"
@@ -53,7 +77,7 @@ if SRC_PATH not in sys.path:
 
 # %%
 try:
-    from google.colab import drive
+    from google.colab import drive  # type: ignore[import-not-found,import-untyped,missing-import]
     if not os.path.exists('/content/drive'):
         print("[Colab] Montando Google Drive em /content/drive...")
         drive.mount('/content/drive')
@@ -68,28 +92,17 @@ DRIVE_INPUTS = '/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/
 
 
 # %%
-import importlib
 import config
 importlib.reload(config)
 
 
 # %%
 try:
+    pass
     # %load_ext autoreload
     # %autoreload 2
 except Exception:
     pass
-
-import sys, os
-
-import importlib
-import numpy as np
-import pandas as pd
-import torch
-import anndata as ad
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import confusion_matrix, f1_score, classification_report
 
 # Detecção robusta do diretório raiz e de src/ para Jupyter, Scripts e Colab
 if '__file__' in globals():
@@ -184,6 +197,8 @@ print('Alvo binarizado em:', binarizador_alvo.path_binarizada)
 leitor = LeitorFeatures(PATH_FEATURES_REFERENCIA, PATH_FEATURES_ALVO)
 leitor.ler()
 print(leitor)
+assert leitor.map_f is not None and leitor.map_m is not None
+assert binarizador_ref.path_binarizada is not None and binarizador_alvo.path_binarizada is not None
 
 # %%
 # Passo 1.5 — Validação Prévia de Compatibilidade e Ordem de Colunas (Fail-Fast)
@@ -208,6 +223,7 @@ del _f
 analisador = AnalisadorSobreposicao(leitor.map_f, leitor.map_m, var_names_f_original)
 analisador.analisar()
 print(analisador)
+assert analisador.gene_alvo_idx is not None and analisador.genes_ordenados is not None and analisador.ids_so_f is not None
 
 # %%
 # Passo 3 — Alinhamento dos dois h5ad binarizados (100% Esparso & OOM-Safe)
@@ -223,6 +239,7 @@ alinhador = AlinhadorEsparso(
 alinhador.alinhar()
 alinhador.gerar_tracking(analisador.ids_so_f, leitor.map_f)
 print(alinhador)
+assert alinhador.path_f_alinhado is not None and alinhador.path_m_alinhado is not None
 
 # %%
 # Passo 4 — Validação da ordem de genes
@@ -265,6 +282,7 @@ projetor_r.projetar()
 
 
 # %%
+assert analisador.genes_ordenados is not None
 carregador = CarregadorDadosFujita(
     path_matriz = path_f_completo,                  # Aceita .h5ad e .npy nativamente!
     path_genes  = analisador.genes_ordenados,       # Pode passar a lista de genes diretamente
@@ -274,12 +292,15 @@ carregador = CarregadorDadosFujita(
 )
 carregador.carregar()
 print(carregador)
+assert carregador.W0 is not None and carregador.Wswp is not None
 
 
 # %%
+adata_m: ad.AnnData | None = None
+W_mathys: Union[NDArray[np.float32], sp.spmatrix]
 if path_m_completo.endswith('.npy'):
     W_mathys = np.load(path_m_completo, mmap_mode='r') # mmap evita carregar 11GB de uma vez
-elif path_m_completo.endswith('.h5ad'):
+else:
     adata_m = ad.read_h5ad(path_m_completo)
     W_mathys = adata_m.X # Mantém em formato esparso CSR
 
@@ -293,6 +314,7 @@ from treinamento import carregar_labels
 # 1. Carregamento robusto dos rótulos brutos
 labels_referencia = carregar_labels(PATH_LABELS_REFERENCIA)
 labels_alvo       = carregar_labels(PATH_LABELS_ALVO)
+assert labels_referencia is not None and labels_alvo is not None
 
 print(f"[Labels] Referência : {len(labels_referencia)} células | Tipos: {np.unique(labels_referencia)}")
 print(f"[Labels] Alvo       : {len(labels_alvo)} células | Tipos: {np.unique(labels_alvo)}")
@@ -318,9 +340,12 @@ for v, c in zip(vals_a, counts_a):
 
 
 # %%
+assert analisador.genes_ordenados is not None
+assert carregador.Wswp is not None
 projetor = ProjetorSWeP(n_features=len(analisador.genes_ordenados), n_componentes=600, seed=SEED)
 projetor.usar_sweep_precomputado(carregador.Wswp).aplicar_pca()
 print(projetor)
+assert projetor.Wswp is not None
 
 
 # %% [markdown]
@@ -338,7 +363,9 @@ extrator = ExtratorPadroesSubcluster(
     k       = 10,
 )
 extrator.extrair(projetor.Wswp)
+assert extrator.padroes is not None and extrator.meta is not None
 perf35 = extrator.padroes
+meta_eval = extrator.meta
 print(extrator)
 print(f'perf35 shape: {perf35.shape}  (esperado: (210, {len(analisador.genes_ordenados)}))')
 
@@ -379,10 +406,15 @@ print("Rede Hopfield e metadados salvos com sucesso em outputs/hopfield/!")
 NC   = 30
 CLASSES_ARR = np.array([1, 2, 3, 4, 5, 6, 7])
 
+assert carregador.W0 is not None
+assert perf35 is not None
+
 # Agora a query é o espaço W0 Binário Original!
-Wk4    = wsort(carregador.W0[clo_ref == 3])
-n_test = min(1000, Wk4.shape[0])
-Wtes   = rede35.retrieve(Wk4[:n_test], batch_size=4096)
+W0_arr: NDArray[np.float32] = sp.csr_matrix(carregador.W0).toarray().astype(np.float32) if sp.issparse(carregador.W0) else np.asarray(carregador.W0, dtype=np.float32)
+Wk4_res = wsort(W0_arr[clo_ref == 3])
+Wk4: NDArray[np.float32] = np.asarray(Wk4_res, dtype=np.float32)
+n_test: int = min(1000, int(Wk4.shape[0]))
+Wtes: NDArray[np.float32] = rede35.retrieve(Wk4[:n_test], batch_size=4096)
 print(f'hopf_ts(Wswp[:{n_test}], rede35): shape {Wtes.shape}')
 
 perf35_f = perf35.astype(np.float64)
@@ -421,11 +453,13 @@ plt.tight_layout(); plt.show()
 # 3. Auto-imputação (Fujita → Fujita)
 # ==============================================================================
 print('\n=== Auto-imputação: Fujita → Fujita ===')
+assert carregador.W0 is not None
 Wrecuperado_f = rede35.retrieve(carregador.W0, batch_size=2048)
 print(f"Auto-imputação concluída! Shape: {Wrecuperado_f.shape}")
 
 
 # %%
+assert perf35 is not None
 avaliador_f = AvaliadorHopfield(
     padroes       = perf35,
     classes       = [1, 2, 3, 4, 5, 6, 7],
@@ -457,14 +491,17 @@ if 'rede35' not in globals() or 'perf35' not in globals() or 'meta_eval' not in 
     if os.path.exists(PATH_PT) and os.path.exists(PATH_META):
         print(f"Carregando checkpoint de rede35 salvo em {PATH_PT}...")
         rede35, meta_eval, meta_json = ModernHopfieldNetwork.carregar_com_metadados(PATH_PT, PATH_META)
+        assert rede35.patterns is not None
         perf35 = ((rede35.patterns.cpu().numpy() + 1.0) / 2.0).astype(np.float32)
     else:
         raise RuntimeError("A variável 'rede35' não está definida e o checkpoint em outputs/hopfield/ não foi encontrado. Execute as células de treino anteriores.")
 
+assert perf35 is not None
+
 # 1. Identificação dos genes ausentes no Mathys
 if 'alinhador' in globals() and hasattr(alinhador, 'obter_mascara_ausentes'):
     mask_ausentes = alinhador.obter_mascara_ausentes()
-elif 'adata_m' in globals() and 'presente_no_dataset' in adata_m.var:
+elif adata_m is not None and 'presente_no_dataset' in adata_m.var:
     mask_ausentes = ~adata_m.var['presente_no_dataset'].to_numpy()
 else:
     path_track = os.path.join(OUT_ALINHAMENTO, 'tracking_genes_adicionados_mathys.csv')
