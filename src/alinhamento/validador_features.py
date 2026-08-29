@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import re
-from typing import Mapping, Pattern, Sequence, Union
+from collections.abc import Mapping
+from re import Pattern
 
 import anndata as ad
 import polars as pl
 
-PathType = Union[str, os.PathLike[str]]
+PathType = str | os.PathLike[str]
 
 
 class ValidadorFeatures:
@@ -38,7 +38,9 @@ class ValidadorFeatures:
 
     ENSEMBL_PATTERN: Pattern[str] = re.compile(r"^ENS[A-Z]*G\d+", re.IGNORECASE)
 
-    def __init__(self, min_match_pct: float = 50.0, min_genes_comuns: int = 1000) -> None:
+    def __init__(
+        self, min_match_pct: float = 50.0, min_genes_comuns: int = 1000
+    ) -> None:
         self.min_match_pct: float = float(min_match_pct)
         self.min_genes_comuns: int = int(min_genes_comuns)
 
@@ -73,7 +75,9 @@ class ValidadorFeatures:
         """
         path: str = str(path_features)
         if not os.path.exists(path):
-            raise FileNotFoundError(f"[{dataset_name}] Arquivo de features não encontrado: {path}")
+            raise FileNotFoundError(
+                f"[{dataset_name}] Arquivo de features não encontrado: {path}"
+            )
 
         sep: str = "\t" if (path.endswith(".tsv") or path.endswith(".tsv.gz")) else ","
         df: pl.DataFrame
@@ -100,23 +104,39 @@ class ValidadorFeatures:
                 f"Esperado: Pelo menos 2 colunas [Coluna 0: Ensembl ID, Coluna 1: Gene Symbol]."
             )
 
-        col0_vals: list[str] = [str(x).strip() for x in df.get_column(df.columns[0]).to_list() if x is not None]
-        col1_vals: list[str] = [str(x).strip() for x in df.get_column(df.columns[1]).to_list() if x is not None]
+        col0_vals: list[str] = [
+            str(x).strip()
+            for x in df.get_column(df.columns[0]).to_list()
+            if x is not None
+        ]
+        col1_vals: list[str] = [
+            str(x).strip()
+            for x in df.get_column(df.columns[1]).to_list()
+            if x is not None
+        ]
 
-        col0_ensembl_count: int = sum(1 for x in col0_vals if self.ENSEMBL_PATTERN.match(x))
-        col1_ensembl_count: int = sum(1 for x in col1_vals if self.ENSEMBL_PATTERN.match(x))
+        col0_ensembl_count: int = sum(
+            1 for x in col0_vals if self.ENSEMBL_PATTERN.match(x)
+        )
+        col1_ensembl_count: int = sum(
+            1 for x in col1_vals if self.ENSEMBL_PATTERN.match(x)
+        )
 
-        col0_pct: float = (col0_ensembl_count / len(col0_vals) * 100) if col0_vals else 0.0
-        col1_pct: float = (col1_ensembl_count / len(col1_vals) * 100) if col1_vals else 0.0
+        col0_pct: float = (
+            (col0_ensembl_count / len(col0_vals) * 100) if col0_vals else 0.0
+        )
+        col1_pct: float = (
+            (col1_ensembl_count / len(col1_vals) * 100) if col1_vals else 0.0
+        )
 
         # Detecção de Colunas Invertidas: Coluna 1 parece Ensembl e Coluna 0 não
         if col1_pct > 50.0 and col0_pct < 20.0:
             amostra_col0: list[str] = col0_vals[:5]
             amostra_col1: list[str] = col1_vals[:5]
             raise ValueError(
-                f"\n{'='*70}\n"
+                f"\n{'=' * 70}\n"
                 f"🚨 [ERRO CRÍTICO: COLUNAS INVERTIDAS EM {dataset_name.upper()}]\n"
-                f"{'='*70}\n"
+                f"{'=' * 70}\n"
                 f"O arquivo de features parece estar com as colunas invertidas!\n"
                 f"Caminho: {path}\n\n"
                 f"• Coluna 0 ({col0_pct:.1f}% Ensembl IDs): {amostra_col0}  <-- Parece conter 'Gene Symbols'\n"
@@ -126,15 +146,17 @@ class ValidadorFeatures:
                 f"Se as colunas estiverem trocadas, o mapeamento gerará 0 matches com a referência canônica!\n\n"
                 f"COMO CORRIGIR:\n"
                 f"1. Inverta as colunas no arquivo TSV/CSV ou utilize colunas corretas ao instanciar LeitorFeatures.\n"
-                f"{'='*70}\n"
+                f"{'=' * 70}\n"
             )
 
-        print(f"[ValidadorFeatures] Formato do arquivo ({dataset_name}): OK ({col0_pct:.1f}% Ensembl na Col 0)")
+        print(
+            f"[ValidadorFeatures] Formato do arquivo ({dataset_name}): OK ({col0_pct:.1f}% Ensembl na Col 0)"
+        )
         return True
 
     def validar_compatibilidade_anndata(
         self,
-        path_h5ad_or_adata: Union[PathType, ad.AnnData],
+        path_h5ad_or_adata: PathType | ad.AnnData,
         map_features: Mapping[str, str],
         dataset_name: str = "Dataset",
     ) -> bool:
@@ -155,29 +177,49 @@ class ValidadorFeatures:
             True se a compatibilidade atender aos critérios.
         """
         if not map_features:
-            raise ValueError(f"[{dataset_name}] O mapa de features fornecido está vazio.")
+            raise ValueError(
+                f"[{dataset_name}] O mapa de features fornecido está vazio."
+            )
 
         var_names: list[str] | None = None
         if isinstance(path_h5ad_or_adata, (str, os.PathLike)):
             path_str: str = str(path_h5ad_or_adata)
             if not os.path.exists(path_str):
-                raise FileNotFoundError(f"[{dataset_name}] Matriz AnnData não encontrada: {path_str}")
+                raise FileNotFoundError(
+                    f"[{dataset_name}] Matriz AnnData não encontrada: {path_str}"
+                )
             if path_str.endswith(".h5ad"):
                 try:
                     import h5py
+
                     with h5py.File(path_str, "r") as f:
                         if "var" in f:
                             var_g = f["var"]
                             index_key = var_g.attrs.get("_index", "_index")
                             if index_key in var_g:
                                 raw = var_g[index_key][:]
-                                var_names = [x.decode("utf-8") if isinstance(x, bytes) else str(x) for x in raw]
+                                var_names = [
+                                    x.decode("utf-8")
+                                    if isinstance(x, bytes)
+                                    else str(x)
+                                    for x in raw
+                                ]
                             elif "_index" in var_g:
                                 raw = var_g["_index"][:]
-                                var_names = [x.decode("utf-8") if isinstance(x, bytes) else str(x) for x in raw]
+                                var_names = [
+                                    x.decode("utf-8")
+                                    if isinstance(x, bytes)
+                                    else str(x)
+                                    for x in raw
+                                ]
                             elif "gene_name" in var_g:
                                 raw = var_g["gene_name"][:]
-                                var_names = [x.decode("utf-8") if isinstance(x, bytes) else str(x) for x in raw]
+                                var_names = [
+                                    x.decode("utf-8")
+                                    if isinstance(x, bytes)
+                                    else str(x)
+                                    for x in raw
+                                ]
                 except Exception:
                     var_names = None
             if var_names is None:
@@ -189,12 +231,16 @@ class ValidadorFeatures:
         elif isinstance(path_h5ad_or_adata, ad.AnnData):
             var_names = list(path_h5ad_or_adata.var_names)
         else:
-            raise TypeError(f"Tipo inválido para path_h5ad_or_adata: {type(path_h5ad_or_adata)}")
+            raise TypeError(
+                f"Tipo inválido para path_h5ad_or_adata: {type(path_h5ad_or_adata)}"
+            )
 
         assert var_names is not None
         n_vars: int = len(var_names)
         if n_vars == 0:
-            raise ValueError(f"[{dataset_name}] Matriz AnnData não contém variáveis (var_names está vazio).")
+            raise ValueError(
+                f"[{dataset_name}] Matriz AnnData não contém variáveis (var_names está vazio)."
+            )
 
         # Teste de correspondência com chaves (gene_name) ou valores (ensembl_id)
         vals_set: set[str] = set(map_features.values())
@@ -210,9 +256,9 @@ class ValidadorFeatures:
             amostra_map_keys: list[str] = list(map_features.keys())[:5]
             amostra_map_vals: list[str] = list(map_features.values())[:5]
             raise ValueError(
-                f"\n{'='*70}\n"
+                f"\n{'=' * 70}\n"
                 f"🚨 [ERRO CRÍTICO: INCOMPATIBILIDADE DE IDENTIFICADORES EM {dataset_name.upper()}]\n"
-                f"{'='*70}\n"
+                f"{'=' * 70}\n"
                 f"Os var_names da matriz AnnData NÃO coincidem com o mapa de features!\n"
                 f"• Total de variáveis na matriz AnnData: {n_vars:,}\n"
                 f"• Total de genes mapeados encontrados: {melhor_match:,} ({match_pct:.2f}% de compatibilidade)\n"
@@ -224,10 +270,12 @@ class ValidadorFeatures:
                 f"DIAGNÓSTICO:\n"
                 f"A matriz AnnData está usando uma convenção de nomes de genes incompatível com a tabela de features.\n"
                 f"Se o alinhamento continuar, quase todas as colunas serão descartadas ou preenchidas com 0.5.\n"
-                f"{'='*70}\n"
+                f"{'=' * 70}\n"
             )
 
-        print(f"[ValidadorFeatures] Compatibilidade AnnData x Features ({dataset_name}): OK ({match_pct:.1f}% de correspondência)")
+        print(
+            f"[ValidadorFeatures] Compatibilidade AnnData x Features ({dataset_name}): OK ({match_pct:.1f}% de correspondência)"
+        )
         return True
 
     def validar_sobreposicao_inter_dataset(
@@ -255,19 +303,21 @@ class ValidadorFeatures:
 
         if len(comuns) < self.min_genes_comuns:
             raise ValueError(
-                f"\n{'='*70}\n"
+                f"\n{'=' * 70}\n"
                 f"🚨 [ERRO CRÍTICO: SOBREPOSIÇÃO GENÔMICA ANORMALMENTE BAIXA]\n"
-                f"{'='*70}\n"
+                f"{'=' * 70}\n"
                 f"Os datasets compartilham apenas {len(comuns):,} genes em comum (esperado >= {self.min_genes_comuns:,}).\n"
                 f"• Genes Referência (Fujita): {len(ids_f):,}\n"
                 f"• Genes Alvo (Mathys)      : {len(ids_m):,}\n"
                 f"• Genes em Comum           : {len(comuns):,}\n\n"
                 f"DIAGNÓSTICO:\n"
                 f"Verifique se ambos os arquivos de features utilizam a mesma versão do genoma de referência.\n"
-                f"{'='*70}\n"
+                f"{'=' * 70}\n"
             )
 
-        print(f"[ValidadorFeatures] Sobreposição Inter-Datasets: OK ({len(comuns):,} genes em comum)")
+        print(
+            f"[ValidadorFeatures] Sobreposição Inter-Datasets: OK ({len(comuns):,} genes em comum)"
+        )
         return True
 
     def validar_tudo(
@@ -306,21 +356,29 @@ class ValidadorFeatures:
         print("=" * 60)
 
         # 1. Validação de formato e ordem de colunas
-        self.validar_arquivo_features(path_features_ref, dataset_name="Referência (Fujita)")
+        self.validar_arquivo_features(
+            path_features_ref, dataset_name="Referência (Fujita)"
+        )
         self.validar_arquivo_features(path_features_alvo, dataset_name="Alvo (Mathys)")
 
         # 2. Validação AnnData x Features (se os caminhos e mapas forem fornecidos)
         if path_h5ad_ref and map_f:
-            self.validar_compatibilidade_anndata(path_h5ad_ref, map_f, dataset_name="Referência (Fujita)")
+            self.validar_compatibilidade_anndata(
+                path_h5ad_ref, map_f, dataset_name="Referência (Fujita)"
+            )
         if path_h5ad_alvo and map_m:
-            self.validar_compatibilidade_anndata(path_h5ad_alvo, map_m, dataset_name="Alvo (Mathys)")
+            self.validar_compatibilidade_anndata(
+                path_h5ad_alvo, map_m, dataset_name="Alvo (Mathys)"
+            )
 
         # 3. Validação de sobreposição entre datasets
         if map_f and map_m:
             self.validar_sobreposicao_inter_dataset(map_f, map_m)
 
         print("=" * 60)
-        print("✅ [ValidadorFeatures] Todos os arquivos de entrada são compatíveis e válidos!")
+        print(
+            "✅ [ValidadorFeatures] Todos os arquivos de entrada são compatíveis e válidos!"
+        )
         print("=" * 60 + "\n")
         return True
 

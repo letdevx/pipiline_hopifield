@@ -7,12 +7,11 @@ a mesma contagem, nomes e ordem posicional exata de genes.
 from __future__ import annotations
 
 import os
-from pathlib import Path
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import anndata as ad
 
-PathType = Union[str, os.PathLike[str]]
+PathType = str | os.PathLike[str]
 
 
 class ValidadorAlinhamento:

@@ -8,15 +8,13 @@ from __future__ import annotations
 
 import gc
 import os
-from pathlib import Path
-from typing import Union
 
 import numpy as np
-from numpy.typing import NDArray
 import pandas as pd
 import polars as pl
+from numpy.typing import NDArray
 
-PathType = Union[str, os.PathLike[str]]
+PathType = str | os.PathLike[str]
 
 
 class SelecionadorGenesFrequentes:
@@ -75,13 +73,17 @@ class SelecionadorGenesFrequentes:
             A própria instância com `df_resultado` preenchido.
         """
         if out_csv is not None and os.path.exists(str(out_csv)):
-            print(f"[SelecionadorGenesFrequentes] Arquivo já existe, pulando: {out_csv}")
+            print(
+                f"[SelecionadorGenesFrequentes] Arquivo já existe, pulando: {out_csv}"
+            )
             self.df_resultado = pl.read_csv(str(out_csv))
             return self
 
         # 1. Tenta carregar diretamente via .h5ad (rápido e OOM-Safe)
         path_h5ad_alvo: str | None = (
-            self.path_h5ad if (self.path_h5ad and os.path.exists(self.path_h5ad)) else None
+            self.path_h5ad
+            if (self.path_h5ad and os.path.exists(self.path_h5ad))
+            else None
         )
         if path_h5ad_alvo is None and self.path_txt:
             candidato_h5ad: str = os.path.splitext(self.path_txt)[0] + ".h5ad"
@@ -93,8 +95,12 @@ class SelecionadorGenesFrequentes:
         total_genes: int
 
         if path_h5ad_alvo and os.path.exists(path_h5ad_alvo):
-            print(f"[SelecionadorGenesFrequentes] Arquivo .h5ad detectado: {path_h5ad_alvo}")
-            print("  Calculando frequências diretamente via AnnData esparso (OOM-Safe & ultrarrápido)...")
+            print(
+                f"[SelecionadorGenesFrequentes] Arquivo .h5ad detectado: {path_h5ad_alvo}"
+            )
+            print(
+                "  Calculando frequências diretamente via AnnData esparso (OOM-Safe & ultrarrápido)..."
+            )
             import anndata as ad
             import scipy.sparse as sp
 
@@ -114,18 +120,24 @@ class SelecionadorGenesFrequentes:
         else:
             path_txt_alvo: str | None = self.path_txt or self.path_h5ad
             if path_txt_alvo is None or not os.path.exists(path_txt_alvo):
-                raise FileNotFoundError(f"[SelecionadorGenesFrequentes] Nenhum arquivo de entrada encontrado: {path_txt_alvo}")
+                raise FileNotFoundError(
+                    f"[SelecionadorGenesFrequentes] Nenhum arquivo de entrada encontrado: {path_txt_alvo}"
+                )
 
             print(f"[SelecionadorGenesFrequentes] Lendo arquivo texto: {path_txt_alvo}")
             with open(path_txt_alvo, encoding="utf-8") as fh:
                 gene_names = fh.readline().strip().split(",")
             total_genes = len(gene_names)
 
-            print(f"  Calculando frequências para {total_genes} genes (streaming por chunks em RAM otimizada)...")
+            print(
+                f"  Calculando frequências para {total_genes} genes (streaming por chunks em RAM otimizada)..."
+            )
             somas = np.zeros(total_genes, dtype=np.int64)
 
             n_celulas: int = 0
-            for chunk in pd.read_csv(path_txt_alvo, chunksize=250, dtype=np.float32, header=0, engine="c"):
+            for chunk in pd.read_csv(
+                path_txt_alvo, chunksize=250, dtype=np.float32, header=0, engine="c"
+            ):
                 somas += (chunk.values > 0).sum(axis=0).astype(np.int64)
                 n_celulas += len(chunk)
                 del chunk
@@ -133,16 +145,18 @@ class SelecionadorGenesFrequentes:
                 if n_celulas % 5000 < 250:
                     print(f"  {n_celulas} células processadas...")
 
-        df_frequencias: pl.DataFrame = pl.DataFrame({"gene": gene_names, "frequencia": somas})
-
-        n_real: int = min(self.n, total_genes)
-        self.df_resultado = (
-            df_frequencias
-            .sort("frequencia", descending=True)
-            .head(n_real)
+        df_frequencias: pl.DataFrame = pl.DataFrame(
+            {"gene": gene_names, "frequencia": somas}
         )
 
-        print(f"[SelecionadorGenesFrequentes] Concluído. Top {n_real} genes selecionados.")
+        n_real: int = min(self.n, total_genes)
+        self.df_resultado = df_frequencias.sort("frequencia", descending=True).head(
+            n_real
+        )
+
+        print(
+            f"[SelecionadorGenesFrequentes] Concluído. Top {n_real} genes selecionados."
+        )
         return self
 
     def salvar(self, out_csv: PathType) -> SelecionadorGenesFrequentes:
@@ -171,7 +185,9 @@ class SelecionadorGenesFrequentes:
         print(f"[SelecionadorGenesFrequentes] Salvo em: {out_csv_str}")
         return self
 
-    def filtrar_matriz(self, in_csv: PathType, out_csv: PathType) -> SelecionadorGenesFrequentes:
+    def filtrar_matriz(
+        self, in_csv: PathType, out_csv: PathType
+    ) -> SelecionadorGenesFrequentes:
         """Salva nova matriz contendo apenas as colunas dos top N genes selecionados.
 
         Parameters
@@ -197,7 +213,9 @@ class SelecionadorGenesFrequentes:
 
         coluna_celulas: str = header[0]
         lista_genes: list[str] = self.df_resultado["gene"].to_list()
-        colunas_validas: list[str] = [coluna_celulas] + [c for c in lista_genes if c in header]
+        colunas_validas: list[str] = [coluna_celulas] + [
+            c for c in lista_genes if c in header
+        ]
 
         os.makedirs(os.path.dirname(os.path.abspath(out_csv_str)), exist_ok=True)
         if os.path.exists(out_csv_str):
@@ -208,20 +226,35 @@ class SelecionadorGenesFrequentes:
             df_filtered: pl.DataFrame = pl.read_csv(in_csv_str, columns=colunas_validas)
             # Remove a primeira coluna se for identificador não-numérico ou mantém se já for genes
             arr: NDArray[np.float32]
-            if df_filtered.columns[0] == coluna_celulas and not df_filtered.dtypes[0].is_numeric():
-                arr = df_filtered.select(colunas_validas[1:]).to_numpy().astype(np.float32)
+            if (
+                df_filtered.columns[0] == coluna_celulas
+                and not df_filtered.dtypes[0].is_numeric()
+            ):
+                arr = (
+                    df_filtered.select(colunas_validas[1:])
+                    .to_numpy()
+                    .astype(np.float32)
+                )
             else:
                 arr = df_filtered.to_numpy().astype(np.float32)
             np.save(out_csv_str, arr)
-            print(f"[SelecionadorGenesFrequentes] Matriz filtrada salva em binário: {out_csv_str} ({arr.shape})")
+            print(
+                f"[SelecionadorGenesFrequentes] Matriz filtrada salva em binário: {out_csv_str} ({arr.shape})"
+            )
         else:
             pl.scan_csv(in_csv_str).select(colunas_validas).sink_csv(out_csv_str)
-            print(f"[SelecionadorGenesFrequentes] Matriz filtrada salva em: {out_csv_str} ({len(colunas_validas)} colunas)")
+            print(
+                f"[SelecionadorGenesFrequentes] Matriz filtrada salva em: {out_csv_str} ({len(colunas_validas)} colunas)"
+            )
         return self
 
     def __repr__(self) -> str:
         """Representação textual do selecionador de genes frequentes."""
-        n: str = str(len(self.df_resultado)) if self.df_resultado is not None else "não calculado"
+        n: str = (
+            str(len(self.df_resultado))
+            if self.df_resultado is not None
+            else "não calculado"
+        )
         return (
             f"SelecionadorGenesFrequentes(\n"
             f"  path_txt     = {self.path_txt}\n"

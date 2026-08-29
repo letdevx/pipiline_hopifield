@@ -6,14 +6,17 @@ closervects, contaocorr, mat2celllines, wsort, indexa).
 
 from __future__ import annotations
 
-from typing import Any, Literal, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Any, Literal
 
 import numpy as np
-from numpy.typing import NDArray
 import scipy.sparse as sp
+from numpy.typing import NDArray
 
 
-def sorti(x: Sequence[Any] | NDArray[Any], mode: Literal["ascend", "descend"] = "ascend") -> NDArray[np.intp]:
+def sorti(
+    x: Sequence[Any] | NDArray[Any], mode: Literal["ascend", "descend"] = "ascend"
+) -> NDArray[np.intp]:
     """Retorna os índices que ordenam o vetor x (equivalente a sorti.m).
 
     Parameters
@@ -35,7 +38,9 @@ def sorti(x: Sequence[Any] | NDArray[Any], mode: Literal["ascend", "descend"] = 
     return idx.copy()
 
 
-def princomp_(W: Union[NDArray[np.float32], Sequence[Sequence[float]]]) -> NDArray[np.float32]:
+def princomp_(
+    W: NDArray[np.float32] | Sequence[Sequence[float]],
+) -> NDArray[np.float32]:
     """Calcula PCA sem centralização via decomposição em valores singulares (SVD).
 
     Equivale a `pca(W, 'Centered', false, 'Algorithm', 'svd')` do MATLAB.
@@ -56,11 +61,11 @@ def princomp_(W: Union[NDArray[np.float32], Sequence[Sequence[float]]]) -> NDArr
 
 
 def closervects(
-    W: Union[NDArray[np.float32], Sequence[Sequence[float]]],
-    Wi: Union[NDArray[np.float32], Sequence[float], Sequence[int]],
+    W: NDArray[np.float32] | Sequence[Sequence[float]],
+    Wi: NDArray[np.float32] | Sequence[float] | Sequence[int],
     k: int,
-    distance: Union[Literal["euclidean"], float, int, str] = "euclidean",
-) -> Union[int, NDArray[np.intp]]:
+    distance: Literal["euclidean"] | float | int | str = "euclidean",
+) -> int | NDArray[np.intp]:
     """Identifica os índices dos k vetores em W mais próximos de Wi (equivalente a closervects.m).
 
     Parameters
@@ -100,7 +105,7 @@ def closervects(
     else:
         kp: float = float(distance)
         diff_abs = np.abs(W_arr - query[None, :])
-        u_sum = np.sum(diff_abs ** kp, axis=1)
+        u_sum = np.sum(diff_abs**kp, axis=1)
         if kp >= 1:
             u = (u_sum ** (1.0 / kp)).astype(np.float32)
         else:
@@ -110,7 +115,7 @@ def closervects(
     return int(ii[0]) if k == 1 else ii
 
 
-def contaocorr(v: Union[NDArray[Any], Sequence[Any]], ordby_max: bool = True) -> NDArray[Any]:
+def contaocorr(v: NDArray[Any] | Sequence[Any], ordby_max: bool = True) -> NDArray[Any]:
     """Conta ocorrências de cada valor distinto em v (equivalente a contaocorr.m).
 
     Parameters
@@ -131,7 +136,7 @@ def contaocorr(v: Union[NDArray[Any], Sequence[Any]], ordby_max: bool = True) ->
     return np.column_stack([vals[order], counts[order]])
 
 
-def mat2celllines(M: Union[NDArray[Any], Sequence[Sequence[Any]]]) -> list[NDArray[Any]]:
+def mat2celllines(M: NDArray[Any] | Sequence[Sequence[Any]]) -> list[NDArray[Any]]:
     """Converte as linhas de uma matriz em lista de vetores 1D (equivalente a mat2celllines.m).
 
     Parameters
@@ -149,10 +154,10 @@ def mat2celllines(M: Union[NDArray[Any], Sequence[Sequence[Any]]]) -> list[NDArr
 
 
 def wsort(
-    W: Union[NDArray[Any], sp.spmatrix],
+    W: NDArray[Any] | sp.spmatrix,
     return_perm: bool = False,
     rng: np.random.Generator | None = None,
-) -> Union[NDArray[Any], Tuple[NDArray[Any], NDArray[np.intp]]]:
+) -> NDArray[Any] | tuple[NDArray[Any], NDArray[np.intp]]:
     """Embaralha pseudoaleatoriamente as linhas da matriz W (equivalente a wsort.m).
 
     Parameters
@@ -182,7 +187,9 @@ def wsort(
     return (out, perm) if return_perm else out
 
 
-def indexa(X: Union[NDArray[Any], Sequence[Any]], xinds: Union[str, int, Sequence[int], NDArray[np.int_]]) -> Any:
+def indexa(
+    X: NDArray[Any] | Sequence[Any], xinds: str | int | Sequence[int] | NDArray[np.int_]
+) -> Any:
     """Indexação estilo MATLAB 1-based `X(xinds)` (equivalente a indexa.m).
 
     Parameters

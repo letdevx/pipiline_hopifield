@@ -1,28 +1,35 @@
 """Módulo de Treinamento, Redes Hopfield Modernas e Avaliação de Imputação."""
 
-from .gerador_conjunto_treinamento import GeradorConjuntoTreinamento
-from .hopfield import ModernHopfieldNetwork
-from .carregador_dados_fujita import CarregadorDados, CarregadorDadosFujita, carregar_labels
-from .projetor_sweep import ProjetorSWeP, ProjetorSWeePR, ProjetorSWePR
-from .extrator_padroes import ExtratorPadroesSubcluster
 from .avaliador_hopfield import AvaliadorHopfield
+from .carregador_dados_fujita import (
+    CarregadorDados,
+    CarregadorDadosFujita,
+    carregar_labels,
+)
+from .estrategias_clusterizacao import (
+    EstrategiaHDBSCAN,
+    EstrategiaKMeansDinamico,
+    EstrategiaKMeansFixo,
+)
+from .extrator_padroes import ExtratorPadroesSubcluster
+from .gerador_conjunto_treinamento import GeradorConjuntoTreinamento
 from .gerador_relatorio import GeradorRelatorio
-from .estrategias_clusterizacao import EstrategiaKMeansDinamico, EstrategiaHDBSCAN, EstrategiaKMeansFixo
+from .hopfield import ModernHopfieldNetwork
+from .projetor_sweep import ProjetorSWeePR, ProjetorSWeP, ProjetorSWePR
 
 __all__ = [
-    "GeradorConjuntoTreinamento",
-    "ModernHopfieldNetwork",
+    "AvaliadorHopfield",
     "CarregadorDados",
     "CarregadorDadosFujita",
-    "carregar_labels",
-    "ProjetorSWeP",
-    "ProjetorSWeePR",
-    "ProjetorSWePR",
-    "ExtratorPadroesSubcluster",
-    "AvaliadorHopfield",
-    "GeradorRelatorio",
-    "EstrategiaKMeansDinamico",
     "EstrategiaHDBSCAN",
+    "EstrategiaKMeansDinamico",
     "EstrategiaKMeansFixo",
+    "ExtratorPadroesSubcluster",
+    "GeradorConjuntoTreinamento",
+    "GeradorRelatorio",
+    "ModernHopfieldNetwork",
+    "ProjetorSWeP",
+    "ProjetorSWePR",
+    "ProjetorSWeePR",
+    "carregar_labels",
 ]
-

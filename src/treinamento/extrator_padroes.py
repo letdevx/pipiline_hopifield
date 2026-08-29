@@ -6,11 +6,12 @@ protótipos e centróides celulares armazenáveis na memória Hopfield.
 
 from __future__ import annotations
 
-from typing import Any, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
-from numpy.typing import NDArray
 import scipy.sparse as sp
+from numpy.typing import NDArray
 
 from .estrategias_clusterizacao import (
     EstrategiaClusterizacao,
@@ -66,8 +67,8 @@ class ExtratorPadroesSubcluster:
 
     def __init__(
         self,
-        W0: Union[NDArray[Any], sp.spmatrix],
-        labels: Union[NDArray[Any], Sequence[int]],
+        W0: NDArray[Any] | sp.spmatrix,
+        labels: NDArray[Any] | Sequence[int],
         classes: Sequence[int] | None = None,
         estrategia: EstrategiaClusterizacao | None = None,
         seed: int = 42,
@@ -75,16 +76,20 @@ class ExtratorPadroesSubcluster:
         nc: int | None = None,
     ) -> None:
         if sp.issparse(W0):
-            self.W0: Union[NDArray[np.float32], sp.csr_matrix] = sp.csr_matrix(W0)
+            self.W0: NDArray[np.float32] | sp.csr_matrix = sp.csr_matrix(W0)
         else:
             self.W0 = np.asarray(W0, dtype=np.float32)
         self.labels: NDArray[np.int_] = np.asarray(labels, dtype=int)
-        self.classes: list[int] = list(classes) if classes is not None else [1, 3, 4, 5, 6, 7, 2]
+        self.classes: list[int] = (
+            list(classes) if classes is not None else [1, 3, 4, 5, 6, 7, 2]
+        )
 
         # Fallback para retrocompatibilidade
         if estrategia is None:
             if nc is not None:
-                self.estrategia: EstrategiaClusterizacao = EstrategiaKMeansFixo(n_clusters=nc, seed=seed)
+                self.estrategia: EstrategiaClusterizacao = EstrategiaKMeansFixo(
+                    n_clusters=nc, seed=seed
+                )
             else:
                 self.estrategia = EstrategiaKMeansDinamico(k_range=[10], seed=seed)
         else:
@@ -95,7 +100,9 @@ class ExtratorPadroesSubcluster:
         self.padroes: NDArray[np.float32] | None = None
         self.meta: list[tuple[int, int]] | None = None
 
-    def extrair(self, Wswp: Union[NDArray[Any], Sequence[Sequence[float]]]) -> ExtratorPadroesSubcluster:
+    def extrair(
+        self, Wswp: NDArray[Any] | Sequence[Sequence[float]]
+    ) -> ExtratorPadroesSubcluster:
         """Extrai padrões representativos de subclusters projetados no espaço SWeeP.
 
         Parameters
@@ -109,7 +116,9 @@ class ExtratorPadroesSubcluster:
             A própria instância com os padrões e metadados gerados.
         """
         Wswp_arr: NDArray[np.float32] = np.asarray(Wswp, dtype=np.float32)
-        classes_validas: list[int] = [c for c in self.classes if (self.labels == c).any()]
+        classes_validas: list[int] = [
+            c for c in self.classes if (self.labels == c).any()
+        ]
         padroes_list: list[NDArray[np.float32]] = []
         meta_list: list[tuple[int, int]] = []
 
@@ -117,8 +126,10 @@ class ExtratorPadroesSubcluster:
             ids_cls: NDArray[np.intp] = np.where(self.labels == cls)[0]
             Wswp_cls: NDArray[np.float32] = Wswp_arr[ids_cls]
 
-            print(f"[ExtratorPadroesSubcluster] Classe {cls}: n={len(ids_cls)} "
-                  f"Aplicando estratégia de clusterização...")
+            print(
+                f"[ExtratorPadroesSubcluster] Classe {cls}: n={len(ids_cls)} "
+                f"Aplicando estratégia de clusterização..."
+            )
 
             # Aplica o padrão Strategy
             centroides: NDArray[np.float32] = self.estrategia.clusterizar(Wswp_cls)
@@ -126,12 +137,18 @@ class ExtratorPadroesSubcluster:
             for centroide in centroides:
                 if self.k == 1:
                     idx_local_res = closervects(Wswp_cls, centroide, k=1)
-                    idx_local: int = int(idx_local_res) if isinstance(idx_local_res, (int, np.integer)) else int(idx_local_res[0])
+                    idx_local: int = (
+                        int(idx_local_res)
+                        if isinstance(idx_local_res, (int, np.integer))
+                        else int(idx_local_res[0])
+                    )
                     idx_global: int = int(ids_cls[idx_local])
                     row = self.W0[idx_global]
                     row_dense: NDArray[np.float32]
                     if sp.issparse(row):
-                        row_dense = sp.csr_matrix(row).toarray().ravel().astype(np.float32)
+                        row_dense = (
+                            sp.csr_matrix(row).toarray().ravel().astype(np.float32)
+                        )
                     else:
                         row_dense = np.asarray(row, dtype=np.float32).ravel()
                     padroes_list.append(row_dense)
@@ -146,14 +163,19 @@ class ExtratorPadroesSubcluster:
                         sub_dense = sp.csr_matrix(sub).toarray().astype(np.float32)
                     else:
                         sub_dense = np.asarray(sub, dtype=np.float32)
-                    padrao: NDArray[np.float32] = (sub_dense.mean(axis=0) >= 0.5).astype(np.float32)
+                    padrao: NDArray[np.float32] = (
+                        sub_dense.mean(axis=0) >= 0.5
+                    ).astype(np.float32)
                     padroes_list.append(padrao)
                     meta_list.append((cls, int(ids_cls[idxs[0]])))
 
         self.padroes = np.vstack(padroes_list).astype(np.float32)
         self.meta = meta_list
-        print(f"[ExtratorPadroesSubcluster] Extração concluída: "
-              f"{self.padroes.shape[0]} padrões ({len(classes_validas)} classes, amostragem k={self.k})", flush=True)
+        print(
+            f"[ExtratorPadroesSubcluster] Extração concluída: "
+            f"{self.padroes.shape[0]} padrões ({len(classes_validas)} classes, amostragem k={self.k})",
+            flush=True,
+        )
         return self
 
     def __repr__(self) -> str:

@@ -8,18 +8,18 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
-from typing import Any, Mapping, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
-from numpy.typing import NDArray
 import scipy.sparse as sp
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from numpy.typing import NDArray
 
-PathType = Union[str, os.PathLike[str]]
-InputQueries = Union[NDArray[Any], sp.spmatrix, torch.Tensor]
+PathType = str | os.PathLike[str]
+InputQueries = NDArray[Any] | sp.spmatrix | torch.Tensor
 
 
 class ModernHopfieldNetwork(nn.Module):
@@ -76,7 +76,9 @@ class ModernHopfieldNetwork(nn.Module):
         self.normalize: bool = bool(normalize)
         self.register_buffer("patterns", torch.empty(0, dtype=torch.float32))
 
-    def store(self, patterns: Union[NDArray[Any], torch.Tensor, Sequence[Sequence[float]]]) -> ModernHopfieldNetwork:
+    def store(
+        self, patterns: NDArray[Any] | torch.Tensor | Sequence[Sequence[float]]
+    ) -> ModernHopfieldNetwork:
         """Armazena os padrões na matriz de memória da rede.
 
         Parameters
@@ -96,8 +98,10 @@ class ModernHopfieldNetwork(nn.Module):
             K = 2.0 * K - 1.0
 
         self.patterns = K.to(torch.device("cpu"))
-        print(f"[ModernHopfieldNetwork] {self.patterns.shape[0]} padrões armazenados "
-              f"({self.patterns.shape[1]} genes, device=cpu)")
+        print(
+            f"[ModernHopfieldNetwork] {self.patterns.shape[0]} padrões armazenados "
+            f"({self.patterns.shape[1]} genes, device=cpu)"
+        )
         return self
 
     @torch.no_grad()
@@ -106,8 +110,8 @@ class ModernHopfieldNetwork(nn.Module):
         queries: InputQueries,
         batch_size: int = 1024,
         normalize: bool | None = None,
-        subspace_mask: Union[NDArray[Any], torch.Tensor, None] = None,
-        mask_sentinela_ausentes: Union[NDArray[np.bool_], Sequence[int], None] = None,
+        subspace_mask: NDArray[Any] | torch.Tensor | None = None,
+        mask_sentinela_ausentes: NDArray[np.bool_] | Sequence[int] | None = None,
         fill_value: float = 0.5,
         out_buffer: NDArray[np.float32] | None = None,
     ) -> NDArray[np.float32]:
@@ -136,9 +140,13 @@ class ModernHopfieldNetwork(nn.Module):
             Matriz recuperada e imputada.
         """
         if self.patterns.numel() == 0:
-            raise RuntimeError("[ModernHopfieldNetwork] Execute .store() antes de .retrieve().")
+            raise RuntimeError(
+                "[ModernHopfieldNetwork] Execute .store() antes de .retrieve()."
+            )
 
-        norm_active: bool = normalize if normalize is not None else getattr(self, "normalize", False)
+        norm_active: bool = (
+            normalize if normalize is not None else getattr(self, "normalize", False)
+        )
 
         Xi: torch.Tensor = self.patterns.to(dtype=torch.float32, device="cpu")
         is_sparse: bool = sp.issparse(queries)
@@ -152,14 +160,12 @@ class ModernHopfieldNetwork(nn.Module):
             queries_csr = sp.csr_matrix(queries)
             n_queries, n_features = queries_csr.shape
             queries_np = None
-            target_dtype = np.float32
         else:
             if isinstance(queries, torch.Tensor):
                 queries_np = queries.detach().cpu().numpy()
             else:
                 queries_np = np.asarray(queries)
             n_queries, n_features = queries_np.shape
-            target_dtype = queries_np.dtype if queries_np.dtype in (np.float16, np.float32) else np.float32
 
         subspace_tensor: torch.Tensor | None = None
         if subspace_mask is not None:
@@ -179,7 +185,8 @@ class ModernHopfieldNetwork(nn.Module):
             else:
                 assert queries_np is not None
                 chunk_np = queries_np[s : s + batch_size].astype(
-                    np.float32, copy=True if mask_sentinela_ausentes is not None else False
+                    np.float32,
+                    copy=mask_sentinela_ausentes is not None,
                 )
 
             if mask_sentinela_ausentes is not None:
@@ -215,7 +222,9 @@ class ModernHopfieldNetwork(nn.Module):
             res_np: NDArray[np.float32] = x.numpy().astype(np.float32)
             out_buffer[s : s + batch_size] = res_np
 
-        print(f"[ModernHopfieldNetwork] Recuperação concluída: {out_buffer.shape} (dtype={out_buffer.dtype})")
+        print(
+            f"[ModernHopfieldNetwork] Recuperação concluída: {out_buffer.shape} (dtype={out_buffer.dtype})"
+        )
         return out_buffer
 
     def salvar(self, path: PathType) -> ModernHopfieldNetwork:
@@ -232,7 +241,9 @@ class ModernHopfieldNetwork(nn.Module):
             A própria instância.
         """
         if self.patterns.numel() == 0:
-            raise RuntimeError("[ModernHopfieldNetwork] Execute .store() antes de salvar.")
+            raise RuntimeError(
+                "[ModernHopfieldNetwork] Execute .store() antes de salvar."
+            )
         path_str: str = str(path)
         os.makedirs(os.path.dirname(os.path.abspath(path_str)), exist_ok=True)
         torch.save(
@@ -246,8 +257,10 @@ class ModernHopfieldNetwork(nn.Module):
             },
             path_str,
         )
-        print(f"[ModernHopfieldNetwork] Rede salva em: {path_str} "
-              f"({self.patterns.shape[0]} padrões)")
+        print(
+            f"[ModernHopfieldNetwork] Rede salva em: {path_str} "
+            f"({self.patterns.shape[0]} padrões)"
+        )
         return self
 
     @classmethod
@@ -274,8 +287,10 @@ class ModernHopfieldNetwork(nn.Module):
             normalize=data.get("normalize", False),
         )
         rede.patterns = data["patterns"]
-        print(f"[ModernHopfieldNetwork] Rede carregada de: {path_str} "
-              f"({rede.patterns.shape[0]} padrões)")
+        print(
+            f"[ModernHopfieldNetwork] Rede carregada de: {path_str} "
+            f"({rede.patterns.shape[0]} padrões)"
+        )
         return rede
 
     def salvar_com_metadados(
@@ -309,12 +324,17 @@ class ModernHopfieldNetwork(nn.Module):
         self.salvar(path_pt)
 
         meta_serializavel: list[Any] = [
-            list(item) if isinstance(item, (tuple, list, np.ndarray)) else item for item in meta
+            list(item) if isinstance(item, (tuple, list, np.ndarray)) else item
+            for item in meta
         ]
         n_patterns: int = int(self.patterns.shape[0]) if self.patterns.numel() else 0
         n_genes: int = int(self.patterns.shape[1]) if self.patterns.numel() else 0
-        cls_list: list[int] = list(classes) if classes is not None else [1, 2, 3, 4, 5, 6, 7]
-        nc_val: int = nc if nc is not None else (n_patterns // len(cls_list) if cls_list else 30)
+        cls_list: list[int] = (
+            list(classes) if classes is not None else [1, 2, 3, 4, 5, 6, 7]
+        )
+        nc_val: int = (
+            nc if nc is not None else (n_patterns // len(cls_list) if cls_list else 30)
+        )
 
         info: dict[str, Any] = {
             "meta": meta_serializavel,
@@ -329,8 +349,10 @@ class ModernHopfieldNetwork(nn.Module):
         with open(path_meta_str, "w", encoding="utf-8") as f:
             json.dump(info, f, indent=2)
 
-        print(f"[ModernHopfieldNetwork] Metadados salvos em: {path_meta_str} "
-              f"({n_patterns} padrões, {n_genes} genes)")
+        print(
+            f"[ModernHopfieldNetwork] Metadados salvos em: {path_meta_str} "
+            f"({n_patterns} padrões, {n_genes} genes)"
+        )
         return self
 
     @classmethod
@@ -338,7 +360,7 @@ class ModernHopfieldNetwork(nn.Module):
         cls,
         path_pt: PathType,
         path_meta: PathType,
-    ) -> Tuple[ModernHopfieldNetwork, list[tuple[int, int]], dict[str, Any]]:
+    ) -> tuple[ModernHopfieldNetwork, list[tuple[int, int]], dict[str, Any]]:
         """Carrega a rede (.pt) e o arquivo JSON de metadados (.json).
 
         Parameters
@@ -356,16 +378,20 @@ class ModernHopfieldNetwork(nn.Module):
         rede = cls.carregar(path_pt)
 
         path_meta_str: str = str(path_meta)
-        with open(path_meta_str, "r", encoding="utf-8") as f:
+        with open(path_meta_str, encoding="utf-8") as f:
             meta_json: dict[str, Any] = json.load(f)
 
         meta_eval: list[tuple[int, int]] = [tuple(x) for x in meta_json["meta"]]  # type: ignore[misc]
 
-        print(f"[ModernHopfieldNetwork] Metadados carregados de: {path_meta_str} "
-              f"(classes={meta_json.get('classes')}, nc={meta_json.get('nc')}, n_patterns={meta_json.get('n_patterns')})")
+        print(
+            f"[ModernHopfieldNetwork] Metadados carregados de: {path_meta_str} "
+            f"(classes={meta_json.get('classes')}, nc={meta_json.get('nc')}, n_patterns={meta_json.get('n_patterns')})"
+        )
         return rede, meta_eval, meta_json
 
-    def hopf_tr(self, patterns: Union[NDArray[Any], torch.Tensor, Sequence[Sequence[float]]]) -> ModernHopfieldNetwork:
+    def hopf_tr(
+        self, patterns: NDArray[Any] | torch.Tensor | Sequence[Sequence[float]]
+    ) -> ModernHopfieldNetwork:
         """Alias compatível com o script MATLAB original para treino."""
         return self.store(patterns)
 

@@ -1,11 +1,10 @@
 """Testes unitários para o ValidadorFeatures (Validação Estrita Pré-Alinhamento)."""
 
-import os
 import gzip
-import pytest
-import numpy as np
-import polars as pl
+
 import anndata as ad
+import numpy as np
+import pytest
 from scipy import sparse
 
 from src.alinhamento.validador_features import ValidadorFeatures
@@ -33,7 +32,9 @@ def test_validacao_arquivo_features_correto(tmp_features_dir):
             f.write(f"{eid}\t{sym}\n")
 
     validador = ValidadorFeatures()
-    assert validador.validar_arquivo_features(str(tsv_path), dataset_name="Teste") is True
+    assert (
+        validador.validar_arquivo_features(str(tsv_path), dataset_name="Teste") is True
+    )
 
 
 def test_validacao_arquivo_features_gzip_correto(tmp_features_dir):
@@ -49,7 +50,9 @@ def test_validacao_arquivo_features_gzip_correto(tmp_features_dir):
             f.write(f"{eid}\t{sym}\n")
 
     validador = ValidadorFeatures()
-    assert validador.validar_arquivo_features(str(gz_path), dataset_name="TesteGZ") is True
+    assert (
+        validador.validar_arquivo_features(str(gz_path), dataset_name="TesteGZ") is True
+    )
 
 
 def test_detecta_colunas_invertidas(tmp_features_dir):
@@ -68,7 +71,9 @@ def test_detecta_colunas_invertidas(tmp_features_dir):
 
     validador = ValidadorFeatures()
     with pytest.raises(ValueError, match="COLUNAS INVERTIDAS"):
-        validador.validar_arquivo_features(str(tsv_path), dataset_name="MathysInvertido")
+        validador.validar_arquivo_features(
+            str(tsv_path), dataset_name="MathysInvertido"
+        )
 
 
 def test_arquivo_com_uma_coluna_apenas(tmp_features_dir):
@@ -101,8 +106,18 @@ def test_validacao_compatibilidade_anndata_sucesso(tmp_path):
     }
 
     validador = ValidadorFeatures(min_match_pct=50.0)
-    assert validador.validar_compatibilidade_anndata(str(h5ad_path), map_features, dataset_name="FujitaTest") is True
-    assert validador.validar_compatibilidade_anndata(adata, map_features, dataset_name="FujitaTestInMemory") is True
+    assert (
+        validador.validar_compatibilidade_anndata(
+            str(h5ad_path), map_features, dataset_name="FujitaTest"
+        )
+        is True
+    )
+    assert (
+        validador.validar_compatibilidade_anndata(
+            adata, map_features, dataset_name="FujitaTestInMemory"
+        )
+        is True
+    )
 
 
 def test_detecta_mismatch_var_names_anndata(tmp_path):
@@ -124,7 +139,9 @@ def test_detecta_mismatch_var_names_anndata(tmp_path):
 
     validador = ValidadorFeatures(min_match_pct=50.0)
     with pytest.raises(ValueError, match="INCOMPATIBILIDADE DE IDENTIFICADORES"):
-        validador.validar_compatibilidade_anndata(str(h5ad_path), map_features, dataset_name="MismatchTest")
+        validador.validar_compatibilidade_anndata(
+            str(h5ad_path), map_features, dataset_name="MismatchTest"
+        )
 
 
 def test_sobreposicao_inter_dataset(tmp_path):
@@ -136,7 +153,9 @@ def test_sobreposicao_inter_dataset(tmp_path):
     assert validador.validar_sobreposicao_inter_dataset(map_f, map_m) is True
 
     # Caso com sobreposição insuficiente (< 1000)
-    map_m_insuficiente = {f"GENE_{i}": f"ENSG{i:08d}" for i in range(1900, 3000)}  # apenas 100 em comum
+    map_m_insuficiente = {
+        f"GENE_{i}": f"ENSG{i:08d}" for i in range(1900, 3000)
+    }  # apenas 100 em comum
     with pytest.raises(ValueError, match="SOBREPOSIÇÃO GENÔMICA ANORMALMENTE BAIXA"):
         validador.validar_sobreposicao_inter_dataset(map_f, map_m_insuficiente)
 
@@ -171,11 +190,14 @@ def test_validar_tudo_fluxo_completo(tmp_path, tmp_features_dir):
     adata_m.write_h5ad(path_m)
 
     validador = ValidadorFeatures(min_match_pct=50.0, min_genes_comuns=1000)
-    assert validador.validar_tudo(
-        path_features_ref=str(tsv_ref),
-        path_features_alvo=str(tsv_alvo),
-        path_h5ad_ref=str(path_f),
-        path_h5ad_alvo=str(path_m),
-        map_f=map_f,
-        map_m=map_m,
-    ) is True
+    assert (
+        validador.validar_tudo(
+            path_features_ref=str(tsv_ref),
+            path_features_alvo=str(tsv_alvo),
+            path_h5ad_ref=str(path_f),
+            path_h5ad_alvo=str(path_m),
+            map_f=map_f,
+            map_m=map_m,
+        )
+        is True
+    )

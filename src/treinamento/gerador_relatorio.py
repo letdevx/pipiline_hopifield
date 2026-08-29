@@ -9,19 +9,17 @@ from __future__ import annotations
 import base64
 import io
 import os
-from pathlib import Path
-from typing import Any, Mapping, Sequence, Union
+from typing import Any
 
 import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
 import numpy as np
-from numpy.typing import NDArray
 import pandas as pd
-import seaborn as sns
+from matplotlib.figure import Figure
+from numpy.typing import NDArray
 
 from .avaliador_hopfield import AvaliadorHopfield
 
-PathType = Union[str, os.PathLike[str]]
+PathType = str | os.PathLike[str]
 
 
 class GeradorRelatorio:
@@ -47,7 +45,9 @@ class GeradorRelatorio:
         Nome do relatório.
     """
 
-    def __init__(self, out_dir: PathType, nome_experimento: str = "experimento") -> None:
+    def __init__(
+        self, out_dir: PathType, nome_experimento: str = "experimento"
+    ) -> None:
         self.out_dir: str = str(out_dir)
         self.nome_experimento: str = str(nome_experimento)
         self._avaliadores: dict[str, AvaliadorHopfield] = {}
@@ -73,7 +73,9 @@ class GeradorRelatorio:
         self._metadados.update(kwargs)
         return self
 
-    def adicionar_avaliador(self, nome: str, avaliador: AvaliadorHopfield) -> GeradorRelatorio:
+    def adicionar_avaliador(
+        self, nome: str, avaliador: AvaliadorHopfield
+    ) -> GeradorRelatorio:
         """Adiciona uma instância de avaliador executado ao conjunto do relatório.
 
         Parameters
@@ -118,7 +120,9 @@ class GeradorRelatorio:
         self._mae_bin = float(mae_bin)
         return self
 
-    def adicionar_figura(self, titulo: str, fig: Figure, secao: str = "Visualizações") -> GeradorRelatorio:
+    def adicionar_figura(
+        self, titulo: str, fig: Figure, secao: str = "Visualizações"
+    ) -> GeradorRelatorio:
         """Converte e anexa uma figura Matplotlib em formato Base64 ao relatório.
 
         Parameters
@@ -171,7 +175,9 @@ class GeradorRelatorio:
         return self
 
     def _salvar_csv_resumo(self) -> None:
-        rows: list[dict[str, Any]] = [av.metricas_resumo(nome) for nome, av in self._avaliadores.items()]
+        rows: list[dict[str, Any]] = [
+            av.metricas_resumo(nome) for nome, av in self._avaliadores.items()
+        ]
         path: str = os.path.join(self.out_dir, "metricas_globais.csv")
         pd.DataFrame(rows).to_csv(path, index=False)
         print(f"[GeradorRelatorio] Salvo: {path}")
@@ -217,8 +223,7 @@ class GeradorRelatorio:
 
         # Metadados
         meta_rows: str = "\n".join(
-            f"<tr><td>{k}</td><td>{v}</td></tr>"
-            for k, v in self._metadados.items()
+            f"<tr><td>{k}</td><td>{v}</td></tr>" for k, v in self._metadados.items()
         )
         meta_html: str = (
             f"<table class='meta'>"
@@ -227,8 +232,16 @@ class GeradorRelatorio:
         )
 
         # Tabela de métricas globais com destaque no melhor por coluna
-        colunas_num: list[str] = ["acuracia", "f1_macro", "f1_weighted", "taxa_reconstrucao", "semelhanca_media"]
-        rows_resumo: list[dict[str, Any]] = [av.metricas_resumo(nome) for nome, av in self._avaliadores.items()]
+        colunas_num: list[str] = [
+            "acuracia",
+            "f1_macro",
+            "f1_weighted",
+            "taxa_reconstrucao",
+            "semelhanca_media",
+        ]
+        rows_resumo: list[dict[str, Any]] = [
+            av.metricas_resumo(nome) for nome, av in self._avaliadores.items()
+        ]
         df_res: pd.DataFrame = pd.DataFrame(rows_resumo)
         max_idx: dict[str, Any] = {}
         if not df_res.empty:
@@ -260,9 +273,9 @@ class GeradorRelatorio:
                 plt.close(fig)
                 cards.append(
                     f'<div class="card">'
-                    f'<h3>{nome} ({sufixo})</h3>'
+                    f"<h3>{nome} ({sufixo})</h3>"
                     f'<img src="data:image/png;base64,{img_b64}">'
-                    f'</div>'
+                    f"</div>"
                 )
         confusion_html: str = f'<div class="grid">{"".join(cards)}</div>'
 
@@ -280,22 +293,36 @@ class GeradorRelatorio:
         genes_html: str = ""
         if self._genes_ausentes is not None:
             df_ga: pd.DataFrame = self._genes_ausentes
-            df_top: pd.DataFrame = df_ga.sort_values("frequencia", ascending=False).head(20)
+            df_top: pd.DataFrame = df_ga.sort_values(
+                "frequencia", ascending=False
+            ).head(20)
             cab_ga = "<tr>" + "".join(f"<th>{c}</th>" for c in df_top.columns) + "</tr>"
             lins_ga = []
             for _, row in df_top.iterrows():
                 lins_ga.append("<tr>" + "".join(f"<td>{v}</td>" for v in row) + "</tr>")
-            tabela_ga = f"<table>{cab_ga}{''.join(lins_ga)}</table>"
+            f"<table>{cab_ga}{''.join(lins_ga)}</table>"
 
             ref: NDArray[np.float32] = df_ga["ref_fujita"].to_numpy().astype(np.float32)
             r05: NDArray[np.float32] = df_ga["rec_05"].to_numpy().astype(np.float32)
             rbin: NDArray[np.float32] = df_ga["rec_bin"].to_numpy().astype(np.float32)
-            freqs: NDArray[np.float32] = df_ga["frequencia"].to_numpy().astype(np.float32)
+            freqs: NDArray[np.float32] = (
+                df_ga["frequencia"].to_numpy().astype(np.float32)
+            )
 
             fig_ga, axes_ga = plt.subplots(1, 3, figsize=(18, 5))
             ax0 = axes_ga[0]
-            ax0.scatter(ref, r05, alpha=0.7, label="Mathys 0.5", color="steelblue", s=30)
-            ax0.scatter(ref, rbin, alpha=0.7, label="Mathys bin", color="tomato", s=30, marker="s")
+            ax0.scatter(
+                ref, r05, alpha=0.7, label="Mathys 0.5", color="steelblue", s=30
+            )
+            ax0.scatter(
+                ref,
+                rbin,
+                alpha=0.7,
+                label="Mathys bin",
+                color="tomato",
+                s=30,
+                marker="s",
+            )
             ax0.plot([0, 1], [0, 1], "k--", lw=1, label="ideal")
             ax0.set_xlabel("Fujita (ref)")
             ax0.set_ylabel("Mathys (rec)")
@@ -307,8 +334,20 @@ class GeradorRelatorio:
             ax1 = axes_ga[1]
             mae05_str = f"{self._mae_05:.3f}" if self._mae_05 is not None else "0"
             maebin_str = f"{self._mae_bin:.3f}" if self._mae_bin is not None else "0"
-            ax1.hist(r05 - ref, bins=20, alpha=0.6, label=f"0.5−ref (MAE={mae05_str})", color="steelblue")
-            ax1.hist(rbin - ref, bins=20, alpha=0.6, label=f"bin−ref (MAE={maebin_str})", color="tomato")
+            ax1.hist(
+                r05 - ref,
+                bins=20,
+                alpha=0.6,
+                label=f"0.5−ref (MAE={mae05_str})",
+                color="steelblue",
+            )
+            ax1.hist(
+                rbin - ref,
+                bins=20,
+                alpha=0.6,
+                label=f"bin−ref (MAE={maebin_str})",
+                color="tomato",
+            )
             ax1.axvline(0, color="k", lw=1, ls="--")
             ax1.set_xlabel("Erro (reconstruído − referência)")
             ax1.set_ylabel("Número de genes")
@@ -320,10 +359,35 @@ class GeradorRelatorio:
             ordem: NDArray[np.intp] = np.argsort(freqs)[::-1][:n_show]
             y_pos: NDArray[np.intp] = np.arange(n_show)
             h_bar: float = 0.25
-            gene_names: NDArray[Any] = df_ga["gene"].to_numpy() if "gene" in df_ga.columns else np.arange(len(ref)).astype(str)
-            ax2.barh(y_pos + h_bar, ref[ordem], h_bar, label="Fujita (ref)", color="gray", alpha=0.8)
-            ax2.barh(y_pos, r05[ordem], h_bar, label="Mathys 0.5", color="steelblue", alpha=0.8)
-            ax2.barh(y_pos - h_bar, rbin[ordem], h_bar, label="Mathys bin", color="tomato", alpha=0.8)
+            gene_names: NDArray[Any] = (
+                df_ga["gene"].to_numpy()
+                if "gene" in df_ga.columns
+                else np.arange(len(ref)).astype(str)
+            )
+            ax2.barh(
+                y_pos + h_bar,
+                ref[ordem],
+                h_bar,
+                label="Fujita (ref)",
+                color="gray",
+                alpha=0.8,
+            )
+            ax2.barh(
+                y_pos,
+                r05[ordem],
+                h_bar,
+                label="Mathys 0.5",
+                color="steelblue",
+                alpha=0.8,
+            )
+            ax2.barh(
+                y_pos - h_bar,
+                rbin[ordem],
+                h_bar,
+                label="Mathys bin",
+                color="tomato",
+                alpha=0.8,
+            )
             ax2.set_yticks(y_pos)
             ax2.set_yticklabels([str(gene_names[i])[:14] for i in ordem], fontsize=8)
             ax2.set_xlabel("Taxa de ativação")
@@ -371,7 +435,9 @@ class GeradorRelatorio:
 </body>
 </html>"""
 
-        path_html: str = os.path.join(self.out_dir, f"relatorio_{self.nome_experimento}.html")
+        path_html: str = os.path.join(
+            self.out_dir, f"relatorio_{self.nome_experimento}.html"
+        )
         with open(path_html, "w", encoding="utf-8") as fh:
             fh.write(html)
         print(f"[GeradorRelatorio] HTML salvo: {path_html}")

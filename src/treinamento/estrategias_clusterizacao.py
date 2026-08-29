@@ -7,7 +7,7 @@ Calinski-Harabasz), K-Means com k fixo e clustering por densidade com HDBSCAN.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Sequence
+from collections.abc import Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -70,11 +70,13 @@ class EstrategiaKMeansDinamico(EstrategiaClusterizacao):
         NDArray[np.float32]
             Array de centróides calculados.
         """
-        n_samples: int = int(len(Wswp_cls))
+        n_samples: int = len(Wswp_cls)
 
         # Se houver menos células do que o k mínimo, retorna a média de todas como centróide
         if n_samples < min(self.k_range):
-            print(f"[EstrategiaKMeansDinamico] Poucas amostras ({n_samples}). Usando 1 cluster.")
+            print(
+                f"[EstrategiaKMeansDinamico] Poucas amostras ({n_samples}). Usando 1 cluster."
+            )
             return np.array([Wswp_cls.mean(axis=0)], dtype=np.float32)
 
         best_score: float = -1.0
@@ -104,7 +106,9 @@ class EstrategiaKMeansDinamico(EstrategiaClusterizacao):
             best_centroids = np.array([Wswp_cls.mean(axis=0)], dtype=np.float32)
             best_k = 1
 
-        print(f"[EstrategiaKMeansDinamico] Melhor k encontrado: {best_k} (Calinski-Harabasz: {best_score:.2f})")
+        print(
+            f"[EstrategiaKMeansDinamico] Melhor k encontrado: {best_k} (Calinski-Harabasz: {best_score:.2f})"
+        )
         return best_centroids
 
 
@@ -143,10 +147,12 @@ class EstrategiaKMeansFixo(EstrategiaClusterizacao):
         NDArray[np.float32]
             Centróides calculados.
         """
-        n_samples: int = int(len(Wswp_cls))
+        n_samples: int = len(Wswp_cls)
 
         if n_samples <= self.n_clusters:
-            print(f"[EstrategiaKMeansFixo] Células insuficientes ({n_samples}) para {self.n_clusters} clusters. Retornando todas como centróides.")
+            print(
+                f"[EstrategiaKMeansFixo] Células insuficientes ({n_samples}) para {self.n_clusters} clusters. Retornando todas como centróides."
+            )
             return np.asarray(Wswp_cls, dtype=np.float32)
 
         km = KMeans(n_clusters=self.n_clusters, n_init=1, random_state=self.seed)
@@ -186,8 +192,10 @@ class EstrategiaHDBSCAN(EstrategiaClusterizacao):
         """
         try:
             import hdbscan  # type: ignore[import-untyped]
-        except ImportError:
-            raise ImportError("O pacote 'hdbscan' não está instalado. Rode 'pip install hdbscan' no seu terminal.")
+        except ImportError as err:
+            raise ImportError(
+                "O pacote 'hdbscan' não está instalado. Rode 'pip install hdbscan' no seu terminal."
+            ) from err
 
         clusterer = hdbscan.HDBSCAN(min_cluster_size=self.min_cluster_size)
         labels = clusterer.fit_predict(Wswp_cls)
@@ -204,9 +212,13 @@ class EstrategiaHDBSCAN(EstrategiaClusterizacao):
             centroides.append(centroid)
 
         if not centroides:
-            print("[EstrategiaHDBSCAN] Nenhum cluster denso encontrado. Usando a média global.")
+            print(
+                "[EstrategiaHDBSCAN] Nenhum cluster denso encontrado. Usando a média global."
+            )
             return np.array([Wswp_cls.mean(axis=0)], dtype=np.float32)
 
         centroides_arr: NDArray[np.float32] = np.vstack(centroides).astype(np.float32)
-        print(f"[EstrategiaHDBSCAN] Encontrados {len(centroides)} clusters densos válidos.")
+        print(
+            f"[EstrategiaHDBSCAN] Encontrados {len(centroides)} clusters densos válidos."
+        )
         return centroides_arr

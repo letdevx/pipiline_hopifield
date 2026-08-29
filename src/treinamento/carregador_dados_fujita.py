@@ -7,19 +7,21 @@ e anotações de metadados celulares com checagem de tipos estrita.
 from __future__ import annotations
 
 import os
-from pathlib import Path
-from typing import Any, Sequence, Union
+from collections.abc import Sequence
+from typing import Any
 
 import anndata as ad
 import numpy as np
-from numpy.typing import NDArray
 import pandas as pd
 import scipy.sparse as sp
+from numpy.typing import NDArray
 
-PathType = Union[str, os.PathLike[str]]
+PathType = str | os.PathLike[str]
 
 
-def carregar_labels(path_ou_array: Union[PathType, NDArray[Any], Sequence[int], pd.Series, None]) -> NDArray[np.int_] | None:
+def carregar_labels(
+    path_ou_array: PathType | NDArray[Any] | Sequence[int] | pd.Series | None,
+) -> NDArray[np.int_] | None:
     """Carrega array 1D de rótulos de tipo celular a partir de arquivo (.txt, .csv, .tsv) ou vetor em memória.
 
     Suporta arquivos com ou sem cabeçalho e diferentes delimitadores.
@@ -100,18 +102,20 @@ class CarregadorDados:
     def __init__(
         self,
         path_matriz: PathType,
-        path_genes: Union[PathType, Sequence[str], pd.DataFrame, None] = None,
-        path_labels: Union[PathType, Sequence[int], NDArray[Any], None] = None,
+        path_genes: PathType | Sequence[str] | pd.DataFrame | None = None,
+        path_labels: PathType | Sequence[int] | NDArray[Any] | None = None,
         path_sweep: PathType | None = None,
         n_genes: int | None = None,
     ) -> None:
         self.path_matriz: str = str(path_matriz)
-        self.path_genes: Union[PathType, Sequence[str], pd.DataFrame, None] = path_genes
-        self.path_labels: Union[PathType, Sequence[int], NDArray[Any], None] = path_labels
-        self.path_sweep: str | None = str(path_sweep) if path_sweep is not None else None
+        self.path_genes: PathType | Sequence[str] | pd.DataFrame | None = path_genes
+        self.path_labels: PathType | Sequence[int] | NDArray[Any] | None = path_labels
+        self.path_sweep: str | None = (
+            str(path_sweep) if path_sweep is not None else None
+        )
         self.n_genes: int | None = n_genes
-        self.X: Union[NDArray[np.float32], sp.spmatrix, None] = None
-        self.W0: Union[NDArray[np.float32], sp.spmatrix, None] = None
+        self.X: NDArray[np.float32] | sp.spmatrix | None = None
+        self.W0: NDArray[np.float32] | sp.spmatrix | None = None
         self.ids_top: NDArray[np.int_] | None = None
         self.genes: pd.DataFrame | None = None
         self.labels: NDArray[np.int_] | None = None
@@ -134,8 +138,10 @@ class CarregadorDados:
         if self.path_sweep is not None:
             self._carregar_sweep()
         assert self.X is not None
-        print(f"[{self.__class__.__name__}] Carregamento concluído: "
-              f"{self.X.shape[0]} células, {self.n_genes} genes selecionados")
+        print(
+            f"[{self.__class__.__name__}] Carregamento concluído: "
+            f"{self.X.shape[0]} células, {self.n_genes} genes selecionados"
+        )
         return self
 
     def _carregar_matriz(self) -> None:
@@ -155,7 +161,9 @@ class CarregadorDados:
         self.ids_top = np.arange(int(self.X.shape[1]), dtype=np.intp)
         self.W0 = self.X
         self.n_genes = int(self.X.shape[1])
-        print(f"[{self.__class__.__name__}] W0 shape: {self.W0.shape} ({self.n_genes} genes)")
+        print(
+            f"[{self.__class__.__name__}] W0 shape: {self.W0.shape} ({self.n_genes} genes)"
+        )
 
     def _carregar_genes(self) -> None:
         print(f"[{self.__class__.__name__}] Carregando genes: {self.path_genes}")
@@ -173,11 +181,15 @@ class CarregadorDados:
         self.labels = carregar_labels(self.path_labels)
         if self.labels is not None:
             tipos = np.unique(self.labels)
-            print(f"[{self.__class__.__name__}] Rótulos shape: {self.labels.shape}, tipos: {tipos}")
+            print(
+                f"[{self.__class__.__name__}] Rótulos shape: {self.labels.shape}, tipos: {tipos}"
+            )
 
     def _carregar_sweep(self) -> None:
         if self.path_sweep is not None and os.path.exists(self.path_sweep):
-            print(f"[{self.__class__.__name__}] Carregando SWeeP pré-computado: {self.path_sweep}")
+            print(
+                f"[{self.__class__.__name__}] Carregando SWeeP pré-computado: {self.path_sweep}"
+            )
             self.Wswp = pd.read_csv(self.path_sweep).to_numpy(dtype=np.float32)
             print(f"[{self.__class__.__name__}] Wswp shape: {self.Wswp.shape}")
 

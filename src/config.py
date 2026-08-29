@@ -5,7 +5,6 @@ e estrutura de pastas geradas em outputs/.
 """
 
 import os
-from pathlib import Path
 
 # Raiz do projeto (pasta pipiline_hopifield/)
 ROOT: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -14,7 +13,9 @@ ROOT: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Entradas — busca dinâmica (Local Windows / Linux / Google Drive Colab)
 # ---------------------------------------------------------------------------
 
-PATH_BASE: str = r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs"
+PATH_BASE: str = (
+    r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs"
+)
 
 # Entrada Conjunto de Referência
 PATH_REFERENCIA: str = os.path.join(PATH_BASE, "pan_anotado.h5ad")
@@ -27,8 +28,12 @@ PATH_FEATURES_REFERENCIA: str = os.path.join(PATH_BASE, "featuresPANcorrigido.ts
 PATH_FEATURES_ALVO: str = os.path.join(PATH_BASE, "features.tsv")
 
 # Matrizes SWeeP e Rótulos
-PATH_SWEEP_REFERENCIA: str = os.path.join(ROOT, "outputs", "treinamento", "matriz_reduzida_sweepF.csv")
-PATH_SWEEP_ALVO: str = os.path.join(ROOT, "outputs", "treinamento", "matriz_reduzida_sweepM.csv")
+PATH_SWEEP_REFERENCIA: str = os.path.join(
+    ROOT, "outputs", "treinamento", "matriz_reduzida_sweepF.csv"
+)
+PATH_SWEEP_ALVO: str = os.path.join(
+    ROOT, "outputs", "treinamento", "matriz_reduzida_sweepM.csv"
+)
 PATH_LABELS_REFERENCIA: str = os.path.join(PATH_BASE, "PanNumerico.csv")
 PATH_LABELS_ALVO: str = os.path.join(PATH_BASE, "tipos_celulares_numericoMs.txt")
 

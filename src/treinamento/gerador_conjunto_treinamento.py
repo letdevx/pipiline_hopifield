@@ -8,17 +8,15 @@ from __future__ import annotations
 
 import gc
 import os
-from pathlib import Path
-from typing import Any, Set, Union
 
 import anndata as ad
 import numpy as np
-from numpy.typing import NDArray
 import pandas as pd
 import polars as pl
 import scipy.sparse as sp
+from numpy.typing import NDArray
 
-PathType = Union[str, os.PathLike[str]]
+PathType = str | os.PathLike[str]
 
 
 class GeradorConjuntoTreinamento:
@@ -50,11 +48,13 @@ class GeradorConjuntoTreinamento:
         Caminho do último arquivo gerado.
     """
 
-    def __init__(self, path_top_genes_csv: PathType, out_dir: PathType, chunk: int = 3000) -> None:
+    def __init__(
+        self, path_top_genes_csv: PathType, out_dir: PathType, chunk: int = 3000
+    ) -> None:
         self.path_top_genes_csv: str = str(path_top_genes_csv)
         self.out_dir: str = str(out_dir)
         self.chunk: int = int(chunk)
-        self.genes_selecionados: Set[str] = set()
+        self.genes_selecionados: set[str] = set()
         self.path_saida: str | None = None
         self._carregar_genes()
 
@@ -62,7 +62,9 @@ class GeradorConjuntoTreinamento:
         df: pl.DataFrame = pl.read_csv(self.path_top_genes_csv)
         col_nome: str = "gene" if "gene" in df.columns else df.columns[0]
         self.genes_selecionados = set(df[col_nome].to_list())
-        print(f"[GeradorConjuntoTreinamento] {len(self.genes_selecionados)} genes carregados de: {self.path_top_genes_csv}")
+        print(
+            f"[GeradorConjuntoTreinamento] {len(self.genes_selecionados)} genes carregados de: {self.path_top_genes_csv}"
+        )
 
     def gerar(self, path_txt: PathType) -> GeradorConjuntoTreinamento:
         """Filtra arquivo CSV/TXT delimitado por vírgula em modo streaming via Polars.
@@ -81,14 +83,18 @@ class GeradorConjuntoTreinamento:
         with open(path_txt_str, encoding="utf-8") as f:
             todos_genes: list[str] = f.readline().strip().split(",")
 
-        genes_filtrados: list[str] = [g for g in todos_genes if g in self.genes_selecionados]
+        genes_filtrados: list[str] = [
+            g for g in todos_genes if g in self.genes_selecionados
+        ]
         n: int = len(genes_filtrados)
         nome: str = os.path.splitext(os.path.basename(path_txt_str))[0]
         path_saida: str = os.path.join(self.out_dir, f"{nome}_top{n}.txt")
         os.makedirs(self.out_dir, exist_ok=True)
 
         if os.path.exists(path_saida):
-            print(f"[GeradorConjuntoTreinamento] Arquivo já existe, pulando: {path_saida}")
+            print(
+                f"[GeradorConjuntoTreinamento] Arquivo já existe, pulando: {path_saida}"
+            )
             self.path_saida = path_saida
             return self
 
@@ -97,7 +103,9 @@ class GeradorConjuntoTreinamento:
             os.remove(path_tmp)
 
         print(f"\n[GeradorConjuntoTreinamento] Processando: {path_txt_str}")
-        print(f"  Genes encontrados no arquivo: {n} de {len(self.genes_selecionados)} selecionados")
+        print(
+            f"  Genes encontrados no arquivo: {n} de {len(self.genes_selecionados)} selecionados"
+        )
         print("  Escrevendo via Polars streaming...")
 
         (
@@ -142,7 +150,9 @@ class GeradorConjuntoTreinamento:
         path_h5ad_str: str = str(path_h5ad)
         adata: ad.AnnData = ad.read_h5ad(path_h5ad_str)
         todos_genes: list[str] = list(adata.var_names)
-        genes_filtrados: list[str] = [g for g in todos_genes if g in self.genes_selecionados]
+        genes_filtrados: list[str] = [
+            g for g in todos_genes if g in self.genes_selecionados
+        ]
         n: int = len(genes_filtrados)
         nome: str = os.path.splitext(os.path.basename(path_h5ad_str))[0]
 
@@ -150,13 +160,19 @@ class GeradorConjuntoTreinamento:
         path_saida_h5ad: str = os.path.join(self.out_dir, f"{nome}_top{n}.h5ad")
         os.makedirs(self.out_dir, exist_ok=True)
 
-        if os.path.exists(path_npy) and (not exportar_h5ad or os.path.exists(path_saida_h5ad)):
-            print(f"[GeradorConjuntoTreinamento] Arquivos já existem, pulando: {nome}_top{n}")
+        if os.path.exists(path_npy) and (
+            not exportar_h5ad or os.path.exists(path_saida_h5ad)
+        ):
+            print(
+                f"[GeradorConjuntoTreinamento] Arquivos já existem, pulando: {nome}_top{n}"
+            )
             self.path_saida = path_npy
             return self
 
         print(f"\n[GeradorConjuntoTreinamento] Processando .h5ad: {path_h5ad_str}")
-        print(f"  Genes selecionados encontrados: {n} de {len(self.genes_selecionados)}")
+        print(
+            f"  Genes selecionados encontrados: {n} de {len(self.genes_selecionados)}"
+        )
 
         gene_to_idx: dict[str, int] = {g: i for i, g in enumerate(todos_genes)}
         col_indices: list[int] = [gene_to_idx[g] for g in genes_filtrados]
@@ -170,22 +186,32 @@ class GeradorConjuntoTreinamento:
 
         # Injeção de sentinela se for Mathys e houver anotação de presença
         if is_mathys and "presente_no_dataset" in adata.var:
-            presente_sub: NDArray[np.bool_] = np.asarray(adata.var["presente_no_dataset"].to_numpy())[col_indices].astype(bool)
+            presente_sub: NDArray[np.bool_] = np.asarray(
+                adata.var["presente_no_dataset"].to_numpy()
+            )[col_indices].astype(bool)
             ausentes_mask: NDArray[np.bool_] = ~presente_sub
             n_ausentes: int = int(np.sum(ausentes_mask))
             if n_ausentes > 0:
-                print(f"  Injetando sentinela {fill_value} em {n_ausentes} genes ausentes no Mathys...")
+                print(
+                    f"  Injetando sentinela {fill_value} em {n_ausentes} genes ausentes no Mathys..."
+                )
                 X_dense[:, ausentes_mask] = fill_value
 
         if exportar_npy:
             np.save(path_npy, X_dense)
-            print(f"[GeradorConjuntoTreinamento] Salvo .npy: {path_npy} ({X_dense.shape})")
+            print(
+                f"[GeradorConjuntoTreinamento] Salvo .npy: {path_npy} ({X_dense.shape})"
+            )
 
         if exportar_h5ad:
-            var_df: pd.DataFrame = pd.DataFrame(index=pd.Index(genes_filtrados, name="ensembl_id"))
+            var_df: pd.DataFrame = pd.DataFrame(
+                index=pd.Index(genes_filtrados, name="ensembl_id")
+            )
             assert isinstance(adata.obs, pd.DataFrame)
             obs_df: pd.DataFrame = adata.obs.copy()
-            adata_sub: ad.AnnData = ad.AnnData(X=sp.csr_matrix(X_dense), obs=obs_df, var=var_df)
+            adata_sub: ad.AnnData = ad.AnnData(
+                X=sp.csr_matrix(X_dense), obs=obs_df, var=var_df
+            )
             adata_sub.write_h5ad(path_saida_h5ad, compression="gzip")
             print(f"[GeradorConjuntoTreinamento] Salvo .h5ad: {path_saida_h5ad}")
 

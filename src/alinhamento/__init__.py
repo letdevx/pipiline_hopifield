@@ -5,26 +5,24 @@ de schemas Ensembl ID/Gene Symbol, seleção de genes de alta frequência/difere
 análise de sobreposição e alinhamento dimensional de matrizes (esparso e denso).
 """
 
-from .leitor_features import LeitorFeatures
-from .analisador_sobreposicao import AnalisadorSobreposicao
 from .alinhador import Alinhador
 from .alinhador_esparso import AlinhadorEsparso
+from .analisador_cobertura import AnalisadorCobertura
+from .analisador_sobreposicao import AnalisadorSobreposicao
+from .leitor_features import LeitorFeatures
+from .selecionador_genes_diferenciais import SelecionadorGenesDiferenciais
+from .selecionador_genes_frequentes import SelecionadorGenesFrequentes
 from .validador_alinhamento import ValidadorAlinhamento
 from .validador_features import ValidadorFeatures
-from .selecionador_genes_frequentes import SelecionadorGenesFrequentes
-from .selecionador_genes_diferenciais import SelecionadorGenesDiferenciais
-from .analisador_cobertura import AnalisadorCobertura
 
 __all__ = [
-    "LeitorFeatures",
-    "AnalisadorSobreposicao",
     "Alinhador",
     "AlinhadorEsparso",
+    "AnalisadorCobertura",
+    "AnalisadorSobreposicao",
+    "LeitorFeatures",
+    "SelecionadorGenesDiferenciais",
+    "SelecionadorGenesFrequentes",
     "ValidadorAlinhamento",
     "ValidadorFeatures",
-    "SelecionadorGenesFrequentes",
-    "SelecionadorGenesDiferenciais",
-    "AnalisadorCobertura",
 ]
-
-

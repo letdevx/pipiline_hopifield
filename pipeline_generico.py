@@ -30,17 +30,16 @@ from __future__ import annotations
 import importlib
 import os
 import sys
-from typing import Any, Sequence, Union
 
 import anndata as ad
 import matplotlib.pyplot as plt
 import numpy as np
-from numpy.typing import NDArray
 import pandas as pd
 import scipy.sparse as sp
 import seaborn as sns
-from sklearn.metrics import classification_report, confusion_matrix, f1_score
 import torch
+from numpy.typing import NDArray
+from sklearn.metrics import classification_report, confusion_matrix
 
 # %%
 try:
@@ -78,13 +77,17 @@ if SRC_PATH not in sys.path:
 # %%
 try:
     from google.colab import drive  # type: ignore[import-not-found,import-untyped,missing-import]
-    if not os.path.exists('/content/drive'):
+
+
+    if not os.path.exists("/content/drive"):
         print("[Colab] Montando Google Drive em /content/drive...")
-        drive.mount('/content/drive')
+        drive.mount("/content/drive")
 except (ImportError, Exception):
     pass
 
-DRIVE_INPUTS = '/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs'
+DRIVE_INPUTS = (
+    "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs"
+)
 # !ls "{DRIVE_INPUTS}"
 
 # %%
@@ -93,6 +96,7 @@ DRIVE_INPUTS = '/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/
 
 # %%
 import config
+
 importlib.reload(config)
 
 
@@ -105,64 +109,81 @@ except Exception:
     pass
 
 # Detecção robusta do diretório raiz e de src/ para Jupyter, Scripts e Colab
-if '__file__' in globals():
+if "__file__" in globals():
     ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 else:
     ROOT_DIR = os.path.abspath(os.getcwd())
-    if not os.path.exists(os.path.join(ROOT_DIR, 'src')) and os.path.exists(os.path.join(os.path.dirname(ROOT_DIR), 'src')):
+    if not os.path.exists(os.path.join(ROOT_DIR, "src")) and os.path.exists(
+        os.path.join(os.path.dirname(ROOT_DIR), "src")
+    ):
         ROOT_DIR = os.path.dirname(ROOT_DIR)
 
-SRC_DIR = os.path.join(ROOT_DIR, 'src')
+SRC_DIR = os.path.join(ROOT_DIR, "src")
 for p in (ROOT_DIR, SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
 import config
+
 importlib.reload(config)
+import preprocessing
 from config import (
-    PATH_REFERENCIA, PATH_ALVO, PATH_FEATURES_REFERENCIA, PATH_FEATURES_ALVO,
-    PATH_SWEEP_REFERENCIA, PATH_SWEEP_ALVO, PATH_LABELS_REFERENCIA, PATH_LABELS_ALVO,
-    OUT_BINARIZACAO, OUT_ALINHAMENTO, OUT_TOP_GENES,
-    OUT_TREINAMENTO, OUT_HOPFIELD, OUT_RELATORIO,
+    OUT_ALINHAMENTO,
+    OUT_BINARIZACAO,
+    OUT_HOPFIELD,
+    OUT_TOP_GENES,
+    PATH_ALVO,
+    PATH_FEATURES_ALVO,
+    PATH_FEATURES_REFERENCIA,
+    PATH_LABELS_ALVO,
+    PATH_LABELS_REFERENCIA,
+    PATH_REFERENCIA,
+    PATH_SWEEP_REFERENCIA,
 )
 
-import preprocessing
 importlib.reload(preprocessing)
 import alinhamento
+
 importlib.reload(alinhamento)
 import treinamento
+
 importlib.reload(treinamento)
 
-from preprocessing import Binarizador
 from alinhamento import (
-    LeitorFeatures, AnalisadorSobreposicao, Alinhador, AlinhadorEsparso,
-    ValidadorAlinhamento, ValidadorFeatures, SelecionadorGenesFrequentes, AnalisadorCobertura,
+    AlinhadorEsparso,
+    AnalisadorSobreposicao,
+    LeitorFeatures,
+    ValidadorAlinhamento,
+    ValidadorFeatures,
 )
+from preprocessing import Binarizador
 from treinamento import (
-    GeradorConjuntoTreinamento, CarregadorDadosFujita,
-    ProjetorSWeP, ProjetorSWeePR,
-    ExtratorPadroesSubcluster, ModernHopfieldNetwork, AvaliadorHopfield,
-    GeradorRelatorio,
+    AvaliadorHopfield,
+    CarregadorDadosFujita,
+    ExtratorPadroesSubcluster,
+    ModernHopfieldNetwork,
+    ProjetorSWeePR,
+    ProjetorSWeP,
 )
-from treinamento.hopfield_utils import wsort, closervects
-
+from treinamento.hopfield_utils import wsort
 
 SEED = 42
 np.random.seed(SEED)
 torch.manual_seed(SEED)
 
 if torch.cuda.is_available():
-    device = torch.device('cuda')
+    device = torch.device("cuda")
     torch.cuda.manual_seed_all(SEED)
     # Garante determinismo em operações CUDA (útil para reprodutibilidade)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    print(f'Dispositivo: {device} ({torch.cuda.get_device_name(0)})')
-    print(f'VRAM disponível: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB')
+    print(f"Dispositivo: {device} ({torch.cuda.get_device_name(0)})")
+    print(
+        f"VRAM disponível: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB"
+    )
 else:
-    device = torch.device('cpu')
-    print(f'Dispositivo: {device} (GPU não disponível)')
-
+    device = torch.device("cpu")
+    print(f"Dispositivo: {device} (GPU não disponível)")
 
 
 # %% [markdown]
@@ -177,13 +198,13 @@ binarizador_alvo = Binarizador(path_h5ad=PATH_ALVO, out_dir=OUT_BINARIZACAO)
 binarizador_ref.binarizar()
 binarizador_alvo.binarizar()
 
-print('Referência binarizada em:', binarizador_ref.path_binarizada)
-print('Alvo binarizado em:', binarizador_alvo.path_binarizada)
+print("Referência binarizada em:", binarizador_ref.path_binarizada)
+print("Alvo binarizado em:", binarizador_alvo.path_binarizada)
 
 
 # %% [markdown]
 # #### 3. Alinhamento de espaços gênicos ↔️
-#  Os dois datasets têm espaços gênicos distintos (36 591 genes no Fujita, 32 643 no Mathys, ~30 312 em comum). 
+#  Os dois datasets têm espaços gênicos distintos (36 591 genes no Fujita, 32 643 no Mathys, ~30 312 em comum).
 #  O alinhamento:
 #  1. Lê os mapeamentos `gene_name → Ensembl ID` de cada dataset.
 #  2. Valida a integridade dos arquivos de features e a compatibilidade com as matrizes AnnData.
@@ -198,7 +219,10 @@ leitor = LeitorFeatures(PATH_FEATURES_REFERENCIA, PATH_FEATURES_ALVO)
 leitor.ler()
 print(leitor)
 assert leitor.map_f is not None and leitor.map_m is not None
-assert binarizador_ref.path_binarizada is not None and binarizador_alvo.path_binarizada is not None
+assert (
+    binarizador_ref.path_binarizada is not None
+    and binarizador_alvo.path_binarizada is not None
+)
 
 # %%
 # Passo 1.5 — Validação Prévia de Compatibilidade e Ordem de Colunas (Fail-Fast)
@@ -215,7 +239,7 @@ validador_feat.validar_tudo(
 # %%
 # Passo 2 — Análise de sobreposição dos espaços gênicos
 # var_names idênticos no original e no binarizado — lemos direto do original
-_f = ad.read_h5ad(PATH_REFERENCIA, backed='r')
+_f = ad.read_h5ad(PATH_REFERENCIA, backed="r")
 var_names_f_original = _f.var_names.tolist()
 _f.file.close()
 del _f
@@ -223,18 +247,22 @@ del _f
 analisador = AnalisadorSobreposicao(leitor.map_f, leitor.map_m, var_names_f_original)
 analisador.analisar()
 print(analisador)
-assert analisador.gene_alvo_idx is not None and analisador.genes_ordenados is not None and analisador.ids_so_f is not None
+assert (
+    analisador.gene_alvo_idx is not None
+    and analisador.genes_ordenados is not None
+    and analisador.ids_so_f is not None
+)
 
 # %%
 # Passo 3 — Alinhamento dos dois h5ad binarizados (100% Esparso & OOM-Safe)
 alinhador = AlinhadorEsparso(
-    path_binarizada_m = binarizador_alvo.path_binarizada,
-    path_binarizada_f = binarizador_ref.path_binarizada,
-    out_dir           = OUT_ALINHAMENTO,
-    map_f             = leitor.map_f,
-    map_m             = leitor.map_m,
-    gene_alvo_idx     = analisador.gene_alvo_idx,
-    genes_ordenados   = analisador.genes_ordenados,
+    path_binarizada_m=binarizador_alvo.path_binarizada,
+    path_binarizada_f=binarizador_ref.path_binarizada,
+    out_dir=OUT_ALINHAMENTO,
+    map_f=leitor.map_f,
+    map_m=leitor.map_m,
+    gene_alvo_idx=analisador.gene_alvo_idx,
+    genes_ordenados=analisador.genes_ordenados,
 )
 alinhador.alinhar()
 alinhador.gerar_tracking(analisador.ids_so_f, leitor.map_f)
@@ -244,9 +272,9 @@ assert alinhador.path_f_alinhado is not None and alinhador.path_m_alinhado is no
 # %%
 # Passo 4 — Validação da ordem de genes
 validador = ValidadorAlinhamento(
-    path_f_alinhado = alinhador.path_f_alinhado,
-    path_m_alinhado = alinhador.path_m_alinhado,
-    genes_ordenados = analisador.genes_ordenados,
+    path_f_alinhado=alinhador.path_f_alinhado,
+    path_m_alinhado=alinhador.path_m_alinhado,
+    genes_ordenados=analisador.genes_ordenados,
 )
 validador.validar()
 
@@ -262,8 +290,8 @@ path_f_completo = alinhador.path_f_alinhado  # adataF_binarizado_alinhado.h5ad
 path_m_completo = alinhador.path_m_alinhado  # adataM_binarizado_alinhado.h5ad
 
 # Salva a lista completa de genes para o Carregador
-path_todos_genes = os.path.join(OUT_ALINHAMENTO, 'genes_canonicos_completos.csv')
-pd.DataFrame({'gene': analisador.genes_ordenados}).to_csv(path_todos_genes, index=False)
+path_todos_genes = os.path.join(OUT_ALINHAMENTO, "genes_canonicos_completos.csv")
+pd.DataFrame({"gene": analisador.genes_ordenados}).to_csv(path_todos_genes, index=False)
 
 
 # %%
@@ -273,10 +301,10 @@ pd.DataFrame({'gene': analisador.genes_ordenados}).to_csv(path_todos_genes, inde
 
 # %%
 projetor_r = ProjetorSWeePR(
-    path_matriz   = path_f_completo,
-    path_saida    = PATH_SWEEP_REFERENCIA,
-    n_componentes = 600,
-    seed          = SEED,
+    path_matriz=path_f_completo,
+    path_saida=PATH_SWEEP_REFERENCIA,
+    n_componentes=600,
+    seed=SEED,
 )
 projetor_r.projetar()
 
@@ -284,11 +312,11 @@ projetor_r.projetar()
 # %%
 assert analisador.genes_ordenados is not None
 carregador = CarregadorDadosFujita(
-    path_matriz = path_f_completo,                  # Aceita .h5ad e .npy nativamente!
-    path_genes  = analisador.genes_ordenados,       # Pode passar a lista de genes diretamente
-    path_labels = PATH_LABELS_REFERENCIA,
-    path_sweep  = PATH_SWEEP_REFERENCIA,
-    n_genes     = len(analisador.genes_ordenados),
+    path_matriz=path_f_completo,  # Aceita .h5ad e .npy nativamente!
+    path_genes=analisador.genes_ordenados,  # Pode passar a lista de genes diretamente
+    path_labels=PATH_LABELS_REFERENCIA,
+    path_sweep=PATH_SWEEP_REFERENCIA,
+    n_genes=len(analisador.genes_ordenados),
 )
 carregador.carregar()
 print(carregador)
@@ -297,12 +325,14 @@ assert carregador.W0 is not None and carregador.Wswp is not None
 
 # %%
 adata_m: ad.AnnData | None = None
-W_mathys: Union[NDArray[np.float32], sp.spmatrix]
-if path_m_completo.endswith('.npy'):
-    W_mathys = np.load(path_m_completo, mmap_mode='r') # mmap evita carregar 11GB de uma vez
+W_mathys: NDArray[np.float32] | sp.spmatrix
+if path_m_completo.endswith(".npy"):
+    W_mathys = np.load(
+        path_m_completo, mmap_mode="r"
+    )  # mmap evita carregar 11GB de uma vez
 else:
     adata_m = ad.read_h5ad(path_m_completo)
-    W_mathys = adata_m.X # Mantém em formato esparso CSR
+    W_mathys = adata_m.X  # Mantém em formato esparso CSR
 
 
 # %%
@@ -313,11 +343,15 @@ from treinamento import carregar_labels
 
 # 1. Carregamento robusto dos rótulos brutos
 labels_referencia = carregar_labels(PATH_LABELS_REFERENCIA)
-labels_alvo       = carregar_labels(PATH_LABELS_ALVO)
+labels_alvo = carregar_labels(PATH_LABELS_ALVO)
 assert labels_referencia is not None and labels_alvo is not None
 
-print(f"[Labels] Referência : {len(labels_referencia)} células | Tipos: {np.unique(labels_referencia)}")
-print(f"[Labels] Alvo       : {len(labels_alvo)} células | Tipos: {np.unique(labels_alvo)}")
+print(
+    f"[Labels] Referência : {len(labels_referencia)} células | Tipos: {np.unique(labels_referencia)}"
+)
+print(
+    f"[Labels] Alvo       : {len(labels_alvo)} células | Tipos: {np.unique(labels_alvo)}"
+)
 
 # 2. Remapeamento canônico (clo_ref e clo_alvo)
 # Classes não presentes em [1, 3, 4, 5, 6, 7, 0] são remapeadas para a classe 2
@@ -328,21 +362,23 @@ clo_alvo = labels_alvo.copy()
 clo_alvo[~np.isin(clo_alvo, [1, 3, 4, 5, 6, 7, 0])] = 2
 
 # 3. Exibição das distribuições
-print('\nDistribuição Referência (clo_ref):')
+print("\nDistribuição Referência (clo_ref):")
 vals_r, counts_r = np.unique(clo_ref, return_counts=True)
 for v, c in zip(vals_r, counts_r):
-    print(f'  classe {v}: {c:>6d} células')
+    print(f"  classe {v}: {c:>6d} células")
 
-print('\nDistribuição Alvo (clo_alvo):')
+print("\nDistribuição Alvo (clo_alvo):")
 vals_a, counts_a = np.unique(clo_alvo, return_counts=True)
 for v, c in zip(vals_a, counts_a):
-    print(f'  classe {v}: {c:>6d} células')
+    print(f"  classe {v}: {c:>6d} células")
 
 
 # %%
 assert analisador.genes_ordenados is not None
 assert carregador.Wswp is not None
-projetor = ProjetorSWeP(n_features=len(analisador.genes_ordenados), n_componentes=600, seed=SEED)
+projetor = ProjetorSWeP(
+    n_features=len(analisador.genes_ordenados), n_componentes=600, seed=SEED
+)
 projetor.usar_sweep_precomputado(carregador.Wswp).aplicar_pca()
 print(projetor)
 assert projetor.Wswp is not None
@@ -355,19 +391,21 @@ assert projetor.Wswp is not None
 
 # %%
 extrator = ExtratorPadroesSubcluster(
-    W0      = carregador.W0,
-    labels  = clo_ref,
-    classes = [1, 2, 3, 4, 5, 6, 7],
-    seed    = SEED,
-    nc      = 30,
-    k       = 10,
+    W0=carregador.W0,
+    labels=clo_ref,
+    classes=[1, 2, 3, 4, 5, 6, 7],
+    seed=SEED,
+    nc=30,
+    k=10,
 )
 extrator.extrair(projetor.Wswp)
 assert extrator.padroes is not None and extrator.meta is not None
 perf35 = extrator.padroes
 meta_eval = extrator.meta
 print(extrator)
-print(f'perf35 shape: {perf35.shape}  (esperado: (210, {len(analisador.genes_ordenados)}))')
+print(
+    f"perf35 shape: {perf35.shape}  (esperado: (210, {len(analisador.genes_ordenados)}))"
+)
 
 
 # %%
@@ -380,8 +418,8 @@ print(rede35)
 # %%
 import os
 
-PATH_PT   = os.path.join(OUT_HOPFIELD, 'rede35.pt')
-PATH_META = os.path.join(OUT_HOPFIELD, 'rede35.json')
+PATH_PT = os.path.join(OUT_HOPFIELD, "rede35.pt")
+PATH_META = os.path.join(OUT_HOPFIELD, "rede35.json")
 
 # 1. Cria e armazena os 210 padrões na rede Hopfield
 rede35 = ModernHopfieldNetwork(beta=50.0, n_iters=1, binary=True, threshold=0.0)
@@ -390,11 +428,11 @@ meta_eval = extrator.meta
 
 # 2. Salva a rede (.pt) e os metadados (.json) no disco
 rede35.salvar_com_metadados(
-    path_pt   = PATH_PT,
-    path_meta = PATH_META,
-    meta      = extrator.meta,
-    classes   = [1, 2, 3, 4, 5, 6, 7],
-    nc        = 30
+    path_pt=PATH_PT,
+    path_meta=PATH_META,
+    meta=extrator.meta,
+    classes=[1, 2, 3, 4, 5, 6, 7],
+    nc=30,
 )
 
 print("Rede Hopfield e metadados salvos com sucesso em outputs/hopfield/!")
@@ -403,29 +441,33 @@ print("Rede Hopfield e metadados salvos com sucesso em outputs/hopfield/!")
 # %%
 
 
-NC   = 30
+NC = 30
 CLASSES_ARR = np.array([1, 2, 3, 4, 5, 6, 7])
 
 assert carregador.W0 is not None
 assert perf35 is not None
 
 # Agora a query é o espaço W0 Binário Original!
-W0_arr: NDArray[np.float32] = sp.csr_matrix(carregador.W0).toarray().astype(np.float32) if sp.issparse(carregador.W0) else np.asarray(carregador.W0, dtype=np.float32)
+W0_arr: NDArray[np.float32] = (
+    sp.csr_matrix(carregador.W0).toarray().astype(np.float32)
+    if sp.issparse(carregador.W0)
+    else np.asarray(carregador.W0, dtype=np.float32)
+)
 Wk4_res = wsort(W0_arr[clo_ref == 3])
 Wk4: NDArray[np.float32] = np.asarray(Wk4_res, dtype=np.float32)
 n_test: int = min(1000, int(Wk4.shape[0]))
 Wtes: NDArray[np.float32] = rede35.retrieve(Wk4[:n_test], batch_size=4096)
-print(f'hopf_ts(Wswp[:{n_test}], rede35): shape {Wtes.shape}')
+print(f"hopf_ts(Wswp[:{n_test}], rede35): shape {Wtes.shape}")
 
 perf35_f = perf35.astype(np.float64)
-Wtes_f   = Wtes.astype(np.float64)
-a2 = (Wtes_f ** 2).sum(axis=1, keepdims=True)
-b2 = (perf35_f ** 2).sum(axis=1, keepdims=True).T
+Wtes_f = Wtes.astype(np.float64)
+a2 = (Wtes_f**2).sum(axis=1, keepdims=True)
+b2 = (perf35_f**2).sum(axis=1, keepdims=True).T
 idx_proto = (a2 + b2 - 2 * (Wtes_f @ perf35_f.T)).argmin(axis=1)
-pred_sub  = CLASSES_ARR[idx_proto // NC]
+pred_sub = CLASSES_ARR[idx_proto // NC]
 
 acc_sub = (pred_sub == 3).mean()
-print(f'\nAcurácia subclasse clo_ref==3: {acc_sub * 100:.2f}%')
+print(f"\nAcurácia subclasse clo_ref==3: {acc_sub * 100:.2f}%")
 
 
 y_true_sub = np.full(n_test, 3)
@@ -434,11 +476,20 @@ print(classification_report(y_true_sub, pred_sub, labels=labels_sub, zero_divisi
 
 cm_sub = confusion_matrix(y_true_sub, pred_sub, labels=labels_sub)
 fig, ax = plt.subplots(figsize=(max(6, len(labels_sub)), max(5, len(labels_sub))))
-sns.heatmap(cm_sub, annot=True, fmt='d', cmap='Blues',
-            xticklabels=labels_sub, yticklabels=labels_sub, ax=ax)
-ax.set_xlabel('Predito'); ax.set_ylabel('Real')
-ax.set_title('Matriz de Confusão — rede35 (subconjunto clo==3)')
-plt.tight_layout(); plt.show()
+sns.heatmap(
+    cm_sub,
+    annot=True,
+    fmt="d",
+    cmap="Blues",
+    xticklabels=labels_sub,
+    yticklabels=labels_sub,
+    ax=ax,
+)
+ax.set_xlabel("Predito")
+ax.set_ylabel("Real")
+ax.set_title("Matriz de Confusão — rede35 (subconjunto clo==3)")
+plt.tight_layout()
+plt.show()
 
 
 # %% [markdown]
@@ -452,7 +503,7 @@ plt.tight_layout(); plt.show()
 # ==============================================================================
 # 3. Auto-imputação (Fujita → Fujita)
 # ==============================================================================
-print('\n=== Auto-imputação: Fujita → Fujita ===')
+print("\n=== Auto-imputação: Fujita → Fujita ===")
 assert carregador.W0 is not None
 Wrecuperado_f = rede35.retrieve(carregador.W0, batch_size=2048)
 print(f"Auto-imputação concluída! Shape: {Wrecuperado_f.shape}")
@@ -461,11 +512,19 @@ print(f"Auto-imputação concluída! Shape: {Wrecuperado_f.shape}")
 # %%
 assert perf35 is not None
 avaliador_f = AvaliadorHopfield(
-    padroes       = perf35,
-    classes       = [1, 2, 3, 4, 5, 6, 7],
-    nc            = 30,
-    nomes_classes = ['Excitatory', 'Inhibitory', 'Astrocytes', 'Microglia', 'Oligodendrocytes', 'OPC', 'Pericytes'],
-    meta          = meta_eval,
+    padroes=perf35,
+    classes=[1, 2, 3, 4, 5, 6, 7],
+    nc=30,
+    nomes_classes=[
+        "Excitatory",
+        "Inhibitory",
+        "Astrocytes",
+        "Microglia",
+        "Oligodendrocytes",
+        "OPC",
+        "Pericytes",
+    ],
+    meta=meta_eval,
 )
 
 # 1. Avalia a recuperação contra os rótulos verdadeiros
@@ -473,7 +532,7 @@ avaliador_f.avaliar(Wrecuperado_f, clo_ref)
 print(avaliador_f)
 
 # 2. Plota a Matriz de Confusão
-avaliador_f.plotar(titulo='Confusão — rede35 (Fujita → Fujita)')
+avaliador_f.plotar(titulo="Confusão — rede35 (Fujita → Fujita)")
 
 
 # %% [markdown]
@@ -482,46 +541,58 @@ avaliador_f.plotar(titulo='Confusão — rede35 (Fujita → Fujita)')
 # A rede realiza a atenção contínua (onde 0.5 se torna 0.0 no espaço bipolar) e reconstrói o perfil completo.
 
 # %%
-print('=== Imputação cross-dataset: Mathys (Sentinela Neutra 0.5) ===')
+print("=== Imputação cross-dataset: Mathys (Sentinela Neutra 0.5) ===")
 
 # Se rede35 ou metadados não estiverem em memória (ex: reinício de kernel), carrega do checkpoint
-if 'rede35' not in globals() or 'perf35' not in globals() or 'meta_eval' not in globals():
-    PATH_PT   = os.path.join(OUT_HOPFIELD, 'rede35.pt')
-    PATH_META = os.path.join(OUT_HOPFIELD, 'rede35.json')
+if (
+    "rede35" not in globals()
+    or "perf35" not in globals()
+    or "meta_eval" not in globals()
+):
+    PATH_PT = os.path.join(OUT_HOPFIELD, "rede35.pt")
+    PATH_META = os.path.join(OUT_HOPFIELD, "rede35.json")
     if os.path.exists(PATH_PT) and os.path.exists(PATH_META):
         print(f"Carregando checkpoint de rede35 salvo em {PATH_PT}...")
-        rede35, meta_eval, meta_json = ModernHopfieldNetwork.carregar_com_metadados(PATH_PT, PATH_META)
+        rede35, meta_eval, meta_json = ModernHopfieldNetwork.carregar_com_metadados(
+            PATH_PT, PATH_META
+        )
         assert rede35.patterns is not None
         perf35 = ((rede35.patterns.cpu().numpy() + 1.0) / 2.0).astype(np.float32)
     else:
-        raise RuntimeError("A variável 'rede35' não está definida e o checkpoint em outputs/hopfield/ não foi encontrado. Execute as células de treino anteriores.")
+        raise RuntimeError(
+            "A variável 'rede35' não está definida e o checkpoint em outputs/hopfield/ não foi encontrado. Execute as células de treino anteriores."
+        )
 
 assert perf35 is not None
 
 # 1. Identificação dos genes ausentes no Mathys
-if 'alinhador' in globals() and hasattr(alinhador, 'obter_mascara_ausentes'):
+if "alinhador" in globals() and hasattr(alinhador, "obter_mascara_ausentes"):
     mask_ausentes = alinhador.obter_mascara_ausentes()
-elif adata_m is not None and 'presente_no_dataset' in adata_m.var:
-    mask_ausentes = ~adata_m.var['presente_no_dataset'].to_numpy()
+elif adata_m is not None and "presente_no_dataset" in adata_m.var:
+    mask_ausentes = ~adata_m.var["presente_no_dataset"].to_numpy()
 else:
-    path_track = os.path.join(OUT_ALINHAMENTO, 'tracking_genes_adicionados_mathys.csv')
+    path_track = os.path.join(OUT_ALINHAMENTO, "tracking_genes_adicionados_mathys.csv")
     if os.path.exists(path_track):
         df_tr = pd.read_csv(path_track)
         mask_ausentes = np.zeros(W_mathys.shape[1], dtype=bool)
-        mask_ausentes[df_tr['posicao_coluna'].to_numpy()] = True
+        mask_ausentes[df_tr["posicao_coluna"].to_numpy()] = True
     else:
         mask_ausentes = np.zeros(W_mathys.shape[1], dtype=bool)
 
 n_genes_ausentes = np.sum(mask_ausentes)
-print(f"Total de genes ausentes no Mathys (Sentinela 0.5): {n_genes_ausentes:,} de {len(mask_ausentes):,} genes canônicos.")
+print(
+    f"Total de genes ausentes no Mathys (Sentinela 0.5): {n_genes_ausentes:,} de {len(mask_ausentes):,} genes canônicos."
+)
 
 # 2. Recuperação na rede Hopfield com injeção de 0.5 nos genes ausentes (Lotes OOM-Safe)
-print("\nRecuperando padrões na Modern Hopfield Network (batch_size=2048, sentinela=0.5)...")
+print(
+    "\nRecuperando padrões na Modern Hopfield Network (batch_size=2048, sentinela=0.5)..."
+)
 Wrecuperado_m = rede35.retrieve(
     queries=W_mathys,
     batch_size=2048,
     mask_sentinela_ausentes=mask_ausentes,
-    fill_value=0.5
+    fill_value=0.5,
 )
 print(f"Recuperação concluída! Matriz reconstruída: {Wrecuperado_m.shape}")
 
@@ -540,23 +611,28 @@ if n_genes_ausentes > 0:
     genes_imputados_ativos = np.sum(W_mathys_imputado[:, mask_ausentes] == 1.0)
     genes_imputados_inativos = np.sum(W_mathys_imputado[:, mask_ausentes] == 0.0)
     total_posicoes_imputadas = W_mathys_imputado.shape[0] * n_genes_ausentes
-    print(f"\n--- Estatísticas da Imputação (6.289 genes ausentes) ---")
-    print(f"  Posições ativadas (1.0): {genes_imputados_ativos:,} ({genes_imputados_ativos / total_posicoes_imputadas * 100:.2f}%)")
-    print(f"  Posições inativadas (0.0): {genes_imputados_inativos:,} ({genes_imputados_inativos / total_posicoes_imputadas * 100:.2f}%)")
+    print("\n--- Estatísticas da Imputação (6.289 genes ausentes) ---")
+    print(
+        f"  Posições ativadas (1.0): {genes_imputados_ativos:,} ({genes_imputados_ativos / total_posicoes_imputadas * 100:.2f}%)"
+    )
+    print(
+        f"  Posições inativadas (0.0): {genes_imputados_inativos:,} ({genes_imputados_inativos / total_posicoes_imputadas * 100:.2f}%)"
+    )
 
 # 4. Exportação dos resultados
 os.makedirs(OUT_TOP_GENES, exist_ok=True)
-PATH_IMPUTADO = os.path.join(OUT_TOP_GENES, 'X_mathys_IMPUTADO_rede35.npy')
+PATH_IMPUTADO = os.path.join(OUT_TOP_GENES, "X_mathys_IMPUTADO_rede35.npy")
 np.save(PATH_IMPUTADO, W_mathys_imputado)
 print(f"\nMatriz Mathys Imputada Exportada para: {PATH_IMPUTADO}")
 
 # 5. Avaliação do Tipo Celular Cross-Dataset
 avaliador_m = AvaliadorHopfield(
-    padroes = perf35,
-    classes = [1, 2, 3, 4, 5, 6, 7],
-    nc      = 30,
-    meta    = meta_eval,
+    padroes=perf35,
+    classes=[1, 2, 3, 4, 5, 6, 7],
+    nc=30,
+    meta=meta_eval,
 )
-avaliador_m.avaliar(Wrecuperado_m, clo_alvo).plotar(titulo='Confusão — rede35 (Mathys → Fujita, Sentinela 0.5)')
+avaliador_m.avaliar(Wrecuperado_m, clo_alvo).plotar(
+    titulo="Confusão — rede35 (Mathys → Fujita, Sentinela 0.5)"
+)
 print(avaliador_m)
-

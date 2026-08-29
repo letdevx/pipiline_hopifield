@@ -7,19 +7,19 @@ utilizando decomposição QR ou pontes de integração externa via Rscript.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import subprocess
-from typing import Any, Sequence, Union
+from collections.abc import Sequence
+from typing import Any
 
 import anndata as ad
 import numpy as np
-from numpy.typing import NDArray
 import pandas as pd
 import scipy.sparse as sp
+from numpy.typing import NDArray
 
 from .hopfield_utils import princomp_
 
-PathType = Union[str, os.PathLike[str]]
+PathType = str | os.PathLike[str]
 
 
 class ProjetorSWeP:
@@ -56,7 +56,9 @@ class ProjetorSWeP:
         Scores das componentes principais (células × n_componentes).
     """
 
-    def __init__(self, n_features: int, n_componentes: int = 600, seed: int = 42) -> None:
+    def __init__(
+        self, n_features: int, n_componentes: int = 600, seed: int = 42
+    ) -> None:
         self.n_features: int = int(n_features)
         self.n_componentes: int = int(n_componentes)
         self.seed: int = int(seed)
@@ -73,12 +75,16 @@ class ProjetorSWeP:
         ProjetorSWeP
             A própria instância com o atributo R preenchido.
         """
-        print(f"[ProjetorSWeP] Gerando base sintética QR "
-              f"({self.n_features} × {self.n_componentes}, seed={self.seed})...")
+        print(
+            f"[ProjetorSWeP] Gerando base sintética QR "
+            f"({self.n_features} × {self.n_componentes}, seed={self.seed})..."
+        )
         rng = np.random.default_rng(self.seed)
         Q, _ = np.linalg.qr(rng.standard_normal((self.n_features, self.n_componentes)))
         self.R = Q.astype(np.float32)
-        erro: float = float(np.abs(self.R.T @ self.R - np.eye(self.n_componentes)).max())
+        erro: float = float(
+            np.abs(self.R.T @ self.R - np.eye(self.n_componentes)).max()
+        )
         print(f"[ProjetorSWeP] Base gerada. Erro de ortogonalidade: {erro:.2e}")
         return self
 
@@ -104,7 +110,7 @@ class ProjetorSWeP:
         print(f"[ProjetorSWeP] Base carregada: {self.R.shape}")
         return self
 
-    def projetar(self, W: Union[NDArray[Any], sp.spmatrix]) -> ProjetorSWeP:
+    def projetar(self, W: NDArray[Any] | sp.spmatrix) -> ProjetorSWeP:
         """Projeta matriz W no espaço SWeeP: Wswp = W @ R.
 
         Parameters
@@ -118,7 +124,9 @@ class ProjetorSWeP:
             A própria instância com `Wswp` preenchido.
         """
         if self.R is None:
-            raise RuntimeError("[ProjetorSWeP] Execute .gerar_base() ou .carregar_base() primeiro.")
+            raise RuntimeError(
+                "[ProjetorSWeP] Execute .gerar_base() ou .carregar_base() primeiro."
+            )
         print(f"[ProjetorSWeP] Projetando W {W.shape} → SWeeP...")
         if sp.issparse(W):
             self.Wswp = sp.csr_matrix(W).dot(self.R).astype(np.float32, copy=False)
@@ -127,7 +135,9 @@ class ProjetorSWeP:
         print(f"[ProjetorSWeP] Wswp shape: {self.Wswp.shape}")
         return self
 
-    def usar_sweep_precomputado(self, Wswp: Union[NDArray[Any], Sequence[Sequence[float]]]) -> ProjetorSWeP:
+    def usar_sweep_precomputado(
+        self, Wswp: NDArray[Any] | Sequence[Sequence[float]]
+    ) -> ProjetorSWeP:
         """Configura projeções SWeeP já calculadas externamente.
 
         Parameters
@@ -153,7 +163,9 @@ class ProjetorSWeP:
             A própria instância com `componentes` e `Wpc` calculados.
         """
         if self.Wswp is None:
-            raise RuntimeError("[ProjetorSWeP] Execute .projetar() ou .usar_sweep_precomputado() primeiro.")
+            raise RuntimeError(
+                "[ProjetorSWeP] Execute .projetar() ou .usar_sweep_precomputado() primeiro."
+            )
         print("[ProjetorSWeP] Aplicando PCA sem centralização...")
         self.componentes = princomp_(self.Wswp)
         self.Wpc = self.Wswp @ self.componentes
@@ -239,8 +251,12 @@ class ProjetorSWeePR:
             return self
 
         if self.path_matriz.endswith(".npy") or self.path_matriz.endswith(".h5ad"):
-            print(f"[ProjetorSWeePR] Matriz binária (.npy/.h5ad) detectada: {self.path_matriz}")
-            print("[ProjetorSWeePR] Executando rSWeeP via motor nativo Python/NumPy QR (otimização OOM sem parser de texto)...")
+            print(
+                f"[ProjetorSWeePR] Matriz binária (.npy/.h5ad) detectada: {self.path_matriz}"
+            )
+            print(
+                "[ProjetorSWeePR] Executando rSWeeP via motor nativo Python/NumPy QR (otimização OOM sem parser de texto)..."
+            )
             self._fallback_python()
             return self
 
@@ -271,9 +287,11 @@ class ProjetorSWeePR:
 
     def _fallback_python(self) -> None:
         """Fallback: projeção via base ortogonal QR gerada em Python (100% OOM-Safe)."""
-        print(f"[ProjetorSWeePR] Carregando matriz no motor Python/NumPy: {self.path_matriz}")
+        print(
+            f"[ProjetorSWeePR] Carregando matriz no motor Python/NumPy: {self.path_matriz}"
+        )
 
-        W: Union[NDArray[Any], sp.spmatrix]
+        W: NDArray[Any] | sp.spmatrix
         n_features: int
         if self.path_matriz.endswith(".npy"):
             W = np.load(self.path_matriz, mmap_mode="r")
@@ -287,7 +305,9 @@ class ProjetorSWeePR:
             W = pd.read_csv(self.path_matriz, index_col=0).to_numpy(dtype=np.float32)
             n_features = int(W.shape[1])
 
-        print(f"[ProjetorSWeePR] Matriz {W.shape} → projetando para {self.n_componentes} componentes (QR)...")
+        print(
+            f"[ProjetorSWeePR] Matriz {W.shape} → projetando para {self.n_componentes} componentes (QR)..."
+        )
         rng = np.random.default_rng(self.seed)
         Q, _ = np.linalg.qr(rng.standard_normal((n_features, self.n_componentes)))
         R: NDArray[np.float32] = Q.astype(np.float32)
@@ -300,7 +320,9 @@ class ProjetorSWeePR:
 
         os.makedirs(os.path.dirname(os.path.abspath(self.path_saida)), exist_ok=True)
         pd.DataFrame(proj).to_csv(self.path_saida, index=False)
-        print(f"[ProjetorSWeePR] Projeção SWeeP salva com sucesso em: {self.path_saida}")
+        print(
+            f"[ProjetorSWeePR] Projeção SWeeP salva com sucesso em: {self.path_saida}"
+        )
         self._carregar()
 
     def _carregar(self) -> None:
@@ -324,4 +346,3 @@ class ProjetorSWeePR:
 
 # Alias para tolerância a grafias com 1 ou 2 'e's
 ProjetorSWePR = ProjetorSWeePR
-

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
-from typing import Mapping, Union
+from collections.abc import Mapping
 
 import polars as pl
 
-PathType = Union[str, os.PathLike[str]]
+PathType = str | os.PathLike[str]
 
 
 class AnalisadorCobertura:
@@ -65,29 +64,31 @@ class AnalisadorCobertura:
         ids_m_list: list[str] = list(self.map_m.values())  # Ensembl IDs do Mathys
 
         # top_n['gene'] já contém Ensembl IDs (nomes de coluna do TXT alinhado)
-        df: pl.DataFrame = (
-            top_n
-            .with_columns([
-                pl.col("gene")
-                    .is_in(ids_m_list)
-                    .alias("presente_mathys"),
+        df: pl.DataFrame = top_n.with_columns(
+            [
+                pl.col("gene").is_in(ids_m_list).alias("presente_mathys"),
                 pl.lit(False).alias("sem_ensembl_fujita"),
-            ])
-            .rename({"gene": "ensembl_id"})
-        )
+            ]
+        ).rename({"gene": "ensembl_id"})
 
         total: int = df.height
         presentes: int = int(df["presente_mathys"].sum() or 0)
         sem_ensembl: int = int(df["sem_ensembl_fujita"].sum() or 0)
         ausentes: int = total - presentes - sem_ensembl
 
-        print(f"\n{'='*50}")
+        print(f"\n{'=' * 50}")
         print(f"  Top {total} genes frequentes do Fujita")
-        print(f"{'='*50}")
-        print(f"  Presentes no Mathys       : {presentes:>5}  ({presentes/total*100:.1f}%)")
-        print(f"  Ausentes no Mathys (zeros): {ausentes:>5}  ({ausentes/total*100:.1f}%)")
-        print(f"  Sem Ensembl ID no Fujita  : {sem_ensembl:>5}  ({sem_ensembl/total*100:.1f}%)")
-        print(f"{'='*50}")
+        print(f"{'=' * 50}")
+        print(
+            f"  Presentes no Mathys       : {presentes:>5}  ({presentes / total * 100:.1f}%)"
+        )
+        print(
+            f"  Ausentes no Mathys (zeros): {ausentes:>5}  ({ausentes / total * 100:.1f}%)"
+        )
+        print(
+            f"  Sem Ensembl ID no Fujita  : {sem_ensembl:>5}  ({sem_ensembl / total * 100:.1f}%)"
+        )
+        print(f"{'=' * 50}")
 
         os.makedirs(os.path.dirname(os.path.abspath(out_csv_str)), exist_ok=True)
         df.write_csv(out_csv_str)
@@ -96,8 +97,4 @@ class AnalisadorCobertura:
 
     def __repr__(self) -> str:
         """Representação textual do analisador de cobertura."""
-        return (
-            f"AnalisadorCobertura(\n"
-            f"  path_top_n = {self.path_top_n}\n"
-            f")"
-        )
+        return f"AnalisadorCobertura(\n  path_top_n = {self.path_top_n}\n)"

@@ -8,17 +8,16 @@ from __future__ import annotations
 
 import gc
 import os
-from pathlib import Path
-from typing import Mapping, Sequence, Set, Union
+from collections.abc import Mapping, Sequence
 
 import anndata as ad
 import numpy as np
-from numpy.typing import NDArray
 import pandas as pd
 import polars as pl
 import scipy.sparse as sp
+from numpy.typing import NDArray
 
-PathType = Union[str, os.PathLike[str]]
+PathType = str | os.PathLike[str]
 
 
 class Alinhador:
@@ -106,7 +105,9 @@ class Alinhador:
             adataf: ad.AnnData = ad.read_h5ad(self.path_binarizada_f)
             print(f"  shape original: {adataf.shape}")
             print("[Alinhador] Alinhando Fujita (fill=0.0)...")
-            adataf_alinhado: ad.AnnData = self._alinhar_direto(adataf, self.map_f, fill_value=0.0)
+            adataf_alinhado: ad.AnnData = self._alinhar_direto(
+                adataf, self.map_f, fill_value=0.0
+            )
             del adataf
             gc.collect()
             os.makedirs(pasta_f, exist_ok=True)
@@ -123,7 +124,9 @@ class Alinhador:
             adatam: ad.AnnData = ad.read_h5ad(self.path_binarizada_m)
             print(f"  shape original: {adatam.shape}")
             print("[Alinhador] Alinhando Mathys (genes ausentes → 0.5)...")
-            adatam_alinhado: ad.AnnData = self._alinhar_direto(adatam, self.map_m, fill_value=0.5)
+            adatam_alinhado: ad.AnnData = self._alinhar_direto(
+                adatam, self.map_m, fill_value=0.5
+            )
             del adatam
             gc.collect()
             os.makedirs(pasta_m, exist_ok=True)
@@ -148,7 +151,7 @@ class Alinhador:
 
         old_idx: list[int] = []
         new_idx: list[int] = []
-        present_new_cols: Set[int] = set()
+        present_new_cols: set[int] = set()
         for old_i, gene_name in enumerate(adata.var_names):
             eid: str = ensembl_map.get(gene_name, gene_name)
             if eid in self.gene_alvo_idx:
@@ -159,7 +162,9 @@ class Alinhador:
 
         # Matriz de projeção P (old_vars -> new_genes)
         P_data: NDArray[np.float32] = np.ones(len(old_idx), dtype=np.float32)
-        P: sp.csr_matrix = sp.csr_matrix((P_data, (old_idx, new_idx)), shape=(adata.n_vars, n_genes))
+        P: sp.csr_matrix = sp.csr_matrix(
+            (P_data, (old_idx, new_idx)), shape=(adata.n_vars, n_genes)
+        )
 
         print("  Multiplicando matrizes (projeção)...")
         # Multiplicação é extremamente rápida e consome pouca memória
@@ -179,7 +184,9 @@ class Alinhador:
                 sorted(set(range(n_genes)) - present_new_cols), dtype=np.int32
             )
             if len(missing_cols) > 0:
-                print(f"  Preenchendo {len(missing_cols)} colunas ausentes com {fill_value}...")
+                print(
+                    f"  Preenchendo {len(missing_cols)} colunas ausentes com {fill_value}..."
+                )
                 print("  Mesclando colunas ausentes (otimizado para baixa memória)...")
                 n_miss: int = len(missing_cols)
                 n_novo: int = X_novo.nnz
@@ -187,7 +194,9 @@ class Alinhador:
 
                 final_indices: NDArray[np.int32] = np.empty(n_total, dtype=np.int32)
                 final_data: NDArray[np.float32] = np.empty(n_total, dtype=np.float32)
-                final_indptr: NDArray[np.int64] = np.empty(n_celulas + 1, dtype=np.int64)
+                final_indptr: NDArray[np.int64] = np.empty(
+                    n_celulas + 1, dtype=np.int64
+                )
                 final_indptr[0] = 0
 
                 novo_indptr: NDArray[np.int32] = X_novo.indptr
@@ -195,7 +204,9 @@ class Alinhador:
                 novo_data: NDArray[np.float32] = X_novo.data
 
                 idx_ptr: int = 0
-                fill_dat_arr: NDArray[np.float32] = np.full(n_miss, fill_value, dtype=np.float32)
+                fill_dat_arr: NDArray[np.float32] = np.full(
+                    n_miss, fill_value, dtype=np.float32
+                )
 
                 for i in range(n_celulas):
                     start: int = int(novo_indptr[i])
@@ -222,13 +233,18 @@ class Alinhador:
                     idx_ptr = end_ptr
                     final_indptr[i + 1] = idx_ptr
 
-                X_novo = sp.csr_matrix((final_data, final_indices, final_indptr), shape=(n_celulas, n_genes))
+                X_novo = sp.csr_matrix(
+                    (final_data, final_indices, final_indptr),
+                    shape=(n_celulas, n_genes),
+                )
                 del final_data, final_indices, final_indptr
                 gc.collect()
                 print("  Preenchimento concluído.")
 
         # AnnData exige pd.DataFrame para .var
-        var_novo: pd.DataFrame = pd.DataFrame(index=pd.Index(self.genes_ordenados, name="ensembl_id"))
+        var_novo: pd.DataFrame = pd.DataFrame(
+            index=pd.Index(self.genes_ordenados, name="ensembl_id")
+        )
         assert isinstance(adata.obs, pd.DataFrame)
         obs_df: pd.DataFrame = adata.obs.copy()
         return ad.AnnData(X=X_novo, obs=obs_df, var=var_novo)
@@ -266,7 +282,9 @@ class Alinhador:
             gene_names: list[str] = list(adata.var_names)
             total: int = 0
 
-            with open(path_tmp, "w", buffering=128 * 1024 * 1024, encoding="utf-8") as fout:
+            with open(
+                path_tmp, "w", buffering=128 * 1024 * 1024, encoding="utf-8"
+            ) as fout:
                 fout.write(",".join(gene_names) + "\n")
                 for start in range(0, n_celulas, chunk):
                     end: int = min(start + chunk, n_celulas)
@@ -275,7 +293,11 @@ class Alinhador:
                         X_arr = sp.csr_matrix(X_slice).toarray().astype(np.float32)
                     else:
                         X_arr = np.asarray(X_slice, dtype=np.float32)
-                    fout.write(pl.from_numpy(np.asfortranarray(X_arr)).write_csv(include_header=False))
+                    fout.write(
+                        pl.from_numpy(np.asfortranarray(X_arr)).write_csv(
+                            include_header=False
+                        )
+                    )
                     total += end - start
                     if total % (chunk * 5) == 0:
                         print(f"  {total} células processadas...")
@@ -283,10 +305,14 @@ class Alinhador:
             if hasattr(adata, "file") and adata.file is not None:
                 adata.file.close()
             os.rename(path_tmp, path_txt)
-            print(f"  Salvo: {path_txt}  ({total} células x {len(gene_names)} genes)  [Ok]")
+            print(
+                f"  Salvo: {path_txt}  ({total} células x {len(gene_names)} genes)  [Ok]"
+            )
         return self
 
-    def gerar_tracking(self, ids_so_f: Set[str], map_f: Mapping[str, str]) -> pl.DataFrame:
+    def gerar_tracking(
+        self, ids_so_f: set[str], map_f: Mapping[str, str]
+    ) -> pl.DataFrame:
         """Gera a tabela de rastreamento de genes adicionados artificialmente ao alvo.
 
         Parameters
@@ -303,26 +329,32 @@ class Alinhador:
         """
         if self.path_m_alinhado is None:
             raise RuntimeError("Execute .alinhar() antes de gerar o tracking.")
-        out_tracking: str = os.path.join(self.out_dir, "tracking_genes_adicionados_mathys.csv")
+        out_tracking: str = os.path.join(
+            self.out_dir, "tracking_genes_adicionados_mathys.csv"
+        )
         if os.path.exists(out_tracking):
             print(f"[Alinhador] Tracking já existe, pulando: {out_tracking}")
             return pl.read_csv(out_tracking)
         inv_map_f: dict[str, str] = {v: k for k, v in map_f.items()}
-        tracking_rows: list[dict[str, Union[str, int, float, bool]]] = []
+        tracking_rows: list[dict[str, str | int | float | bool]] = []
         for eid in sorted(ids_so_f):
             if eid in self.gene_alvo_idx:
-                tracking_rows.append({
-                    "gene_name": inv_map_f.get(eid, eid),
-                    "ensembl_id": eid,
-                    "posicao_coluna": self.gene_alvo_idx[eid],
-                    "valor_inserido": 0.5,
-                    "presente_fujita": True,
-                    "presente_mathys": False,
-                })
+                tracking_rows.append(
+                    {
+                        "gene_name": inv_map_f.get(eid, eid),
+                        "ensembl_id": eid,
+                        "posicao_coluna": self.gene_alvo_idx[eid],
+                        "valor_inserido": 0.5,
+                        "presente_fujita": True,
+                        "presente_mathys": False,
+                    }
+                )
         df_tracking: pl.DataFrame = pl.DataFrame(tracking_rows).sort("posicao_coluna")
         os.makedirs(os.path.dirname(os.path.abspath(out_tracking)), exist_ok=True)
         df_tracking.write_csv(out_tracking)
-        print(f"[Alinhador] Tracking salvo em: {out_tracking} ({len(df_tracking)} genes)")
+        print(
+            f"[Alinhador] Tracking salvo em: {out_tracking} ({len(df_tracking)} genes)"
+        )
         return df_tracking
 
     def __repr__(self) -> str:

@@ -7,17 +7,18 @@ para conversão entre símbolos de genes (Gene Symbols) e identificadores Ensemb
 from __future__ import annotations
 
 import os
-from pathlib import Path
-from typing import Union
 
 import polars as pl
 
 try:
-    from src.config import PATH_FEATURES_REFERENCIA, PATH_FEATURES_ALVO
+    from src.config import PATH_FEATURES_ALVO, PATH_FEATURES_REFERENCIA
 except ImportError:
-    from config import PATH_FEATURES_REFERENCIA, PATH_FEATURES_ALVO  # type: ignore[import-not-found]
+    from config import (  # type: ignore[import-not-found]
+        PATH_FEATURES_ALVO,
+        PATH_FEATURES_REFERENCIA,
+    )
 
-PathType = Union[str, os.PathLike[str]]
+PathType = str | os.PathLike[str]
 
 
 class LeitorFeatures:
@@ -108,7 +109,9 @@ class LeitorFeatures:
         """
         self.map_referencia = self._ler_features(self.path_features_referencia)
         self.map_alvo = self._ler_features(self.path_features_alvo)
-        print(f"[LeitorFeatures] Referência : {len(self.map_referencia)} genes mapeados")
+        print(
+            f"[LeitorFeatures] Referência : {len(self.map_referencia)} genes mapeados"
+        )
         print(f"[LeitorFeatures] Alvo       : {len(self.map_alvo)} genes mapeados")
         return self
 
@@ -122,18 +125,28 @@ class LeitorFeatures:
                 new_columns=["ensembl_id", "gene_name"],
                 columns=[0, 1],
             )
-            .with_columns([
-                pl.col("ensembl_id").cast(pl.Utf8).str.strip_chars(),
-                pl.col("gene_name").cast(pl.Utf8).str.strip_chars(),
-            ])
+            .with_columns(
+                [
+                    pl.col("ensembl_id").cast(pl.Utf8).str.strip_chars(),
+                    pl.col("gene_name").cast(pl.Utf8).str.strip_chars(),
+                ]
+            )
             .unique(subset=["gene_name"], keep="first")
         )
-        return dict(zip(df["gene_name"].to_list(), df["ensembl_id"].to_list()))
+        return dict(
+            zip(df["gene_name"].to_list(), df["ensembl_id"].to_list(), strict=False)
+        )
 
     def __repr__(self) -> str:
         """Representação textual do leitor de features."""
-        n_ref: str = str(len(self.map_referencia)) if self.map_referencia is not None else "não carregado"
-        n_alvo: str = str(len(self.map_alvo)) if self.map_alvo is not None else "não carregado"
+        n_ref: str = (
+            str(len(self.map_referencia))
+            if self.map_referencia is not None
+            else "não carregado"
+        )
+        n_alvo: str = (
+            str(len(self.map_alvo)) if self.map_alvo is not None else "não carregado"
+        )
         return (
             f"LeitorFeatures(\n"
             f"  path_features_referencia = {self.path_features_referencia}\n"
@@ -142,4 +155,3 @@ class LeitorFeatures:
             f"  map_alvo                 = {n_alvo} genes\n"
             f")"
         )
-

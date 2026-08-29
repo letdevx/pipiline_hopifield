@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import gc
 import os
-from pathlib import Path
-from typing import Any, Mapping, Sequence, Set, Union
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 import anndata as ad
 import numpy as np
-from numpy.typing import NDArray
 import pandas as pd
 import polars as pl
 import scipy.sparse as sp
+from numpy.typing import NDArray
 
-PathType = Union[str, os.PathLike[str]]
+PathType = str | os.PathLike[str]
 
 
 class AlinhadorEsparso:
@@ -97,12 +97,11 @@ class AlinhadorEsparso:
         dataset_name: str = "Dataset",
     ) -> ad.AnnData:
         """Projeta matriz AnnData para o espaço canônico de genes_ordenados usando projeção CSR."""
-        n_celulas: int = adata.n_obs
         n_genes_alvo: int = len(self.genes_ordenados)
 
         old_idx: list[int] = []
         new_idx: list[int] = []
-        present_new_cols: Set[int] = set()
+        present_new_cols: set[int] = set()
 
         for old_i, gene_name in enumerate(adata.var_names):
             eid: str = ensembl_map.get(gene_name, gene_name)
@@ -112,12 +111,16 @@ class AlinhadorEsparso:
                 new_idx.append(new_col)
                 present_new_cols.add(new_col)
 
-        print(f"[{dataset_name}] {len(old_idx)} genes mapeados para o espaço canônico ({n_genes_alvo} genes totais).")
+        print(
+            f"[{dataset_name}] {len(old_idx)} genes mapeados para o espaço canônico ({n_genes_alvo} genes totais)."
+        )
 
         # Matriz de projeção P (n_vars_original -> n_genes_alvo)
         P_data: NDArray[np.float32] = np.ones(len(old_idx), dtype=np.float32)
         P: sp.csr_matrix = sp.csr_matrix(
-            (P_data, (old_idx, new_idx)), shape=(adata.n_vars, n_genes_alvo), dtype=np.float32
+            (P_data, (old_idx, new_idx)),
+            shape=(adata.n_vars, n_genes_alvo),
+            dtype=np.float32,
         )
 
         print(f"[{dataset_name}] Projetando matriz esparsa...")
@@ -168,44 +171,58 @@ class AlinhadorEsparso:
 
         # 1. Alinhamento Fujita (Referência)
         if os.path.exists(self.path_f_alinhado) and not forcar:
-            print(f"[AlinhadorEsparso] Fujita já alinhado, pulando: {self.path_f_alinhado}")
+            print(
+                f"[AlinhadorEsparso] Fujita já alinhado, pulando: {self.path_f_alinhado}"
+            )
         else:
             print("[AlinhadorEsparso] Carregando Fujita binarizado...")
             adataf: ad.AnnData = ad.read_h5ad(self.path_binarizada_f)
             print(f"  Shape original Fujita: {adataf.shape}")
-            adataf_alinhado: ad.AnnData = self._projetar_esparso(adataf, self.map_f, dataset_name="Fujita")
+            adataf_alinhado: ad.AnnData = self._projetar_esparso(
+                adataf, self.map_f, dataset_name="Fujita"
+            )
             del adataf
             gc.collect()
 
             os.makedirs(pasta_f, exist_ok=True)
             print("  Salvando Fujita alinhado (.h5ad CSR)...")
             adataf_alinhado.write_h5ad(self.path_f_alinhado, compression="gzip")
-            print(f"  Salvo em {self.path_f_alinhado} (shape: {adataf_alinhado.shape})  [OK]\n")
+            print(
+                f"  Salvo em {self.path_f_alinhado} (shape: {adataf_alinhado.shape})  [OK]\n"
+            )
             del adataf_alinhado
             gc.collect()
 
         # 2. Alinhamento Mathys (Alvo)
         if os.path.exists(self.path_m_alinhado) and not forcar:
-            print(f"[AlinhadorEsparso] Mathys já alinhado, pulando: {self.path_m_alinhado}")
+            print(
+                f"[AlinhadorEsparso] Mathys já alinhado, pulando: {self.path_m_alinhado}"
+            )
         else:
             print("[AlinhadorEsparso] Carregando Mathys binarizado...")
             adatam: ad.AnnData = ad.read_h5ad(self.path_binarizada_m)
             print(f"  Shape original Mathys: {adatam.shape}")
-            adatam_alinhado: ad.AnnData = self._projetar_esparso(adatam, self.map_m, dataset_name="Mathys")
+            adatam_alinhado: ad.AnnData = self._projetar_esparso(
+                adatam, self.map_m, dataset_name="Mathys"
+            )
             del adatam
             gc.collect()
 
             os.makedirs(pasta_m, exist_ok=True)
             print("  Salvando Mathys alinhado (.h5ad CSR)...")
             adatam_alinhado.write_h5ad(self.path_m_alinhado, compression="gzip")
-            print(f"  Salvo em {self.path_m_alinhado} (shape: {adatam_alinhado.shape})  [OK]\n")
+            print(
+                f"  Salvo em {self.path_m_alinhado} (shape: {adatam_alinhado.shape})  [OK]\n"
+            )
             del adatam_alinhado
             gc.collect()
 
         print("[AlinhadorEsparso] Alinhamento genômico canônico concluído com sucesso.")
         return self
 
-    def gerar_tracking(self, ids_so_f: Set[str], map_f: Mapping[str, str]) -> pl.DataFrame:
+    def gerar_tracking(
+        self, ids_so_f: set[str], map_f: Mapping[str, str]
+    ) -> pl.DataFrame:
         """Gera relatório de genes exclusivos do Fujita (ausentes no Mathys).
 
         Parameters
@@ -223,25 +240,31 @@ class AlinhadorEsparso:
         if self.path_m_alinhado is None:
             raise RuntimeError("Execute .alinhar() antes de gerar o tracking.")
 
-        out_tracking: str = os.path.join(self.out_dir, "tracking_genes_adicionados_mathys.csv")
+        out_tracking: str = os.path.join(
+            self.out_dir, "tracking_genes_adicionados_mathys.csv"
+        )
         if os.path.exists(out_tracking):
             print(f"[AlinhadorEsparso] Tracking já existe, pulando: {out_tracking}")
             return pl.read_csv(out_tracking)
 
         inv_map_f: dict[str, str] = {v: k for k, v in map_f.items()}
-        tracking_rows: list[dict[str, Union[str, int, float, bool]]] = []
+        tracking_rows: list[dict[str, str | int | float | bool]] = []
         for eid in sorted(ids_so_f):
             gene_name: str = inv_map_f.get(eid, eid)
-            col_idx: int | None = self.gene_alvo_idx.get(eid, self.gene_alvo_idx.get(gene_name, None))
+            col_idx: int | None = self.gene_alvo_idx.get(
+                eid, self.gene_alvo_idx.get(gene_name, None)
+            )
             if col_idx is not None:
-                tracking_rows.append({
-                    "gene_name": gene_name,
-                    "ensembl_id": eid,
-                    "posicao_coluna": int(col_idx),
-                    "valor_inserido": 0.5,
-                    "presente_fujita": True,
-                    "presente_mathys": False,
-                })
+                tracking_rows.append(
+                    {
+                        "gene_name": gene_name,
+                        "ensembl_id": eid,
+                        "posicao_coluna": int(col_idx),
+                        "valor_inserido": 0.5,
+                        "presente_fujita": True,
+                        "presente_mathys": False,
+                    }
+                )
 
         df_tracking: pl.DataFrame
         if not tracking_rows:
@@ -259,10 +282,14 @@ class AlinhadorEsparso:
 
         os.makedirs(os.path.dirname(os.path.abspath(out_tracking)), exist_ok=True)
         df_tracking.write_csv(out_tracking)
-        print(f"[AlinhadorEsparso] Tracking salvo em: {out_tracking} ({len(df_tracking)} genes)")
+        print(
+            f"[AlinhadorEsparso] Tracking salvo em: {out_tracking} ({len(df_tracking)} genes)"
+        )
         return df_tracking
 
-    def obter_mascara_ausentes(self, path_mathys: PathType | None = None) -> NDArray[np.bool_]:
+    def obter_mascara_ausentes(
+        self, path_mathys: PathType | None = None
+    ) -> NDArray[np.bool_]:
         """Retorna máscara booleana (True = gene ausente no Mathys) de forma eficiente sem carregar matriz X.
 
         Parameters
@@ -275,16 +302,22 @@ class AlinhadorEsparso:
         NDArray[np.bool_]
             Vetor booleano 1D indexado por gene.
         """
-        path_m: str = str(path_mathys) if path_mathys is not None else self.path_m_alinhado
+        path_m: str = (
+            str(path_mathys) if path_mathys is not None else self.path_m_alinhado
+        )
         if not os.path.exists(path_m):
-            raise FileNotFoundError(f"Arquivo alinhado do Mathys não encontrado: {path_m}")
+            raise FileNotFoundError(
+                f"Arquivo alinhado do Mathys não encontrado: {path_m}"
+            )
 
         adata: ad.AnnData = ad.read_h5ad(path_m, backed="r")
         mask: NDArray[np.bool_]
         if "presente_no_dataset" in adata.var:
             mask = ~adata.var["presente_no_dataset"].to_numpy().astype(bool)
         else:
-            out_tracking: str = os.path.join(self.out_dir, "tracking_genes_adicionados_mathys.csv")
+            out_tracking: str = os.path.join(
+                self.out_dir, "tracking_genes_adicionados_mathys.csv"
+            )
             if os.path.exists(out_tracking):
                 df_track: pl.DataFrame = pl.read_csv(out_tracking)
                 col_indices: NDArray[np.int_] = df_track["posicao_coluna"].to_numpy()
@@ -298,7 +331,7 @@ class AlinhadorEsparso:
 
     def extrair_subconjunto(
         self,
-        lista_genes_ou_csv: Union[Sequence[str], PathType],
+        lista_genes_ou_csv: Sequence[str] | PathType,
         out_dir: PathType | None = None,
         exportar_npy: bool = True,
         exportar_h5ad: bool = True,
@@ -352,8 +385,12 @@ class AlinhadorEsparso:
         print(f"  {n_encontrados} de {n_genes} genes localizados no espaço canônico.")
 
         # --- 1. Extração Fujita ---
-        path_f_npy: str = os.path.join(destino_dir, f"adataF_binarizado_alinhado_top{n_encontrados}.npy")
-        path_f_h5ad: str = os.path.join(destino_dir, f"adataF_binarizado_alinhado_top{n_encontrados}.h5ad")
+        path_f_npy: str = os.path.join(
+            destino_dir, f"adataF_binarizado_alinhado_top{n_encontrados}.npy"
+        )
+        path_f_h5ad: str = os.path.join(
+            destino_dir, f"adataF_binarizado_alinhado_top{n_encontrados}.h5ad"
+        )
 
         print(f"  Processando Fujita (Top {n_encontrados})...")
         adata_f: ad.AnnData = ad.read_h5ad(self.path_f_alinhado)
@@ -369,10 +406,14 @@ class AlinhadorEsparso:
             print(f"  Salvo Fujita .npy: {path_f_npy} ({X_f_dense.shape})")
 
         if exportar_h5ad:
-            var_f: pd.DataFrame = pd.DataFrame(index=pd.Index(genes_encontrados, name="ensembl_id"))
+            var_f: pd.DataFrame = pd.DataFrame(
+                index=pd.Index(genes_encontrados, name="ensembl_id")
+            )
             assert isinstance(adata_f.obs, pd.DataFrame)
             obs_f: pd.DataFrame = adata_f.obs.copy()
-            adata_f_sub: ad.AnnData = ad.AnnData(X=sp.csr_matrix(X_f_dense), obs=obs_f, var=var_f)
+            adata_f_sub: ad.AnnData = ad.AnnData(
+                X=sp.csr_matrix(X_f_dense), obs=obs_f, var=var_f
+            )
             adata_f_sub.write_h5ad(path_f_h5ad, compression="gzip")
             print(f"  Salvo Fujita .h5ad: {path_f_h5ad}")
 
@@ -380,12 +421,20 @@ class AlinhadorEsparso:
         gc.collect()
 
         # --- 2. Extração Mathys (com Sentinela 0.5) ---
-        path_m_npy: str = os.path.join(destino_dir, f"adataM_binarizado_alinhado_top{n_encontrados}.npy")
-        path_m_h5ad: str = os.path.join(destino_dir, f"adataM_binarizado_alinhado_top{n_encontrados}.h5ad")
+        path_m_npy: str = os.path.join(
+            destino_dir, f"adataM_binarizado_alinhado_top{n_encontrados}.npy"
+        )
+        path_m_h5ad: str = os.path.join(
+            destino_dir, f"adataM_binarizado_alinhado_top{n_encontrados}.h5ad"
+        )
 
-        print(f"  Processando Mathys (Top {n_encontrados} com sentinela={fill_value_mathys})...")
+        print(
+            f"  Processando Mathys (Top {n_encontrados} com sentinela={fill_value_mathys})..."
+        )
         adata_m: ad.AnnData = ad.read_h5ad(self.path_m_alinhado)
-        presente_mathys_all: NDArray[np.bool_] = adata_m.var["presente_no_dataset"].to_numpy().astype(bool)
+        presente_mathys_all: NDArray[np.bool_] = (
+            adata_m.var["presente_no_dataset"].to_numpy().astype(bool)
+        )
         presente_mathys_sub: NDArray[np.bool_] = presente_mathys_all[col_indices]
 
         X_m_sub = adata_m.X[:, col_indices]
@@ -399,7 +448,9 @@ class AlinhadorEsparso:
         ausentes_mask: NDArray[np.bool_] = ~presente_mathys_sub
         n_ausentes: int = int(np.sum(ausentes_mask))
         if n_ausentes > 0:
-            print(f"  Injetando sentinela {fill_value_mathys} em {n_ausentes} colunas ausentes no Mathys...")
+            print(
+                f"  Injetando sentinela {fill_value_mathys} em {n_ausentes} colunas ausentes no Mathys..."
+            )
             X_m_dense[:, ausentes_mask] = fill_value_mathys
 
         if exportar_npy:
@@ -413,7 +464,9 @@ class AlinhadorEsparso:
             )
             assert isinstance(adata_m.obs, pd.DataFrame)
             obs_m: pd.DataFrame = adata_m.obs.copy()
-            adata_m_sub: ad.AnnData = ad.AnnData(X=sp.csr_matrix(X_m_dense), obs=obs_m, var=var_m)
+            adata_m_sub: ad.AnnData = ad.AnnData(
+                X=sp.csr_matrix(X_m_dense), obs=obs_m, var=var_m
+            )
             adata_m_sub.write_h5ad(path_m_h5ad, compression="gzip")
             print(f"  Salvo Mathys .h5ad: {path_m_h5ad}")
 
@@ -429,8 +482,10 @@ class AlinhadorEsparso:
 
     def salvar_como_txt(self, chunk: int = 500) -> AlinhadorEsparso:
         """Método de retrocompatibilidade com aviso sobre descontinuação de TXT de 36k genes."""
-        print("[AlinhadorEsparso] AVISO: A geração de arquivos .txt com 36k colunas foi descontinuada "
-              "para evitar estouro de memória (>20GB). Use extrair_subconjunto() para exportar .npy / .h5ad.")
+        print(
+            "[AlinhadorEsparso] AVISO: A geração de arquivos .txt com 36k colunas foi descontinuada "
+            "para evitar estouro de memória (>20GB). Use extrair_subconjunto() para exportar .npy / .h5ad."
+        )
         return self
 
     def __repr__(self) -> str:

@@ -6,14 +6,15 @@ e rótulos verdadeiros de tipos celulares / estágios patológicos.
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence, Union
+from collections.abc import Sequence
+from typing import Any
 
 import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
 import numpy as np
-from numpy.typing import NDArray
 import pandas as pd
 import seaborn as sns
+from matplotlib.axes import Axes
+from numpy.typing import NDArray
 from sklearn.metrics import (
     classification_report,
     confusion_matrix,
@@ -77,7 +78,7 @@ class AvaliadorHopfield:
 
     def __init__(
         self,
-        padroes: Union[NDArray[Any], Sequence[Sequence[float]]],
+        padroes: NDArray[Any] | Sequence[Sequence[float]],
         classes: Sequence[int],
         nc: int = 10,
         nomes_classes: Sequence[str] | None = None,
@@ -87,7 +88,9 @@ class AvaliadorHopfield:
         self.padroes: NDArray[np.float32] = np.asarray(padroes, dtype=np.float32)
         self.classes: list[int] = list(classes)
         self.nc: int = int(nc)
-        self.nomes_classes: list[str] | None = list(nomes_classes) if nomes_classes is not None else None
+        self.nomes_classes: list[str] | None = (
+            list(nomes_classes) if nomes_classes is not None else None
+        )
         self.metrica: str = str(metrica).lower()
         self._pattern_classes: NDArray[np.int_] | None = (
             np.array([m[0] for m in meta], dtype=int) if meta is not None else None
@@ -104,8 +107,8 @@ class AvaliadorHopfield:
 
     def avaliar(
         self,
-        Wrecuperado: Union[NDArray[Any], Sequence[Sequence[float]]],
-        labels: Union[NDArray[Any], Sequence[int]],
+        Wrecuperado: NDArray[Any] | Sequence[Sequence[float]],
+        labels: NDArray[Any] | Sequence[int],
     ) -> AvaliadorHopfield:
         """Avalia a recuperação comparando com os rótulos verdadeiros.
 
@@ -125,11 +128,14 @@ class AvaliadorHopfield:
         labels_arr: NDArray[np.int_] = np.asarray(labels, dtype=int)
         W_arr: NDArray[np.float32] = np.asarray(Wrecuperado, dtype=np.float32)
 
-        print(f"[AvaliadorHopfield] Mapeando padrões recuperados para classes (métrica: {self.metrica}, lotes em float32)...", flush=True)
+        print(
+            f"[AvaliadorHopfield] Mapeando padrões recuperados para classes (métrica: {self.metrica}, lotes em float32)...",
+            flush=True,
+        )
         n_obs: int = int(W_arr.shape[0])
         n_genes: int = int(W_arr.shape[1])
         perf_f: NDArray[np.float32] = self.padroes.astype(np.float32, copy=False)
-        b2: NDArray[np.float32] = (perf_f ** 2).sum(axis=1, keepdims=True).T
+        b2: NDArray[np.float32] = (perf_f**2).sum(axis=1, keepdims=True).T
         perf_norms: NDArray[np.float32] = np.linalg.norm(perf_f, axis=1, keepdims=True)
         perf_norms[perf_norms == 0] = 1.0
         perf_f_norm: NDArray[np.float32] = perf_f / perf_norms
@@ -140,7 +146,9 @@ class AvaliadorHopfield:
 
         for start in range(0, n_obs, chunk_size):
             end: int = min(start + chunk_size, n_obs)
-            W_chunk_f: NDArray[np.float32] = np.asarray(W_arr[start:end], dtype=np.float32)
+            W_chunk_f: NDArray[np.float32] = np.asarray(
+                W_arr[start:end], dtype=np.float32
+            )
 
             idx_chunk: NDArray[np.intp]
             min_sq_dist: NDArray[np.float32]
@@ -152,14 +160,16 @@ class AvaliadorHopfield:
                 sim_matrix = w_norm @ perf_f_norm.T
                 idx_chunk = np.asarray(sim_matrix.argmax(axis=1), dtype=np.intp)
                 diff = W_chunk_f - perf_f[idx_chunk]
-                min_sq_dist = (diff ** 2).sum(axis=1)
+                min_sq_dist = (diff**2).sum(axis=1)
             else:
-                a2_chunk = (W_chunk_f ** 2).sum(axis=1, keepdims=True)
+                a2_chunk = (W_chunk_f**2).sum(axis=1, keepdims=True)
                 sq_dist_chunk = a2_chunk + b2 - 2 * (W_chunk_f @ perf_f.T)
                 idx_chunk = np.asarray(sq_dist_chunk.argmin(axis=1), dtype=np.intp)
                 min_sq_dist = sq_dist_chunk[np.arange(end - start), idx_chunk]
 
-            hamming_chunk: NDArray[np.float32] = (np.maximum(0.0, min_sq_dist) / n_genes).astype(np.float32)
+            hamming_chunk: NDArray[np.float32] = (
+                np.maximum(0.0, min_sq_dist) / n_genes
+            ).astype(np.float32)
 
             idx_proto_list.append(idx_chunk)
             hamming_list.append(hamming_chunk)
@@ -179,23 +189,39 @@ class AvaliadorHopfield:
         self.y_pred = pred[mask]
 
         self.acuracia = float((self.y_true == self.y_pred).mean())
-        self.f1_macro = float(f1_score(self.y_true, self.y_pred, average="macro", zero_division=0))
-        self.f1_weighted = float(f1_score(self.y_true, self.y_pred, average="weighted", zero_division=0))
+        self.f1_macro = float(
+            f1_score(self.y_true, self.y_pred, average="macro", zero_division=0)
+        )
+        self.f1_weighted = float(
+            f1_score(self.y_true, self.y_pred, average="weighted", zero_division=0)
+        )
         self.taxa_reconstrucao = float((hamming[mask] == 0).mean())
         self.semelhanca_media = float((1 - hamming[mask]).mean())
-        self.matriz_conf = confusion_matrix(self.y_true, self.y_pred, labels=self.classes)
+        self.matriz_conf = confusion_matrix(
+            self.y_true, self.y_pred, labels=self.classes
+        )
 
-        print(f"[AvaliadorHopfield] Acurácia: {self.acuracia * 100:.2f}% (n={mask.sum():,})")
-        print(f"[AvaliadorHopfield] F1 macro={self.f1_macro:.4f}, F1 ponderado={self.f1_weighted:.4f}")
-        print(f"[AvaliadorHopfield] Taxa de reconstrução exata : {self.taxa_reconstrucao * 100:.2f}%")
-        print(f"[AvaliadorHopfield] Semelhança média ao protótipo: {self.semelhanca_media:.4f}")
-        print(classification_report(
-            self.y_true,
-            self.y_pred,
-            labels=self.classes,
-            target_names=[str(c) for c in self.classes],
-            zero_division=0,
-        ))
+        print(
+            f"[AvaliadorHopfield] Acurácia: {self.acuracia * 100:.2f}% (n={mask.sum():,})"
+        )
+        print(
+            f"[AvaliadorHopfield] F1 macro={self.f1_macro:.4f}, F1 ponderado={self.f1_weighted:.4f}"
+        )
+        print(
+            f"[AvaliadorHopfield] Taxa de reconstrução exata : {self.taxa_reconstrucao * 100:.2f}%"
+        )
+        print(
+            f"[AvaliadorHopfield] Semelhança média ao protótipo: {self.semelhanca_media:.4f}"
+        )
+        print(
+            classification_report(
+                self.y_true,
+                self.y_pred,
+                labels=self.classes,
+                target_names=[str(c) for c in self.classes],
+                zero_division=0,
+            )
+        )
         return self
 
     def plotar(
@@ -221,9 +247,13 @@ class AvaliadorHopfield:
             A própria instância.
         """
         if self.matriz_conf is None:
-            raise RuntimeError("[AvaliadorHopfield] Execute .avaliar() antes de .plotar().")
+            raise RuntimeError(
+                "[AvaliadorHopfield] Execute .avaliar() antes de .plotar()."
+            )
 
-        rotulos: list[str] = self.nomes_classes if self.nomes_classes else [str(c) for c in self.classes]
+        rotulos: list[str] = (
+            self.nomes_classes if self.nomes_classes else [str(c) for c in self.classes]
+        )
 
         mat: NDArray[Any] = self.matriz_conf.astype(float)
         fmt: str
@@ -239,13 +269,22 @@ class AvaliadorHopfield:
         criar_figura: bool = ax is None
         current_ax: Axes
         if criar_figura:
-            _, current_ax = plt.subplots(figsize=(max(6, len(self.classes)), max(5, len(self.classes))))
+            _, current_ax = plt.subplots(
+                figsize=(max(6, len(self.classes)), max(5, len(self.classes)))
+            )
         else:
             assert ax is not None
             current_ax = ax
 
-        sns.heatmap(mat, annot=True, fmt=fmt, cmap="Blues",
-                    xticklabels=rotulos, yticklabels=rotulos, ax=current_ax)
+        sns.heatmap(
+            mat,
+            annot=True,
+            fmt=fmt,
+            cmap="Blues",
+            xticklabels=rotulos,
+            yticklabels=rotulos,
+            ax=current_ax,
+        )
         current_ax.set_xlabel("Predito")
         current_ax.set_ylabel("Real")
         current_ax.set_title(titulo)
@@ -255,7 +294,7 @@ class AvaliadorHopfield:
             plt.show()
         return self
 
-    def metricas_resumo(self, nome: str = "") -> dict[str, Union[str, int, float]]:
+    def metricas_resumo(self, nome: str = "") -> dict[str, str | int | float]:
         """Retorna dicionário estruturado com as métricas calculadas.
 
         Parameters
@@ -269,10 +308,12 @@ class AvaliadorHopfield:
             Dicionário com métricas globais resumidas.
         """
         if self.acuracia is None or self.y_true is None:
-            raise RuntimeError("[AvaliadorHopfield] Execute .avaliar() antes de .metricas_resumo().")
+            raise RuntimeError(
+                "[AvaliadorHopfield] Execute .avaliar() antes de .metricas_resumo()."
+            )
         return {
             "dataset": nome,
-            "n_celulas": int(len(self.y_true)),
+            "n_celulas": len(self.y_true),
             "acuracia": round(float(self.acuracia), 4),
             "f1_macro": round(float(self.f1_macro or 0.0), 4),
             "f1_weighted": round(float(self.f1_weighted or 0.0), 4),
@@ -289,10 +330,15 @@ class AvaliadorHopfield:
             DataFrame estruturado contendo precision, recall, f1 e contagem.
         """
         if self.y_true is None or self.y_pred is None:
-            raise RuntimeError("[AvaliadorHopfield] Execute .avaliar() antes de .metricas_por_classe().")
-        rotulos: list[str] = self.nomes_classes if self.nomes_classes else [str(c) for c in self.classes]
+            raise RuntimeError(
+                "[AvaliadorHopfield] Execute .avaliar() antes de .metricas_por_classe()."
+            )
+        rotulos: list[str] = (
+            self.nomes_classes if self.nomes_classes else [str(c) for c in self.classes]
+        )
         p, r, f, s = precision_recall_fscore_support(
-            self.y_true, self.y_pred,
+            self.y_true,
+            self.y_pred,
             labels=self.classes,
             zero_division=0,
         )
@@ -301,21 +347,33 @@ class AvaliadorHopfield:
         r_arr: NDArray[np.float64] = np.asarray(r, dtype=np.float64)
         f_arr: NDArray[np.float64] = np.asarray(f, dtype=np.float64)
         s_arr: NDArray[np.int_] = np.asarray(s, dtype=int)
-        return pd.DataFrame({
-            "classe": rotulos,
-            "n_celulas": s_arr,
-            "precisao": np.round(p_arr, 4),
-            "recall": np.round(r_arr, 4),
-            "f1": np.round(f_arr, 4),
-        })
+        return pd.DataFrame(
+            {
+                "classe": rotulos,
+                "n_celulas": s_arr,
+                "precisao": np.round(p_arr, 4),
+                "recall": np.round(r_arr, 4),
+                "f1": np.round(f_arr, 4),
+            }
+        )
 
     def __repr__(self) -> str:
         """Representação textual do avaliador Hopfield."""
-        acc = f"{self.acuracia * 100:.2f}%" if self.acuracia is not None else "não avaliado"
+        acc = (
+            f"{self.acuracia * 100:.2f}%"
+            if self.acuracia is not None
+            else "não avaliado"
+        )
         f1m = f"{self.f1_macro:.4f}" if self.f1_macro is not None else "—"
         f1w = f"{self.f1_weighted:.4f}" if self.f1_weighted is not None else "—"
-        rec = f"{self.taxa_reconstrucao * 100:.2f}%" if self.taxa_reconstrucao is not None else "—"
-        sim = f"{self.semelhanca_media:.4f}" if self.semelhanca_media is not None else "—"
+        rec = (
+            f"{self.taxa_reconstrucao * 100:.2f}%"
+            if self.taxa_reconstrucao is not None
+            else "—"
+        )
+        sim = (
+            f"{self.semelhanca_media:.4f}" if self.semelhanca_media is not None else "—"
+        )
         return (
             f"AvaliadorHopfield(\n"
             f"  padroes            = {self.padroes.shape}\n"

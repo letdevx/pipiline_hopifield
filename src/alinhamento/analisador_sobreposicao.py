@@ -6,7 +6,7 @@ e estabelece o vocabulário gênico canônico indexado.
 
 from __future__ import annotations
 
-from typing import Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 
 class AnalisadorSobreposicao:
@@ -82,12 +82,17 @@ class AnalisadorSobreposicao:
 
         print(f"[AnalisadorSobreposicao] Em comum  : {len(self.ids_comuns)}")
         print(f"[AnalisadorSobreposicao] Só Fujita : {len(self.ids_so_f)}")
-        print(f"[AnalisadorSobreposicao] Só Mathys : {len(self.ids_so_m)}  <- serão excluídos")
-        print(f"[AnalisadorSobreposicao] Espaço gênico final: {len(self.genes_ordenados)} genes")
+        print(
+            f"[AnalisadorSobreposicao] Só Mathys : {len(self.ids_so_m)}  <- serão excluídos"
+        )
+        print(
+            f"[AnalisadorSobreposicao] Espaço gênico final: {len(self.genes_ordenados)} genes"
+        )
         return self
 
     def __repr__(self) -> str:
         """Representação textual do analisador de sobreposição."""
+
         def _n(x: set[str] | list[str] | None) -> str:
             return str(len(x)) if x is not None else "não calculado"
 

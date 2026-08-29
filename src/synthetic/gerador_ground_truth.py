@@ -7,16 +7,16 @@ genes ausentes e ruído sequencial, viabilizando provas reais sem suposições a
 
 from __future__ import annotations
 
-from typing import Any, Literal, Sequence, Union
+from collections.abc import Sequence
+from typing import Any, Literal
 
 import anndata as ad
 import numpy as np
-from numpy.typing import NDArray
 import pandas as pd
 import scipy.sparse as sp
+from numpy.typing import NDArray
 
-
-SaidaMatriz = Union[NDArray[np.float32], pd.DataFrame, ad.AnnData, sp.csr_matrix]
+SaidaMatriz = NDArray[np.float32] | pd.DataFrame | ad.AnnData | sp.csr_matrix
 
 
 class GeradorGroundTruthSintetico:
@@ -71,28 +71,46 @@ class GeradorGroundTruthSintetico:
         self.gene_names: list[str] = [f"G{j}" for j in range(n_genes)]
         self.cell_names: list[str] = []
         self.labels: NDArray[np.int_] = np.empty(0, dtype=int)
-        self.matriz_pura: NDArray[np.float32] = np.zeros((n_celulas, n_genes), dtype=np.float32)
+        self.matriz_pura: NDArray[np.float32] = np.zeros(
+            (n_celulas, n_genes), dtype=np.float32
+        )
 
         self._construir_ground_truth()
 
     def _construir_ground_truth(self) -> None:
         """Constrói internamente a matriz pura em blocos bem definidos por classe biológica."""
-        matriz: NDArray[np.float32] = np.zeros((self.n_celulas, self.n_genes), dtype=np.float32)
+        matriz: NDArray[np.float32] = np.zeros(
+            (self.n_celulas, self.n_genes), dtype=np.float32
+        )
 
         # Alocação balanceada de células para as classes
         celulas_por_classe: int = int(np.ceil(self.n_celulas / self.n_classes))
         genes_por_classe: int = int(np.ceil(self.n_genes / self.n_classes))
 
-        nomes_classes: list[str] = ["TipoA", "TipoB", "TipoC", "TipoD", "TipoE", "TipoF", "TipoG"]
+        nomes_classes: list[str] = [
+            "TipoA",
+            "TipoB",
+            "TipoC",
+            "TipoD",
+            "TipoE",
+            "TipoF",
+            "TipoG",
+        ]
         labels_list: list[int] = []
         self.cell_names = []
 
         for idx in range(self.n_celulas):
             cls_idx: int = min(idx // celulas_por_classe, self.n_classes - 1)
-            nome_cls: str = nomes_classes[cls_idx] if cls_idx < len(nomes_classes) else f"Tipo{cls_idx}"
+            nome_cls: str = (
+                nomes_classes[cls_idx]
+                if cls_idx < len(nomes_classes)
+                else f"Tipo{cls_idx}"
+            )
 
             self.cell_names.append(f"C{idx}_{nome_cls}")
-            labels_list.append(cls_idx + 1)  # Classes 1, 2, 3... (compatível com clo do pipeline)
+            labels_list.append(
+                cls_idx + 1
+            )  # Classes 1, 2, 3... (compatível com clo do pipeline)
 
             # Ativa um bloco específico de genes para cada classe celular (Assinatura Transcricional)
             g_start: int = cls_idx * genes_por_classe
@@ -128,7 +146,9 @@ class GeradorGroundTruthSintetico:
         data: NDArray[np.float32] = self.matriz_pura.copy()
         if contagem_continua:
             mask: NDArray[np.bool_] = data > 0
-            contagens: NDArray[np.float32] = self.rng.uniform(5.0, 25.0, size=data.shape).astype(np.float32)
+            contagens: NDArray[np.float32] = self.rng.uniform(
+                5.0, 25.0, size=data.shape
+            ).astype(np.float32)
             data[mask] = contagens[mask]
 
         return self._formatar_saida(data, formato)
@@ -172,7 +192,9 @@ class GeradorGroundTruthSintetico:
             data[drop_mask] = 0.0
 
         if genes_remover is not None:
-            colunas_manter_idx: list[int] = [j for j, g in enumerate(genes_atuais) if g not in genes_remover]
+            colunas_manter_idx: list[int] = [
+                j for j, g in enumerate(genes_atuais) if g not in genes_remover
+            ]
             data = data[:, colunas_manter_idx]
             genes_atuais = [genes_atuais[j] for j in colunas_manter_idx]
 
@@ -185,7 +207,9 @@ class GeradorGroundTruthSintetico:
         genes_customizados: Sequence[str] | None = None,
     ) -> SaidaMatriz:
         """Formata o array numérico para a estrutura de dados solicitada."""
-        cols: Sequence[str] = genes_customizados if genes_customizados is not None else self.gene_names
+        cols: Sequence[str] = (
+            genes_customizados if genes_customizados is not None else self.gene_names
+        )
         if formato == "numpy":
             return data
         elif formato == "dataframe":
@@ -225,11 +249,17 @@ class GeradorGroundTruthSintetico:
         str
             Tabela formatada em Markdown.
         """
-        cols: list[str] = list(genes_customizados) if genes_customizados is not None else list(self.gene_names)
+        cols: list[str] = (
+            list(genes_customizados)
+            if genes_customizados is not None
+            else list(self.gene_names)
+        )
         linhas_nomes: list[str]
 
         if isinstance(matriz, ad.AnnData):
-            data_arr = matriz.X.toarray() if sp.issparse(matriz.X) else np.asarray(matriz.X)
+            data_arr = (
+                matriz.X.toarray() if sp.issparse(matriz.X) else np.asarray(matriz.X)
+            )
             cols = matriz.var_names.tolist()
             linhas_nomes = matriz.obs_names.tolist()
         elif isinstance(matriz, pd.DataFrame):

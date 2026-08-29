@@ -7,15 +7,12 @@ preservando padrões esparsos ou densos no formato AnnData (.h5ad).
 from __future__ import annotations
 
 import os
-from pathlib import Path
-from typing import Union
 
 import anndata as ad
 import numpy as np
 import scipy.sparse as sp
 
-
-PathType = Union[str, os.PathLike[str]]
+PathType = str | os.PathLike[str]
 
 
 class Binarizador:
@@ -49,8 +46,14 @@ class Binarizador:
         out_dir_binarizada: PathType | None = None,
     ) -> None:
         self.path_h5ad: str = str(path_h5ad)
-        self.out_dir: str = str(out_dir) if out_dir is not None else os.path.join(os.getcwd(), "outputs")
-        self.out_dir_binarizada: str = str(out_dir_binarizada) if out_dir_binarizada is not None else self.out_dir
+        self.out_dir: str = (
+            str(out_dir)
+            if out_dir is not None
+            else os.path.join(os.getcwd(), "outputs")
+        )
+        self.out_dir_binarizada: str = (
+            str(out_dir_binarizada) if out_dir_binarizada is not None else self.out_dir
+        )
         self.path_binarizada: str | None = None
 
     def binarizar(self, nome_arquivo: str = "matrizBinarizadaM.h5ad") -> Binarizador:
