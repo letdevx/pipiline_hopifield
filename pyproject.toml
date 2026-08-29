@@ -1,9 +1,21 @@
+[tool.pytest.ini_options]
+pythonpath = [".", "src"]
+
 [tool.pyright]
 include = ["src"]
 extraPaths = ["src"]
+typeCheckingMode = "strict"
 executionEnvironments = [
   { root = "src" }
 ]
 
-[tool.pytest.ini_options]
-pythonpath = ["."]
+[tool.pyrefly]
+project-includes = ["src"]
+search-path = ["."]
+infer-with-first-use = false
+check-unannotated-defs = true
+infer-return-types = "never"
+
+project-excludes = [
+    ".venv/**"
+]
