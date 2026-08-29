@@ -113,8 +113,12 @@ from config import (
     OUT_TREINAMENTO, OUT_HOPFIELD, OUT_RELATORIO,
 )
 
+import preprocessing
+importlib.reload(preprocessing)
 import alinhamento
 importlib.reload(alinhamento)
+import treinamento
+importlib.reload(treinamento)
 
 from preprocessing import Binarizador
 from alinhamento import (
@@ -261,16 +265,6 @@ projetor_r.projetar()
 
 
 # %%
-projetor_r = ProjetorSWeePR(
-    path_matriz   = path_f_completo,
-    path_saida    = PATH_SWEEP_REFERENCIA,
-    n_componentes = 600,
-    seed          = SEED,
-)
-projetor_r.projetar()
-
-
-# %%
 carregador = CarregadorDadosFujita(
     path_matriz = path_f_completo,                  # Aceita .h5ad e .npy nativamente!
     path_genes  = analisador.genes_ordenados,       # Pode passar a lista de genes diretamente
@@ -324,14 +318,14 @@ for v, c in zip(vals_a, counts_a):
 
 
 # %%
-projetor = ProjetorSWeP(n_features=58.326 , n_componentes=600, seed=SEED)
+projetor = ProjetorSWeP(n_features=len(analisador.genes_ordenados), n_componentes=600, seed=SEED)
 projetor.usar_sweep_precomputado(carregador.Wswp).aplicar_pca()
 print(projetor)
 
 
 # %% [markdown]
 # #### 9. Extração de padrões por subcluster (perf35)
-# Para cada uma das 7 classes executa KMeans com `nc=10` clusters no espaço SWeeP e seleciona o vetor binário mais próximo de cada centroide como
+# Para cada uma das 7 classes executa KMeans com `nc=30` clusters no espaço SWeeP e seleciona o vetor binário mais próximo de cada centroide como protótipo.
 #
 
 # %%
@@ -346,7 +340,7 @@ extrator = ExtratorPadroesSubcluster(
 extrator.extrair(projetor.Wswp)
 perf35 = extrator.padroes
 print(extrator)
-print(f'perf35 shape: {perf35.shape}  (esperado: (210, 58.326)')
+print(f'perf35 shape: {perf35.shape}  (esperado: (210, {len(analisador.genes_ordenados)}))')
 
 
 # %%

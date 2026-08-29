@@ -77,6 +77,10 @@ class LeitorFeatures:
                 new_columns=['ensembl_id', 'gene_name'],
                 columns=[0, 1],
             )
+            .with_columns([
+                pl.col('ensembl_id').cast(pl.Utf8).str.strip_chars(),
+                pl.col('gene_name').cast(pl.Utf8).str.strip_chars(),
+            ])
             .unique(subset=['gene_name'], keep='first')
         )
         return dict(zip(df['gene_name'].to_list(), df['ensembl_id'].to_list()))

@@ -4,3 +4,6 @@ extraPaths = ["src"]
 executionEnvironments = [
   { root = "src" }
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

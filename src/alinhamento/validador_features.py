@@ -94,12 +94,33 @@ class ValidadorFeatures:
             raise ValueError(f"[{dataset_name}] O mapa de features fornecido está vazio.")
 
         if isinstance(path_h5ad_or_adata, (str, os.PathLike)):
-            if not os.path.exists(str(path_h5ad_or_adata)):
-                raise FileNotFoundError(f"[{dataset_name}] Matriz AnnData não encontrada: {path_h5ad_or_adata}")
-            _adata = ad.read_h5ad(path_h5ad_or_adata, backed='r')
-            var_names = _adata.var_names.tolist()
-            _adata.file.close()
-            del _adata
+            path_str = str(path_h5ad_or_adata)
+            if not os.path.exists(path_str):
+                raise FileNotFoundError(f"[{dataset_name}] Matriz AnnData não encontrada: {path_str}")
+            var_names = None
+            if path_str.endswith(".h5ad"):
+                try:
+                    import h5py
+                    with h5py.File(path_str, "r") as f:
+                        if "var" in f:
+                            var_g = f["var"]
+                            index_key = var_g.attrs.get("_index", "_index")
+                            if index_key in var_g:
+                                raw = var_g[index_key][:]
+                                var_names = [x.decode("utf-8") if isinstance(x, bytes) else str(x) for x in raw]
+                            elif "_index" in var_g:
+                                raw = var_g["_index"][:]
+                                var_names = [x.decode("utf-8") if isinstance(x, bytes) else str(x) for x in raw]
+                            elif "gene_name" in var_g:
+                                raw = var_g["gene_name"][:]
+                                var_names = [x.decode("utf-8") if isinstance(x, bytes) else str(x) for x in raw]
+                except Exception:
+                    var_names = None
+            if var_names is None:
+                _adata = ad.read_h5ad(path_str, backed='r')
+                var_names = _adata.var_names.tolist()
+                _adata.file.close()
+                del _adata
         elif isinstance(path_h5ad_or_adata, ad.AnnData):
             var_names = path_h5ad_or_adata.var_names.tolist()
         else:
@@ -110,8 +131,9 @@ class ValidadorFeatures:
             raise ValueError(f"[{dataset_name}] Matriz AnnData não contém variáveis (var_names está vazio).")
 
         # Teste de correspondência com chaves (gene_name) ou valores (ensembl_id)
+        vals_set = set(map_features.values())
         match_chaves = sum(1 for g in var_names if g in map_features)
-        match_valores = sum(1 for g in var_names if g in map_features.values())
+        match_valores = sum(1 for g in var_names if g in vals_set)
         
         # Consideramos o melhor tipo de match
         melhor_match = max(match_chaves, match_valores)
