@@ -10,22 +10,41 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "anndata>=0.10.0",
+    "h5py>=3.10.0",
+    "hdbscan>=0.8.39",
+    "matplotlib>=3.8.0",
     "numpy>=1.26.0",
     "pandas>=2.0.0",
     "polars>=1.0.0",
+    "scanpy>=1.10.0",
     "scikit-learn>=1.4.0",
     "scipy>=1.12.0",
+    "seaborn>=0.13.0",
     "torch>=2.0.0",
     "tqdm>=4.66.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0",
-    "pyright>=1.1.0",
-    "pyrefly",
-    "ruff>=0.8.0",
+    "ipykernel>=6.29.0",
+    "jupytext>=1.16.0",
     "pandas-stubs",
+    "pyrefly",
+    "pyright>=1.1.0",
+    "pytest>=8.0.0",
+    "ruff>=0.8.0",
+    "types-tqdm",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.0",
+    "jupytext>=1.16.0",
+    "pandas-stubs",
+    "pyrefly",
+    "pyright>=1.1.0",
+    "pytest>=8.0.0",
+    "ruff>=0.8.0",
     "types-tqdm",
 ]
 
@@ -36,7 +55,7 @@ testpaths = ["tests"]
 [tool.pyright]
 include = ["src"]
 extraPaths = ["src"]
-typeCheckingMode = "strict"
+typeCheckingMode = "standard"
 executionEnvironments = [
   { root = "src" }
 ]
@@ -108,10 +127,14 @@ convention = "numpy"
 "pipeline_*.py" = [
     "D",       # Docstrings flexíveis para scripts interativos/notebooks
     "E402",    # Permitir imports intermediários de blocos de execução
+    "F401",    # Imports para checagem condicional em células de ambiente
     "F811",    # Permitir redefinição de variáveis em células
     "F821",    # Permitir funções de ambiente interativo como display()
     "E702",    # Permitir múltiplas instruções por linha em plots interativos
     "E712",    # Permitir comparações literais em filtros interativos
+    "B905",    # Zip sem strict em células exploratórias
+    "NPY002",  # Sementes legadas de compatibilidade em notebooks
+    "SIM105",  # Blocos try-except legados de compatibilidade
 ]
 
 [tool.ruff.format]

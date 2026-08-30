@@ -76,8 +76,7 @@ if SRC_PATH not in sys.path:
 
 # %%
 try:
-    from google.colab import drive  # type: ignore[import-not-found,import-untyped,missing-import]
-
+    from google.colab import drive  # type: ignore
 
     if not os.path.exists("/content/drive"):
         print("[Colab] Montando Google Drive em /content/drive...")

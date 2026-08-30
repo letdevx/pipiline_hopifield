@@ -29,6 +29,7 @@ Esta pasta armazena o repositório de decisões formais de arquitetura para gara
 * 📜 **[[04_Recursos/adrs/adr_013_validacao_estrita_features_pre_alinhamento|ADR 013: Validação Estrita de Features e Identificadores Genômicos Pré-Alinhamento]]**
 * 📜 **[[04_Recursos/adrs/adr_014_adocao_estrita_type_hints_docstrings_pyrefly|ADR 014: Adoção Estrita de Type Hints e Docstrings no Padrão NumPy via Pyrefly]]**
 * 📜 **[[04_Recursos/adrs/adr_015_adocao_ruff_linter_formatter_automacao_ide|ADR 015: Adoção do Ruff como Linter/Formatador Unificado e Automação de Salvamento no IDE]]**
+* 📜 **[[04_Recursos/adrs/adr_016_migracao_gerenciador_pacotes_uv|ADR 016: Migração do Gerenciador de Pacotes para uv e Travamento Determinístico com uv.lock]]**
 
 
 ---
