@@ -25,7 +25,7 @@ PATH_ALVO: str = os.path.join(PATH_BASE, "matriz_anotada_finalM.h5ad")
 
 # Features
 PATH_FEATURES_REFERENCIA: str = os.path.join(PATH_BASE, "featuresPANcorrigido.tsv")
-PATH_FEATURES_ALVO: str = os.path.join(PATH_BASE, "features.tsv")
+PATH_FEATURES_ALVO: str = os.path.join(PATH_BASE, "featuresM.tsv")
 
 # Matrizes SWeeP e Rótulos
 PATH_SWEEP_REFERENCIA: str = os.path.join(
