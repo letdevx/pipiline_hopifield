@@ -66,7 +66,7 @@ else:
     print("Atualizando código na VM...")
     # !cd {DEST_PATH} && git pull
 
-# !cd {DEST_PATH} && git checkout Teste_sem_binarização_dados_brutos
+# !cd {DEST_PATH} && git checkout teste_pipeline_generico_F
 
 # Adiciona a pasta 'src' da VM ao path do Python
 SRC_PATH = os.path.join(DEST_PATH, "src")
