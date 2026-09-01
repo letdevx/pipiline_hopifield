@@ -14,6 +14,20 @@
 # ---
 
 # %%
+from __future__ import annotations
+
+try:
+    import anndata
+    import scanpy
+except ImportError:
+    print("Instalando dependências compatíveis com o ambiente do Colab...")
+    # Mantém o pandas travado na versão esperada pelo Colab (2.2.3)
+    # !pip install -q "pandas==2.2.3" anndata scanpy
+
+# %%
+# !git push origin Teste_sem_binarização_dados_brutos
+
+# %%
 """Notebook executável do Pipeline Genérico Hopfield para scRNA-seq.
 
 Executa o fluxo fim a fim:
@@ -24,8 +38,6 @@ Executa o fluxo fim a fim:
 5. Treinamento e avaliação da Rede de Hopfield Moderna
 6. Imputação e classificação cross-dataset
 """
-
-from __future__ import annotations
 
 import gc
 import importlib
@@ -42,18 +54,6 @@ import seaborn as sns
 import torch
 from numpy.typing import NDArray
 from sklearn.metrics import classification_report, confusion_matrix
-
-# %%
-try:
-    import anndata
-    import scanpy
-except ImportError:
-    print("Instalando dependências compatíveis com o ambiente do Colab...")
-    # Mantém o pandas travado na versão esperada pelo Colab (2.2.3)
-    # !pip install -q "pandas==2.2.3" anndata scanpy
-
-# %%
-# !git push origin Teste_sem_binarização_dados_brutos
 
 # %%
 REPO_NAME = "pipiline_hopifield"  # Nome do seu repo

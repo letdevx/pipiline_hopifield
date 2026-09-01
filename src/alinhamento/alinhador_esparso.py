@@ -170,7 +170,23 @@ class AlinhadorEsparso:
         pasta_m: str = os.path.dirname(self.path_m_alinhado)
 
         # 1. Alinhamento Fujita (Referência)
-        if os.path.exists(self.path_f_alinhado) and not forcar:
+        precisa_f: bool = forcar or not os.path.exists(self.path_f_alinhado)
+        if not precisa_f:
+            try:
+                _f_check = ad.read_h5ad(self.path_f_alinhado, backed="r")
+                genes_disco_f = list(_f_check.var_names)
+                if hasattr(_f_check, "file") and _f_check.file is not None:
+                    _f_check.file.close()
+                del _f_check
+                if genes_disco_f != self.genes_ordenados:
+                    print(
+                        "[AlinhadorEsparso] Genes do Fujita em disco divergem do espaço canônico atual. Realinhando..."
+                    )
+                    precisa_f = True
+            except Exception:
+                precisa_f = True
+
+        if not precisa_f:
             print(
                 f"[AlinhadorEsparso] Fujita já alinhado, pulando: {self.path_f_alinhado}"
             )
@@ -194,7 +210,23 @@ class AlinhadorEsparso:
             gc.collect()
 
         # 2. Alinhamento Mathys (Alvo)
-        if os.path.exists(self.path_m_alinhado) and not forcar:
+        precisa_m: bool = forcar or not os.path.exists(self.path_m_alinhado)
+        if not precisa_m:
+            try:
+                _m_check = ad.read_h5ad(self.path_m_alinhado, backed="r")
+                genes_disco_m = list(_m_check.var_names)
+                if hasattr(_m_check, "file") and _m_check.file is not None:
+                    _m_check.file.close()
+                del _m_check
+                if genes_disco_m != self.genes_ordenados:
+                    print(
+                        "[AlinhadorEsparso] Genes do Mathys em disco divergem do espaço canônico atual. Realinhando..."
+                    )
+                    precisa_m = True
+            except Exception:
+                precisa_m = True
+
+        if not precisa_m:
             print(
                 f"[AlinhadorEsparso] Mathys já alinhado, pulando: {self.path_m_alinhado}"
             )

@@ -74,6 +74,11 @@ class AnalisadorSobreposicao:
         self.genes_ordenados = []
         for gene_name in self.var_names_f_original:
             eid: str = self.map_f.get(gene_name, gene_name)
+            if eid == gene_name and "-" in gene_name:
+                # Fallback defensivo: tenta sem o sufixo numérico de desambiguação
+                base_name = gene_name.rsplit("-", 1)[0]
+                eid = self.map_f.get(base_name, gene_name)
+
             if eid not in seen:
                 self.genes_ordenados.append(eid)
                 seen.add(eid)

@@ -197,11 +197,19 @@ class ExportadorMTX:
 
         # 4. Gravação de genes_referencia.tsv (2 colunas: Ensembl_ID\tGene_Symbol)
         print(f"[ExportadorMTX] Gravando {path_genes} ({len(genes_lista)} genes)...")
+        map_simbolos: dict[str, str] = {}
+        if map_features is not None:
+            for k, v in map_features.items():
+                if k.startswith("ENS"):
+                    map_simbolos[k] = v
+                elif v.startswith("ENS"):
+                    map_simbolos[v] = k
+                else:
+                    map_simbolos[k] = v
+
         with open(path_genes, "w", encoding="utf-8") as f_genes:
             for gene_id in genes_lista:
-                simbolo: str = gene_id
-                if map_features is not None:
-                    simbolo = map_features.get(gene_id, gene_id)
+                simbolo: str = map_simbolos.get(gene_id, gene_id)
                 f_genes.write(f"{gene_id}\t{simbolo}\n")
 
         # 5. Gravação de barcodes.tsv

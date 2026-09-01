@@ -116,29 +116,48 @@ class LeitorFeatures:
         return self
 
     def _ler_features(self, path: PathType) -> dict[str, str]:
-        """Lê o arquivo TSV/CSV de features utilizando Polars em alta velocidade."""
-        df: pl.DataFrame = (
-            pl.read_csv(
-                str(path),
-                separator="\t",
-                has_header=False,
-                new_columns=["ensembl_id", "gene_name"],
-                columns=[0, 1],
-            )
-            .with_columns(
-                [
-                    pl.col("ensembl_id")
-                    .cast(pl.Utf8)
-                    .str.strip_chars()
-                    .str.replace(r"\.\d+$", ""),
-                    pl.col("gene_name").cast(pl.Utf8).str.strip_chars(),
-                ]
-            )
-            .unique(subset=["gene_name"], keep="first")
+        """Lê o arquivo TSV/CSV de features utilizando Polars em alta velocidade.
+
+        Aplica desambiguação posicional idêntica ao `var_names_make_unique()` do AnnData/Scanpy,
+        assegurando que símbolos duplicados (ex: TBCE e TBCE-1) mapeiem para seus respectivos
+        Ensembl IDs exclusivos sem perda de registros.
+        """
+        df: pl.DataFrame = pl.read_csv(
+            str(path),
+            separator="\t",
+            has_header=False,
+            new_columns=["ensembl_id", "gene_name"],
+            columns=[0, 1],
+        ).with_columns(
+            [
+                pl.col("ensembl_id")
+                .cast(pl.Utf8)
+                .str.strip_chars()
+                .str.replace(r"\.\d+$", ""),
+                pl.col("gene_name").cast(pl.Utf8).str.strip_chars(),
+            ]
         )
-        return dict(
-            zip(df["gene_name"].to_list(), df["ensembl_id"].to_list(), strict=False)
-        )
+
+        names: list[str] = df["gene_name"].to_list()
+        ensembls: list[str] = df["ensembl_id"].to_list()
+
+        counts: dict[str, int] = {}
+        mapping: dict[str, str] = {}
+
+        for gene, eid in zip(names, ensembls, strict=False):
+            if gene in counts:
+                counts[gene] += 1
+                unique_gene = f"{gene}-{counts[gene]}"
+            else:
+                counts[gene] = 0
+                unique_gene = gene
+                # Mapeia também a primeira ocorrência sob o símbolo base
+                mapping[gene] = eid
+
+            # Mapeia o símbolo único disambiguado (ex: TBCE-1) para seu respectivo Ensembl ID
+            mapping[unique_gene] = eid
+
+        return mapping
 
     def __repr__(self) -> str:
         """Representação textual do leitor de features."""
