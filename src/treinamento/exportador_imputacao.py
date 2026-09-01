@@ -24,7 +24,10 @@ from numpy.typing import NDArray
 try:
     from src.config import OUT_IMPUTACAO  # pyright: ignore[reportMissingImports]
 except ImportError:
-    from ..config import OUT_IMPUTACAO  # type: ignore[import-not-found]
+    try:
+        from config import OUT_IMPUTACAO  # type: ignore[import-not-found]
+    except ImportError:
+        from ..config import OUT_IMPUTACAO  # type: ignore[import-not-found]
 
 PathType = str | os.PathLike[str]
 MatrixInput = NDArray[Any] | sp.spmatrix

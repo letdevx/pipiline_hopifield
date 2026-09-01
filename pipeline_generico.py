@@ -68,10 +68,10 @@ else:
 
 # !cd {DEST_PATH} && git checkout teste_pipeline_generico_F
 
-# Adiciona a pasta 'src' da VM ao path do Python
-SRC_PATH = os.path.join(DEST_PATH, "src")
-if SRC_PATH not in sys.path:
-    sys.path.insert(0, SRC_PATH)
+# Adiciona a raiz do repo e a pasta 'src' da VM ao path do Python
+for _p in (DEST_PATH, os.path.join(DEST_PATH, "src")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 
 # %%
