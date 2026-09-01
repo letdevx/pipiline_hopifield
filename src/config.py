@@ -5,6 +5,7 @@ e estrutura de pastas geradas em outputs/.
 """
 
 import os
+
 # ---------------------------------------------------------------------------
 # Entradas — busca dinâmica (Local Windows / Linux / Google Drive Colab)
 # ---------------------------------------------------------------------------
@@ -14,10 +15,12 @@ PATH_BASE: str = (
 )
 
 # Entrada Conjunto de Referência
-PATH_REFERENCIA: str = os.path.join(PATH_BASE, "imputs", "matrizFiltradaeNormalizadaF.h5ad")
+PATH_REFERENCIA: str = os.path.join(
+    PATH_BASE, "imputs", "matrizFiltradaeNormalizadaF.h5ad"
+)
 
 # Entrada Conjunto Alvo
-PATH_ALVO: str = os.path.join(PATH_BASE,  "imputs", "matriz_anotada_finalM.h5ad")
+PATH_ALVO: str = os.path.join(PATH_BASE, "imputs", "matriz_anotada_finalM.h5ad")
 
 # Features
 PATH_FEATURES_REFERENCIA: str = os.path.join(PATH_BASE, "imputs", "featuresF.tsv")
@@ -30,8 +33,12 @@ PATH_SWEEP_REFERENCIA: str = os.path.join(
 PATH_SWEEP_ALVO: str = os.path.join(
     PATH_BASE, "outputs", "treinamento", "matriz_reduzida_sweepM.csv"
 )
-PATH_LABELS_REFERENCIA: str = os.path.join(PATH_BASE,  "imputs", "cell_types_binarioF.txt")
-PATH_LABELS_ALVO: str = os.path.join(PATH_BASE,  "imputs", "tipos_celulares_numericoMs.txt")
+PATH_LABELS_REFERENCIA: str = os.path.join(
+    PATH_BASE, "imputs", "cell_types_binarioF.txt"
+)
+PATH_LABELS_ALVO: str = os.path.join(
+    PATH_BASE, "imputs", "tipos_celulares_numericoMs.txt"
+)
 
 # ---------------------------------------------------------------------------
 # Saídas — geradas automaticamente dentro da raiz do projeto
@@ -42,6 +49,7 @@ OUT_ALINHAMENTO: str = os.path.join(OUTPUTS, "alinhamento")
 OUT_TOP_GENES: str = os.path.join(OUTPUTS, "top_genes")
 OUT_TREINAMENTO: str = os.path.join(OUTPUTS, "treinamento")
 OUT_HOPFIELD: str = os.path.join(OUTPUTS, "hopfield")
+OUT_IMPUTACAO: str = os.path.join(OUTPUTS, "imputacao")
 OUT_RELATORIO: str = os.path.join(OUTPUTS, "relatorio")
 
 # ---------------------------------------------------------------------------

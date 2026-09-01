@@ -133,6 +133,7 @@ from config import (
     OUT_ALINHAMENTO,
     OUT_BINARIZACAO,
     OUT_HOPFIELD,
+    OUT_IMPUTACAO,
     OUT_RELATORIO,
     OUT_TOP_GENES,
     OUT_TREINAMENTO,
@@ -160,6 +161,7 @@ from preprocessing import Binarizador
 from treinamento import (
     AvaliadorHopfield,
     CarregadorDadosFujita,
+    ExportadorImputacao,
     ExtratorPadroesSubcluster,
     GeradorRelatorio,
     ModernHopfieldNetwork,
@@ -677,24 +679,47 @@ print("=== Imputação cross-dataset: Mathys ===")
 
 # =========================================================================
 # AUTO-IMPUTAÇÃO DE CROSS-DATASET MATHYS
-print("\\n--- Processo de Imputação ---")
+print("\n--- Processo de Imputação ---")
 print("Usando template Fujita para preencher buracos do Mathys (np.where(== 0.5))")
 
 # Consulta a Rede com W_m_bin, que possui os valores 0.5 originais
 Wrecuperado_m = rede35.retrieve(W_mathys, batch_size=4096)
 
-genes_faltantes_qtd = np.sum(W_mathys == 0.5)
-# Preservamos as marcações corretas originais do Mathys onde a expressão existe.
-W_mathys_imputado = np.where(W_mathys == 0.5, Wrecuperado_m, W_mathys)
-genes_resolvidos_qtd = np.sum(W_mathys_imputado == 0.5)
+# Exportação OOM-Safe em AnnData (.h5ad Gzip), .npy e relatório JSON
+genes_top5k_list = (
+    selecionador.genes
+    if hasattr(selecionador, "genes") and selecionador.genes
+    else pd.read_csv(path_top5k)["gene"].tolist()
+)
+
+exportador_imp = ExportadorImputacao(out_dir=OUT_IMPUTACAO)
+rel_imp = exportador_imp.exportar(
+    w_original=W_mathys,
+    w_recuperado=Wrecuperado_m,
+    genes_canonica=genes_top5k_list,
+    map_features=leitor.map_m,
+    adata_alvo_original=alinhador.path_m_alinhado or PATH_ALVO,
+    classes_reais=clo_m,
+    info_modelo={
+        "beta": rede35.beta,
+        "n_iters": rede35.n_iters,
+        "binary": rede35.binary,
+        "threshold": rede35.threshold,
+        "nc": 10,
+        "n_padroes": perf35.shape[0],
+    },
+    nome_modelo="rede35",
+    exportar_npy=True,
+)
+
+genes_faltantes_qtd = rel_imp["estatisticas_imputacao"]["total_sentinelas_resolvidos"]
+genes_resolvidos_qtd = rel_imp["estatisticas_imputacao"]["valores_resolvidos_para_um"]
 
 print(f"Genes faltantes originais Mathys (0.5): {genes_faltantes_qtd}")
-print(f"Genes faltantes após Imputação: {genes_resolvidos_qtd}")
+print(f"Genes faltantes após Imputação resolvidos para 1: {genes_resolvidos_qtd}")
 
-os.makedirs(OUT_TOP_GENES, exist_ok=True)
-PATH_IMPUTADO = os.path.join(OUT_TOP_GENES, "X_mathys_IMPUTADO_rede35.npy")
-np.save(PATH_IMPUTADO, W_mathys_imputado)
-print(f"Matriz Mathys Imputada Exportada para: {PATH_IMPUTADO}")
+PATH_IMPUTADO = rel_imp["arquivos_gerados"]["npy"]
+PATH_IMPUTADO_H5AD = rel_imp["arquivos_gerados"]["h5ad"]
 # =========================================================================
 
 avaliador_m = AvaliadorHopfield(

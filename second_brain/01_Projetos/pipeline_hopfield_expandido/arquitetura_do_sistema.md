@@ -76,6 +76,7 @@ Define os caminhos absolutos e relativos para arquivos de dados brutos (`.h5ad`)
 - **`extrator_padroes.py` (`ExtratorPadroesSubcluster`)**: Agrupa as células de cada uma das 7 classes biológicas no espaço SWeeP 600D utilizando K-Means ($nc=30$ subclusters). Seleciona a célula real binária mais próxima ($k=1$) no espaço de 11.000 genes de cada centroide. Veja **[[03_Conhecimento/amostragem_prototipos_kmeans|Conceito Atômico]]**.
 - **`hopfield.py` (`ModernHopfieldNetwork`)**: Implementação PyTorch da Modern Hopfield Network (Ramsauer et al., 2020). Veja **[[03_Conhecimento/atencao_softmax_hopfield|Conceito Atômico]]** e **[[04_Recursos/adrs/adr_005_rede_hopfield_moderna_parametros|ADR 005]]**.
 - **`avaliador_hopfield.py` (`AvaliadorHopfield`)**: Calcula acurácia de classificação por distância L2 aos 210 protótipos, F1-score ponderado, matrizes de confusão e relatórios.
+- **`exportador_imputacao.py` (`ExportadorImputacao`)**: Exporta a matriz imputada cross-dataset em formato AnnData (`.h5ad`) comprimido com gzip (CSR Sparse) e camadas de rastreamento (`layers['original']` e `layers['mascara_imputada']`), preservando metadados biológicos autênticos de células (`obs`), genes (`var`), proveniência (`uns`) e retrocompatibilidade NumPy (`.npy`). Veja **[[04_Recursos/adrs/adr_017_exportador_anndata_imputacao_cross_dataset|ADR 017]]**.
 - **`gerador_relatorio.py` (`GeradorRelatorio`)**: Compila os resultados dos experimentos em um relatório HTML/Markdown exportável.
 
 ---
@@ -90,8 +91,7 @@ Define os caminhos absolutos e relativos para arquivos de dados brutos (`.h5ad`)
 | **Expansão Gênica** | Top 5k + Exclusivos | `.csv` / `.npy` | `outputs/top_genes/` | Matrizes filtradas no espaço de ~11.000 genes |
 | **Projeção SWeeP** | Embeddings 600D | `.csv` / `.npy` | `outputs/treinamento/` | Coordenadas compactas para clusterização K-Means |
 | **Rede Treinada** | Pesos & Metadados | `.pt` / `.json` | `outputs/hopfield/` | Modelo de memória associativa salvo (210 padrões) |
-| **Matriz Imputada 11k** | Expressão Reconstruída | `.npy` | `outputs/top_genes/` | Matriz Mathys com ~11k genes imputados |
-| **Matriz Imputada 36k** | Expressão Reconstruída | `.h5ad` (Sparse CSR Gzip) | `outputs/top_genes/` | Matriz Mathys completa 36k esparsa comprimida (ADR 007) |
+| **Imputação Cross-Dataset** | Expressão Reconstruída com Layers & Metadados | `.h5ad` (CSR Gzip) / `.npy` / `.json` | `outputs/imputacao/` | AnnData com camadas `original` e `mascara_imputada`, metadados de células/genes e relatório (ADR 017) |
 
 ---
 

@@ -11,6 +11,7 @@ from .estrategias_clusterizacao import (
     EstrategiaKMeansDinamico,
     EstrategiaKMeansFixo,
 )
+from .exportador_imputacao import ExportadorImputacao
 from .extrator_padroes import ExtratorPadroesSubcluster
 from .gerador_conjunto_treinamento import GeradorConjuntoTreinamento
 from .gerador_relatorio import GeradorRelatorio
@@ -24,6 +25,7 @@ __all__ = [
     "EstrategiaHDBSCAN",
     "EstrategiaKMeansDinamico",
     "EstrategiaKMeansFixo",
+    "ExportadorImputacao",
     "ExtratorPadroesSubcluster",
     "GeradorConjuntoTreinamento",
     "GeradorRelatorio",
