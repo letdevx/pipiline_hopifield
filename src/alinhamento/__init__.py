@@ -9,20 +9,24 @@ from .alinhador import Alinhador
 from .alinhador_esparso import AlinhadorEsparso
 from .analisador_cobertura import AnalisadorCobertura
 from .analisador_sobreposicao import AnalisadorSobreposicao
+from .exportador_mtx import ExportadorMTX
 from .leitor_features import LeitorFeatures
 from .selecionador_genes_diferenciais import SelecionadorGenesDiferenciais
 from .selecionador_genes_frequentes import SelecionadorGenesFrequentes
 from .validador_alinhamento import ValidadorAlinhamento
 from .validador_features import ValidadorFeatures
+from .validador_ordem_genes import ValidadorOrdemGenes
 
 __all__ = [
     "Alinhador",
     "AlinhadorEsparso",
     "AnalisadorCobertura",
     "AnalisadorSobreposicao",
+    "ExportadorMTX",
     "LeitorFeatures",
     "SelecionadorGenesDiferenciais",
     "SelecionadorGenesFrequentes",
     "ValidadorAlinhamento",
     "ValidadorFeatures",
+    "ValidadorOrdemGenes",
 ]

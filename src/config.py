@@ -52,6 +52,11 @@ OUT_HOPFIELD: str = os.path.join(OUTPUTS, "hopfield")
 OUT_IMPUTACAO: str = os.path.join(OUTPUTS, "imputacao")
 OUT_RELATORIO: str = os.path.join(OUTPUTS, "relatorio")
 
+# Diretórios dedicados para exportação Matrix Market (MTX)
+OUT_MTX_REFERENCIA: str = os.path.join(OUT_ALINHAMENTO, "mtx_referencia")
+OUT_MTX_ALVO_SENTINELA: str = os.path.join(OUT_ALINHAMENTO, "mtx_alvo_sentinela")
+OUT_MTX_ALVO_IMPUTADO: str = os.path.join(OUT_IMPUTACAO, "mtx_alvo_imputado")
+
 # ---------------------------------------------------------------------------
 # Retrocompatibilidade (Aliases para nomes legados)
 # ---------------------------------------------------------------------------

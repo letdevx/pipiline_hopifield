@@ -36,7 +36,10 @@ class ValidadorFeatures:
         Limiar mínimo de genes em comum.
     """
 
-    ENSEMBL_PATTERN: Pattern[str] = re.compile(r"^ENS[A-Z]*G\d+", re.IGNORECASE)
+    ENSEMBL_PATTERN: Pattern[str] = re.compile(r"^ENS[A-Z]*G\d{11}$", re.IGNORECASE)
+    ENSEMBL_COM_VERSAO_PATTERN: Pattern[str] = re.compile(
+        r"^ENS[A-Z]*G\d{11}(\.\d+)?$", re.IGNORECASE
+    )
 
     def __init__(
         self, min_match_pct: float = 50.0, min_genes_comuns: int = 1000
@@ -116,10 +119,10 @@ class ValidadorFeatures:
         ]
 
         col0_ensembl_count: int = sum(
-            1 for x in col0_vals if self.ENSEMBL_PATTERN.match(x)
+            1 for x in col0_vals if self.ENSEMBL_COM_VERSAO_PATTERN.match(x)
         )
         col1_ensembl_count: int = sum(
-            1 for x in col1_vals if self.ENSEMBL_PATTERN.match(x)
+            1 for x in col1_vals if self.ENSEMBL_COM_VERSAO_PATTERN.match(x)
         )
 
         col0_pct: float = (

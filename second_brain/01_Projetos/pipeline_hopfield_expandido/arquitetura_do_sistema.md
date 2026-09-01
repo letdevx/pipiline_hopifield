@@ -62,7 +62,9 @@ Define os caminhos absolutos e relativos para arquivos de dados brutos (`.h5ad`)
 - **`binarizador.py` (`Binarizador`)**: Converte matrizes contínuas/contagens de arquivos `.h5ad` para matrizes de presença/ausência binária ($x > 0 \rightarrow 1$, $x \le 0 \rightarrow 0$). Veja **[[03_Conhecimento/binarizacao_expressao_genica|Conceito Atômico]]** e **[[04_Recursos/adrs/adr_001_binarizacao_expressao_genica|ADR 001]]**.
 
 ### 2.3. `src/alinhamento/` — Harmonização Canônica de Espaços Gênicos
-- **`leitor_features.py` (`LeitorFeatures`)**: Lê arquivos TSV/CSV de features (`gene_name` $\rightarrow$ `ensembl_id`) dos datasets de Referência e Alvo (com suporte e fallback às configurações do `src/config.py`).
+- **`leitor_features.py` (`LeitorFeatures`)**: Lê arquivos TSV/CSV de features (`gene_name` $\rightarrow$ `ensembl_id`) dos datasets de Referência e Alvo, aplicando sanitização censitária para remoção automática de sufixos de versão de transcripto/release (`.str.replace(r"\.\d+$", "")`).
+- **`validador_ordem_genes.py` (`ValidadorOrdemGenes`)**: Executa validação estrita de integridade sintática via regex sem versão (`^ENS[A-Z]*G\d{11}$`), auditoria de paridade posicional 1-to-1 ($genes\_teste[i] \equiv genes\_referencia[i]$) e auditoria pré/pós-gravação de pastas no formato Matrix Market. Veja **[[04_Recursos/adrs/adr_018_validacao_ordem_genes_exportacao_mtx|ADR 018]]**.
+- **`exportador_mtx.py` (`ExportadorMTX`)**: Exporta matrizes esparsas OOM-Safe no formato Matrix Market orientado a Machine Learning (células nas linhas $\times$ genes nas colunas) composto pelo trio `matrix.mtx`, `genes_referencia.tsv` (Ensembl ID sem versão e Gene Symbol) e `barcodes.tsv`. Veja **[[04_Recursos/adrs/adr_018_validacao_ordem_genes_exportacao_mtx|ADR 018]]**.
 - **`analisador_sobreposicao.py` (`AnalisadorSobreposicao`)**: Mapeia a interseção e os genes exclusivos de cada dataset baseando-se no Ensembl ID.
 - **`alinhador.py` (`Alinhador`)**: Realinha as matrizes binarizadas para a ordem de genes canônica do Fujita. Para o dataset Mathys, genes inexistentes no seu genoma nativo recebem o **[[03_Conhecimento/sentinela_meio_genes_ausentes|valor sentinela neutro 0.5]]**. Veja **[[04_Recursos/adrs/adr_002_sentinela_meio_genes_ausentes|ADR 002]]**.
 - **`validador_alinhamento.py` (`ValidadorAlinhamento`)**: Valida programaticamente se os genes alinhados em ambos os datasets estão na mesma ordem Ensembl.
@@ -90,8 +92,10 @@ Define os caminhos absolutos e relativos para arquivos de dados brutos (`.h5ad`)
 | **Alinhamento** | Genes Alinhados | `.h5ad` / `.txt` | `outputs/alinhamento/` | Referência Ensembl unificada |
 | **Expansão Gênica** | Top 5k + Exclusivos | `.csv` / `.npy` | `outputs/top_genes/` | Matrizes filtradas no espaço de ~11.000 genes |
 | **Projeção SWeeP** | Embeddings 600D | `.csv` / `.npy` | `outputs/treinamento/` | Coordenadas compactas para clusterização K-Means |
+| **Base Ortonormal SWeeP** | Matriz de Projeção Congelada | `.rds` (R Matrix) | `orthbase_mproj_600d.rds` | Base determinística compartilhada entre treino e inferência (ADR 018) |
 | **Rede Treinada** | Pesos & Metadados | `.pt` / `.json` | `outputs/hopfield/` | Modelo de memória associativa salvo (210 padrões) |
 | **Imputação Cross-Dataset** | Expressão Reconstruída com Layers & Metadados | `.h5ad` (CSR Gzip) / `.npy` / `.json` | `outputs/imputacao/` | AnnData com camadas `original` e `mascara_imputada`, metadados de células/genes e relatório (ADR 017) |
+| **Exportação MTX (ML)** | Matriz Market + Features + Barcodes | `.mtx` + 2×`.tsv` | `outputs/alinhamento/mtx_referencia/`<br/>`outputs/alinhamento/mtx_alvo_sentinela/`<br/>`outputs/imputacao/mtx_alvo_imputado/` | Trio interoperável auditado (células × genes) para Machine Learning (ADR 018) |
 
 ---
 

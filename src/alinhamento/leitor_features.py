@@ -127,7 +127,10 @@ class LeitorFeatures:
             )
             .with_columns(
                 [
-                    pl.col("ensembl_id").cast(pl.Utf8).str.strip_chars(),
+                    pl.col("ensembl_id")
+                    .cast(pl.Utf8)
+                    .str.strip_chars()
+                    .str.replace(r"\.\d+$", ""),
                     pl.col("gene_name").cast(pl.Utf8).str.strip_chars(),
                 ]
             )

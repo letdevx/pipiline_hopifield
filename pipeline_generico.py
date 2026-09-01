@@ -27,6 +27,7 @@ Executa o fluxo fim a fim:
 
 from __future__ import annotations
 
+import gc
 import importlib
 import os
 import shutil
@@ -132,6 +133,9 @@ from config import (
     OUT_BINARIZACAO,
     OUT_HOPFIELD,
     OUT_IMPUTACAO,
+    OUT_MTX_ALVO_IMPUTADO,
+    OUT_MTX_ALVO_SENTINELA,
+    OUT_MTX_REFERENCIA,
     OUT_TOP_GENES,
     PATH_ALVO,
     PATH_FEATURES_ALVO,
@@ -153,9 +157,11 @@ importlib.reload(treinamento)
 from alinhamento import (
     AlinhadorEsparso,
     AnalisadorSobreposicao,
+    ExportadorMTX,
     LeitorFeatures,
     ValidadorAlinhamento,
     ValidadorFeatures,
+    ValidadorOrdemGenes,
 )
 from preprocessing import Binarizador
 from treinamento import (
@@ -280,6 +286,23 @@ validador = ValidadorAlinhamento(
 )
 validador.validar()
 
+# Passo 5 — Validação estrita de Ensembl IDs (sem versão) e Exportação MTX da Referência
+validador_genes = ValidadorOrdemGenes()
+exportador_mtx_ref = ExportadorMTX(
+    out_dir=OUT_MTX_REFERENCIA, validador=validador_genes
+)
+adata_f_exp = ad.read_h5ad(alinhador.path_f_alinhado, backed="r")
+exportador_mtx_ref.exportar(
+    matriz=adata_f_exp,
+    genes_referencia=analisador.genes_ordenados,
+    map_features=leitor.map_f,
+    nome_etapa="Referência Alinhada (Fujita)",
+)
+if hasattr(adata_f_exp, "file") and adata_f_exp.file is not None:
+    adata_f_exp.file.close()
+del adata_f_exp
+gc.collect()
+
 # %% [markdown]
 # #### 4. Adicionando genes faltantes ao conjunto alvo 🧮
 #
@@ -294,6 +317,32 @@ path_m_completo = alinhador.path_m_alinhado  # adataM_binarizado_alinhado.h5ad
 # Salva a lista completa de genes para o Carregador
 path_todos_genes = os.path.join(OUT_ALINHAMENTO, "genes_canonicos_completos.csv")
 pd.DataFrame({"gene": analisador.genes_ordenados}).to_csv(path_todos_genes, index=False)
+
+# Exportação e Validação MTX do Alvo com Sentinela 0.5 (pré-Hopfield)
+exportador_mtx_sentinela = ExportadorMTX(
+    out_dir=OUT_MTX_ALVO_SENTINELA, validador=validador_genes
+)
+adata_m_alin = ad.read_h5ad(alinhador.path_m_alinhado)
+mask_ausentes_cap4 = alinhador.obter_mascara_ausentes()
+X_sentinela = adata_m_alin.X.copy()
+if sp.issparse(X_sentinela):
+    X_sentinela = X_sentinela.tolil()
+    X_sentinela[:, mask_ausentes_cap4] = 0.5
+    X_sentinela = X_sentinela.tocsr()
+else:
+    X_sentinela = np.asarray(X_sentinela, dtype=np.float32)
+    X_sentinela[:, mask_ausentes_cap4] = 0.5
+
+exportador_mtx_sentinela.exportar(
+    matriz=X_sentinela,
+    genes=analisador.genes_ordenados,
+    genes_referencia=analisador.genes_ordenados,
+    map_features=leitor.map_m,
+    barcodes=adata_m_alin.obs_names.tolist(),
+    nome_etapa="Alvo com Sentinela 0.5 (Mathys)",
+)
+del adata_m_alin, X_sentinela
+gc.collect()
 
 
 # %%
@@ -649,6 +698,22 @@ print(
 print(f"\n[Exportação] Matriz AnnData (.h5ad Gzip) : {PATH_IMPUTADO_H5AD}")
 print(f"[Exportação] Matriz NumPy (.npy)        : {PATH_IMPUTADO_NPY}")
 print(f"[Exportação] Retrocompatibilidade (.npy) : {PATH_IMPUTADO}")
+
+# 6. Exportação e Validação MTX do Alvo Imputado pós-Hopfield
+exportador_mtx_imp = ExportadorMTX(
+    out_dir=OUT_MTX_ALVO_IMPUTADO, validador=validador_genes
+)
+adata_imp_loaded = ad.read_h5ad(PATH_IMPUTADO_H5AD, backed="r")
+exportador_mtx_imp.exportar(
+    matriz=adata_imp_loaded,
+    genes_referencia=analisador.genes_ordenados,
+    map_features=leitor.map_m,
+    nome_etapa="Alvo Imputado pós-Hopfield (Mathys)",
+)
+if hasattr(adata_imp_loaded, "file") and adata_imp_loaded.file is not None:
+    adata_imp_loaded.file.close()
+del adata_imp_loaded
+gc.collect()
 
 # 5. Avaliação do Tipo Celular Cross-Dataset
 avaliador_m = AvaliadorHopfield(
