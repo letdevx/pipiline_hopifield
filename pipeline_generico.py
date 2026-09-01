@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import shutil
 import sys
 
 import anndata as ad
@@ -130,6 +131,7 @@ from config import (
     OUT_ALINHAMENTO,
     OUT_BINARIZACAO,
     OUT_HOPFIELD,
+    OUT_IMPUTACAO,
     OUT_TOP_GENES,
     PATH_ALVO,
     PATH_FEATURES_ALVO,
@@ -159,6 +161,7 @@ from preprocessing import Binarizador
 from treinamento import (
     AvaliadorHopfield,
     CarregadorDadosFujita,
+    ExportadorImputacao,
     ExtratorPadroesSubcluster,
     ModernHopfieldNetwork,
     ProjetorSWeePR,
@@ -595,34 +598,57 @@ Wrecuperado_m = rede35.retrieve(
 )
 print(f"Recuperação concluída! Matriz reconstruída: {Wrecuperado_m.shape}")
 
-# 3. Imputação Preservativa: Mantém valores originais observados e preenche apenas os ausentes
-if hasattr(W_mathys, "toarray"):
-    W_mathys_dense = W_mathys.toarray().astype(np.float32)
-else:
-    W_mathys_dense = np.asarray(W_mathys, dtype=np.float32)
+# 3. Exportação Estruturada OOM-Safe em AnnData (.h5ad Gzip), .npy e JSON (ADR 017)
+assert analisador.genes_ordenados is not None
 
-W_mathys_imputado = W_mathys_dense.copy()
-if n_genes_ausentes > 0:
-    W_mathys_imputado[:, mask_ausentes] = Wrecuperado_m[:, mask_ausentes]
+exportador_imp = ExportadorImputacao(out_dir=OUT_IMPUTACAO)
+rel_imp = exportador_imp.exportar(
+    w_original=W_mathys,
+    w_recuperado=Wrecuperado_m,
+    genes_canonica=analisador.genes_ordenados,
+    map_features=leitor.map_m,
+    adata_alvo_original=alinhador.path_m_alinhado or PATH_ALVO,
+    classes_reais=clo_alvo,
+    info_modelo={
+        "beta": rede35.beta,
+        "n_iters": rede35.n_iters,
+        "binary": rede35.binary,
+        "threshold": rede35.threshold,
+        "nc": 30,
+        "n_padroes": perf35.shape[0],
+    },
+    nome_modelo="rede35",
+    exportar_npy=True,
+    substituir_sentinela=True,
+    limiar_sentinela=0.5,
+)
 
-# Estatísticas da imputação nos genes ausentes
-if n_genes_ausentes > 0:
-    genes_imputados_ativos = np.sum(W_mathys_imputado[:, mask_ausentes] == 1.0)
-    genes_imputados_inativos = np.sum(W_mathys_imputado[:, mask_ausentes] == 0.0)
-    total_posicoes_imputadas = W_mathys_imputado.shape[0] * n_genes_ausentes
-    print("\n--- Estatísticas da Imputação (6.289 genes ausentes) ---")
-    print(
-        f"  Posições ativadas (1.0): {genes_imputados_ativos:,} ({genes_imputados_ativos / total_posicoes_imputadas * 100:.2f}%)"
-    )
-    print(
-        f"  Posições inativadas (0.0): {genes_imputados_inativos:,} ({genes_imputados_inativos / total_posicoes_imputadas * 100:.2f}%)"
-    )
+PATH_IMPUTADO_H5AD = rel_imp["arquivos_gerados"]["h5ad"]
+PATH_IMPUTADO_NPY = rel_imp["arquivos_gerados"]["npy"]
 
-# 4. Exportação dos resultados
+# 4. Retrocompatibilidade: Garante o arquivo no caminho legado esperado em outputs/top_genes/
 os.makedirs(OUT_TOP_GENES, exist_ok=True)
 PATH_IMPUTADO = os.path.join(OUT_TOP_GENES, "X_mathys_IMPUTADO_rede35.npy")
-np.save(PATH_IMPUTADO, W_mathys_imputado)
-print(f"\nMatriz Mathys Imputada Exportada para: {PATH_IMPUTADO}")
+if PATH_IMPUTADO_NPY and os.path.exists(PATH_IMPUTADO_NPY):
+    shutil.copyfile(PATH_IMPUTADO_NPY, PATH_IMPUTADO)
+
+genes_faltantes_qtd = rel_imp["estatisticas_imputacao"]["total_sentinelas_resolvidos"]
+genes_resolvidos_um = rel_imp["estatisticas_imputacao"]["valores_resolvidos_para_um"]
+genes_resolvidos_zero = rel_imp["estatisticas_imputacao"][
+    "valores_resolvidos_para_zero"
+]
+
+print("\n--- Estatísticas da Imputação Cross-Dataset (ADR 017) ---")
+print(f"  Total de coordenadas sentinelas resolvidas: {genes_faltantes_qtd:,}")
+print(
+    f"  Posições ativadas (1.0): {genes_resolvidos_um:,} ({genes_resolvidos_um / max(1, genes_faltantes_qtd) * 100:.2f}%)"
+)
+print(
+    f"  Posições inativadas (0.0): {genes_resolvidos_zero:,} ({genes_resolvidos_zero / max(1, genes_faltantes_qtd) * 100:.2f}%)"
+)
+print(f"\n[Exportação] Matriz AnnData (.h5ad Gzip) : {PATH_IMPUTADO_H5AD}")
+print(f"[Exportação] Matriz NumPy (.npy)        : {PATH_IMPUTADO_NPY}")
+print(f"[Exportação] Retrocompatibilidade (.npy) : {PATH_IMPUTADO}")
 
 # 5. Avaliação do Tipo Celular Cross-Dataset
 avaliador_m = AvaliadorHopfield(
