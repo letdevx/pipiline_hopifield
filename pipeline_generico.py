@@ -8,7 +8,7 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.19.5
 #   kernelspec:
-#     display_name: .venv
+#     display_name: Python 3 (ipykernel)
 #     language: python
 #     name: python3
 # ---
@@ -589,7 +589,7 @@ print(
 )
 Wrecuperado_m = rede35.retrieve(
     queries=W_mathys,
-    batch_size=2048,
+    batch_size=40000,
     mask_sentinela_ausentes=mask_ausentes,
     fill_value=0.5,
 )

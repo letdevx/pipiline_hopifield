@@ -40,7 +40,7 @@ PATH_LABELS_ALVO: str = os.path.join(PATH_BASE, "tipos_celulares_numericoMs.txt"
 # ---------------------------------------------------------------------------
 # Saídas — geradas automaticamente dentro da raiz do projeto
 # ---------------------------------------------------------------------------
-OUTPUTS: str = os.path.join(ROOT, "outputs")
+OUTPUTS: str = os.path.join(PATH_BASE, "outputs")
 OUT_BINARIZACAO: str = os.path.join(OUTPUTS, "binarizacao")
 OUT_ALINHAMENTO: str = os.path.join(OUTPUTS, "alinhamento")
 OUT_TOP_GENES: str = os.path.join(OUTPUTS, "top_genes")
