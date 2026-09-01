@@ -18,13 +18,13 @@ PATH_BASE: str = (
 )
 
 # Entrada Conjunto de Referência
-PATH_REFERENCIA: str = os.path.join(PATH_BASE, "pan_anotado.h5ad")
+PATH_REFERENCIA: str = os.path.join(PATH_BASE, "matrizFiltradaeNormalizadaF.h5ad")
 
 # Entrada Conjunto Alvo
 PATH_ALVO: str = os.path.join(PATH_BASE, "matriz_anotada_finalM.h5ad")
 
 # Features
-PATH_FEATURES_REFERENCIA: str = os.path.join(PATH_BASE, "featuresPANcorrigido.tsv")
+PATH_FEATURES_REFERENCIA: str = os.path.join(PATH_BASE, "featuresF.tsv")
 PATH_FEATURES_ALVO: str = os.path.join(PATH_BASE, "featuresM.tsv")
 
 # Matrizes SWeeP e Rótulos
@@ -34,7 +34,7 @@ PATH_SWEEP_REFERENCIA: str = os.path.join(
 PATH_SWEEP_ALVO: str = os.path.join(
     ROOT, "outputs", "treinamento", "matriz_reduzida_sweepM.csv"
 )
-PATH_LABELS_REFERENCIA: str = os.path.join(PATH_BASE, "PanNumerico.csv")
+PATH_LABELS_REFERENCIA: str = os.path.join(PATH_BASE, "cell_types_binarioF.txt")
 PATH_LABELS_ALVO: str = os.path.join(PATH_BASE, "tipos_celulares_numericoMs.txt")
 
 # ---------------------------------------------------------------------------
