@@ -45,7 +45,7 @@ def test_exportador_mtx_anndata(tmp_path):
     # Lê de volta o matrix.mtx gravado
     mtx_read = sio.mmread(str(out_dir / "matrix.mtx"))
     assert mtx_read.shape == (n_celulas, n_genes)
-    assert np.allclose(mtx_read.toarray(), x_dense)
+    assert np.allclose(sp.csr_matrix(mtx_read).toarray(), x_dense)
 
     # Confere genes_referencia.tsv
     with open(out_dir / "genes_referencia.tsv", encoding="utf-8") as f:
@@ -94,3 +94,47 @@ def test_exportador_mtx_rejeita_genes_divergentes(tmp_path):
             genes=genes_errados,
             genes_referencia=genes_ref,
         )
+
+
+def test_exportador_mtx_anndata_backed(tmp_path):
+    """Testa exportação a partir de AnnData aberto em modo backed ('backed=\"r\"')."""
+    h5ad_path = tmp_path / "backed_test.h5ad"
+    out_dir = tmp_path / "mtx_backed"
+    n_celulas, n_genes = 10, 4
+    genes = [f"ENSG0000000000{i}" for i in range(1, n_genes + 1)]
+    barcodes = [f"cell_barcode_{i}" for i in range(n_celulas)]
+
+    rng = np.random.default_rng(42)
+    x_dense = (rng.random((n_celulas, n_genes)) > 0.5).astype(np.float32)
+    x_csr = sp.csr_matrix(x_dense)
+
+    adata_raw = ad.AnnData(
+        X=x_csr,
+        obs={"grupo": ["Ctrl"] * n_celulas},
+        var={"simbolo": [f"GENE_{i}" for i in range(n_genes)]},
+    )
+    adata_raw.obs_names = barcodes
+    adata_raw.var_names = genes
+    adata_raw.write_h5ad(str(h5ad_path))
+
+    # Abre em modo backed="r" (onde adata.X vira _CSRDataset)
+    adata_backed = ad.read_h5ad(str(h5ad_path), backed="r")
+
+    try:
+        exportador = ExportadorMTX(out_dir=out_dir)
+        res = exportador.exportar(
+            matriz=adata_backed,
+            genes_referencia=genes,
+            nome_etapa="Teste Backed AnnData",
+        )
+
+        assert res["status"] == "APROVADO"
+        assert res["n_celulas"] == n_celulas
+        assert res["n_genes"] == n_genes
+
+        mtx_read = sio.mmread(str(out_dir / "matrix.mtx"))
+        assert mtx_read.shape == (n_celulas, n_genes)
+        assert np.allclose(sp.csr_matrix(mtx_read).toarray(), x_dense)
+    finally:
+        if hasattr(adata_backed, "file") and adata_backed.file is not None:
+            adata_backed.file.close()

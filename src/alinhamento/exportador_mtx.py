@@ -21,7 +21,7 @@ from numpy.typing import NDArray
 from .validador_ordem_genes import ValidadorOrdemGenes
 
 PathType = str | os.PathLike[str]
-MatrixInput = NDArray[Any] | sp.spmatrix | ad.AnnData
+MatrixInput = NDArray[Any] | sp.spmatrix | sp.sparray | ad.AnnData | Any
 
 
 class ExportadorMTX:
@@ -56,6 +56,28 @@ class ExportadorMTX:
             validador if validador is not None else ValidadorOrdemGenes()
         )
         os.makedirs(self.out_dir, exist_ok=True)
+
+    @staticmethod
+    def _converter_para_csr(dado: Any) -> sp.csr_matrix:
+        """Converte dados em memória ou backed (AnnData / SciPy / NumPy) para sp.csr_matrix.
+
+        Parameters
+        ----------
+        dado : Any
+            Objeto de dados (array NumPy, matriz esparsa SciPy ou dataset backed do AnnData).
+
+        Returns
+        -------
+        sp.csr_matrix
+            Matriz esparsa no formato CSR com dtype float32.
+        """
+        if hasattr(dado, "to_memory"):
+            # Suporte nativo a datasets backed do AnnData (_CSRDataset, _CSCDataset)
+            dado_mem = dado.to_memory()
+            return sp.csr_matrix(dado_mem, dtype=np.float32)
+        if sp.issparse(dado):
+            return sp.csr_matrix(dado, dtype=np.float32)
+        return sp.csr_matrix(np.asarray(dado, dtype=np.float32), dtype=np.float32)
 
     def exportar(
         self,
@@ -132,25 +154,22 @@ class ExportadorMTX:
             genes_lista = [str(g).split(".")[0].strip() for g in adata.var_names]
             barcodes_lista = [str(b).strip() for b in adata.obs_names]
 
-            if sp.issparse(adata.X):
-                matriz_esparsa = sp.csr_matrix(adata.X, dtype=np.float32)
-            else:
-                matriz_esparsa = sp.csr_matrix(adata.X, dtype=np.float32)
+            if adata.X is None:
+                raise ValueError(
+                    "[ExportadorMTX] AnnData fornecido não possui matriz de contagens em '.X'."
+                )
+            matriz_esparsa = self._converter_para_csr(adata.X)
         else:
             if genes is None:
                 raise ValueError(
                     "[ExportadorMTX] Parâmetro 'genes' é obrigatório quando a entrada não é AnnData."
                 )
             genes_lista = [str(g).split(".")[0].strip() for g in genes]
+            matriz_esparsa = self._converter_para_csr(matriz)
 
-            if sp.issparse(matriz):
-                matriz_esparsa = sp.csr_matrix(matriz, dtype=np.float32)
-            else:
-                matriz_esparsa = sp.csr_matrix(
-                    np.asarray(matriz, dtype=np.float32), dtype=np.float32
-                )
-
-            n_celulas = matriz_esparsa.shape[0]
+            n_celulas: int = (
+                int(matriz_esparsa.shape[0]) if matriz_esparsa.shape is not None else 0
+            )
             if barcodes is not None:
                 barcodes_lista = [str(b).strip() for b in barcodes]
                 if len(barcodes_lista) != n_celulas:

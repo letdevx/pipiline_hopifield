@@ -32,6 +32,7 @@ Instituir um protocolo integrado de integridade posicional, sanitização gênic
 
 ### 3. Exportação Padronizada Matrix Market (`.mtx`) para Machine Learning
 - O componente `ExportadorMTX` grava em disco matrizes esparsas no formato orientado a Machine Learning: **células nas linhas $\times$ genes nas colunas**.
+- Suporte universal e resiliente a matrizes em memória (`scipy.sparse.csr_matrix`, arrays NumPy) e instâncias de `AnnData` abertas em modo *backed* (`backed="r"`), convertendo transparentemente datasets em disco (`_CSRDataset`, `_CSCDataset`, `Dataset`) em `sp.csr_matrix` via `.to_memory()`.
 - Cada pasta exportada possui estrutura tripartite validada:
   1. `matrix.mtx`: Matriz no formato Matrix Market gravada via `scipy.io.mmwrite` de forma OOM-Safe a partir de estruturas `scipy.sparse.csr_matrix`.
   2. `genes_referencia.tsv`: Arquivo sem cabeçalho com 2 colunas separadas por tabulação (`Ensembl_ID\tGene_Symbol`), ordenadas rigorosamente na mesma ordem das colunas da matriz.
