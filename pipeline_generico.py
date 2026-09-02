@@ -453,7 +453,7 @@ extrator = ExtratorPadroesSubcluster(
     labels=clo_ref,
     classes=[1, 2, 3, 4, 5, 6, 7],
     seed=SEED,
-    nc=30,
+    nc=50,
     k=10,
 )
 extrator.extrair(projetor.Wswp)
@@ -490,7 +490,7 @@ rede35.salvar_com_metadados(
     path_meta=PATH_META,
     meta=extrator.meta,
     classes=[1, 2, 3, 4, 5, 6, 7],
-    nc=30,
+    nc=50,
 )
 
 print("Rede Hopfield e metadados salvos com sucesso em outputs/hopfield/!")
@@ -499,7 +499,7 @@ print("Rede Hopfield e metadados salvos com sucesso em outputs/hopfield/!")
 # %%
 
 
-NC = 30
+NC = 50
 CLASSES_ARR = np.array([1, 2, 3, 4, 5, 6, 7])
 
 assert carregador.W0 is not None
@@ -572,7 +572,7 @@ assert perf35 is not None
 avaliador_f = AvaliadorHopfield(
     padroes=perf35,
     classes=[1, 2, 3, 4, 5, 6, 7],
-    nc=30,
+    nc=50,
     nomes_classes=[
         "Excitatory",
         "Inhibitory",

@@ -16,31 +16,31 @@ PATH_BASE: str = (
 
 # Entrada Conjunto de Referência
 PATH_REFERENCIA: str = os.path.join(
-    PATH_BASE, "imputs", "matrizFiltradaeNormalizadaF.h5ad"
+    PATH_BASE, "imputs", "pan_anotado.h5ad"
 )
 
 # Entrada Conjunto Alvo
-PATH_ALVO: str = os.path.join(PATH_BASE, "imputs", "matriz_anotada_finalM.h5ad")
+PATH_ALVO: str = os.path.join(PATH_BASE, "imputs", "matrizFiltradaeNormalizadaF.h5ad")
 
 # Features
-PATH_FEATURES_REFERENCIA: str = os.path.join(PATH_BASE, "imputs", "featuresF.tsv")
-PATH_FEATURES_ALVO: str = os.path.join(PATH_BASE, "imputs", "featuresM.tsv")
+PATH_FEATURES_REFERENCIA: str = os.path.join(PATH_BASE, "imputs", "featuresPANcorrigido.tsv")
+PATH_FEATURES_ALVO: str = os.path.join(PATH_BASE, "imputs", "featuresFtsv")
 
 # Matrizes SWeeP, Base Ortonormal Congelada e Rótulos
 PATH_SWEEP_REFERENCIA: str = os.path.join(
-    PATH_BASE, "outputs", "treinamento", "matriz_reduzida_sweepF.txt"
+    PATH_BASE, "outputs", "treinamento", "matriz_reduzida_sweepREF.txt"
 )
 PATH_SWEEP_ALVO: str = os.path.join(
-    PATH_BASE, "outputs", "treinamento", "matriz_reduzida_sweepM.txt"
+    PATH_BASE, "outputs", "treinamento", "matriz_reduzida_sweepALVO.txt"
 )
 PATH_ORTHBASE_RDS: str = os.path.join(
     PATH_BASE, "outputs", "treinamento", "orthbase_mproj_600d.rds"
 )
 PATH_LABELS_REFERENCIA: str = os.path.join(
-    PATH_BASE, "imputs", "cell_types_binarioF.txt"
+    PATH_BASE, "imputs", "PanNumerico.txt"
 )
 PATH_LABELS_ALVO: str = os.path.join(
-    PATH_BASE, "imputs", "tipos_celulares_numericoMs.txt"
+    PATH_BASE, "imputs", "cell_types_binarioF.txt"
 )
 
 # ---------------------------------------------------------------------------
