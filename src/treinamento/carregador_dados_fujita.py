@@ -190,7 +190,29 @@ class CarregadorDados:
             print(
                 f"[{self.__class__.__name__}] Carregando SWeeP pré-computado: {self.path_sweep}"
             )
-            self.Wswp = pd.read_csv(self.path_sweep).to_numpy(dtype=np.float32)
+            path_str: str = str(self.path_sweep)
+            if path_str.endswith(".npy"):
+                self.Wswp = np.load(path_str).astype(np.float32)
+            else:
+                # O arquivo gerado pelo rSWeeP em R é tabulado (.txt, sep="\t", col.names=FALSE)
+                try:
+                    import polars as pl
+
+                    try:
+                        df = pl.read_csv(path_str, separator="\t", has_header=False)
+                    except Exception:
+                        df = pl.read_csv(path_str, separator=",", has_header=False)
+                    self.Wswp = df.to_numpy().astype(np.float32)
+                except Exception:
+                    try:
+                        self.Wswp = pd.read_csv(
+                            path_str, sep=r"\s+", header=None
+                        ).to_numpy(dtype=np.float32)
+                    except Exception:
+                        self.Wswp = pd.read_csv(
+                            path_str, sep=",", header=None
+                        ).to_numpy(dtype=np.float32)
+
             print(f"[{self.__class__.__name__}] Wswp shape: {self.Wswp.shape}")
 
     def __repr__(self) -> str:
