@@ -24,7 +24,7 @@ PATH_ALVO: str = os.path.join(PATH_BASE, "imputs", "matrizFiltradaeNormalizadaF.
 
 # Features
 PATH_FEATURES_REFERENCIA: str = os.path.join(PATH_BASE, "imputs", "featuresPANcorrigido.tsv")
-PATH_FEATURES_ALVO: str = os.path.join(PATH_BASE, "imputs", "featuresFtsv")
+PATH_FEATURES_ALVO: str = os.path.join(PATH_BASE, "imputs", "featuresF.tsv")
 
 # Matrizes SWeeP, Base Ortonormal Congelada e Rótulos
 PATH_SWEEP_REFERENCIA: str = os.path.join(
