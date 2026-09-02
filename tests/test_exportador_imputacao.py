@@ -195,3 +195,60 @@ def test_exportador_validacoes_dimensoes_incompativeis(tmp_path: Path) -> None:
             w_recuperado=w_orig,
             genes_canonica=["G0", "G1"],
         )
+
+
+def test_exportador_com_mask_ausentes_e_probabilidade(tmp_path: Path) -> None:
+    """Valida a injeção da sentinela via mask_ausentes e a gravação de camadas prob e original."""
+    n_celulas = 10
+    n_genes = 5
+    # w_orig sem sentinelas 0.5 (apenas 0.0 e 1.0)
+    w_orig = np.zeros((n_celulas, n_genes), dtype=np.float32)
+    w_orig[:, 0] = 1.0  # gene 0 observado ativo
+    # genes 2 e 4 são ausentes na plataforma alvo
+    mask_ausentes = np.array([False, False, True, False, True])
+
+    # Hopfield recupera 1.0 no gene 2 e 0.0 no gene 4
+    w_rec = np.zeros((n_celulas, n_genes), dtype=np.float32)
+    w_rec[:, 0] = 1.0
+    w_rec[:, 2] = 1.0
+
+    w_prob = np.zeros((n_celulas, n_genes), dtype=np.float32)
+    w_prob[:, 2] = 0.95
+
+    exportador = ExportadorImputacao(out_dir=tmp_path, chunk_size=4)
+    rel = exportador.exportar(
+        w_original=w_orig,
+        w_recuperado=w_rec,
+        genes_canonica=[f"G_{i}" for i in range(n_genes)],
+        mask_ausentes=mask_ausentes,
+        w_probabilidade=w_prob,
+        nome_modelo="teste_mask",
+    )
+
+    # 1. Deve resolver 10 * 2 = 20 coordenadas sentinelas
+    assert rel["estatisticas_imputacao"]["total_sentinelas_resolvidos"] == 20
+    assert rel["estatisticas_imputacao"]["valores_resolvidos_para_um"] == 10
+    assert rel["estatisticas_imputacao"]["valores_resolvidos_para_zero"] == 10
+
+    # 2. Carrega o AnnData gerado e audita as camadas
+    adata = ad.read_h5ad(rel["arquivos_gerados"]["h5ad"])
+    assert "original" in adata.layers
+    assert "mascara_imputada" in adata.layers
+    assert "probabilidade_imputada" in adata.layers
+
+    orig_dense = adata.layers["original"].toarray()
+    # Posições de mask_ausentes no layer original devem ser 0.5
+    assert np.all(orig_dense[:, 2] == 0.5)
+    assert np.all(orig_dense[:, 4] == 0.5)
+    assert np.all(orig_dense[:, 0] == 1.0)
+    assert np.all(orig_dense[:, 1] == 0.0)
+
+    # Matriz X deve ter os valores imputados {1, 0}
+    X_dense = adata.X.toarray()
+    assert np.all(X_dense[:, 2] == 1.0)
+    assert np.all(X_dense[:, 4] == 0.0)
+    assert np.all(X_dense[:, 0] == 1.0)
+
+    # Probabilidade deve conter o valor 0.95
+    prob_dense = adata.layers["probabilidade_imputada"].toarray()
+    assert np.all(prob_dense[:, 2] == 0.95)

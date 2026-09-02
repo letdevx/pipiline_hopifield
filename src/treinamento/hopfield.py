@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Literal, overload
 
 import numpy as np
 import scipy.sparse as sp
@@ -104,6 +104,33 @@ class ModernHopfieldNetwork(nn.Module):
         )
         return self
 
+    @overload
+    def retrieve(
+        self,
+        queries: InputQueries,
+        batch_size: int = 1024,
+        normalize: bool | None = None,
+        subspace_mask: NDArray[Any] | torch.Tensor | None = None,
+        mask_sentinela_ausentes: NDArray[np.bool_] | Sequence[int] | None = None,
+        fill_value: float = 0.5,
+        out_buffer: NDArray[np.float32] | None = None,
+        *,
+        return_probabilities: Literal[True],
+    ) -> tuple[NDArray[np.float32], NDArray[np.float32]]: ...
+
+    @overload
+    def retrieve(
+        self,
+        queries: InputQueries,
+        batch_size: int = 1024,
+        normalize: bool | None = None,
+        subspace_mask: NDArray[Any] | torch.Tensor | None = None,
+        mask_sentinela_ausentes: NDArray[np.bool_] | Sequence[int] | None = None,
+        fill_value: float = 0.5,
+        out_buffer: NDArray[np.float32] | None = None,
+        return_probabilities: Literal[False] = False,
+    ) -> NDArray[np.float32]: ...
+
     @torch.no_grad()
     def retrieve(
         self,
@@ -114,7 +141,8 @@ class ModernHopfieldNetwork(nn.Module):
         mask_sentinela_ausentes: NDArray[np.bool_] | Sequence[int] | None = None,
         fill_value: float = 0.5,
         out_buffer: NDArray[np.float32] | None = None,
-    ) -> NDArray[np.float32]:
+        return_probabilities: bool = False,
+    ) -> NDArray[np.float32] | tuple[NDArray[np.float32], NDArray[np.float32]]:
         """Recupera o padrão de memória associativa mais próximo para cada query.
 
         Parameters
@@ -133,11 +161,14 @@ class ModernHopfieldNetwork(nn.Module):
             Valor atribuído aos genes ausentes (padrão 0.5 -> 0.0 no espaço bipolar).
         out_buffer : NDArray[np.float32] | None, optional
             Buffer pré-alocado opcional para escrita direta dos resultados.
+        return_probabilities : bool, default=False
+            Se True, retorna uma tupla (matriz_binaria, matriz_probabilidade), onde a
+            probabilidade contínua [0, 1] reflete o grau de certeza da rede na ativação.
 
         Returns
         -------
-        NDArray[np.float32]
-            Matriz recuperada e imputada.
+        NDArray[np.float32] | tuple[NDArray[np.float32], NDArray[np.float32]]
+            Matriz recuperada e imputada (ou tupla com probabilidades contínuas se return_probabilities=True).
         """
         if self.patterns.numel() == 0:
             raise RuntimeError(
@@ -158,14 +189,18 @@ class ModernHopfieldNetwork(nn.Module):
         queries_csr: sp.csr_matrix | None = None
         if is_sparse:
             queries_csr = sp.csr_matrix(queries)
-            n_queries, n_features = queries_csr.shape
+            assert queries_csr is not None and queries_csr.shape is not None
+            n_queries = int(queries_csr.shape[0])
+            n_features = int(queries_csr.shape[1])
             queries_np = None
         else:
             if isinstance(queries, torch.Tensor):
                 queries_np = queries.detach().cpu().numpy()
             else:
                 queries_np = np.asarray(queries)
-            n_queries, n_features = queries_np.shape
+            assert queries_np is not None and queries_np.shape is not None
+            n_queries = int(queries_np.shape[0])
+            n_features = int(queries_np.shape[1])
 
         subspace_tensor: torch.Tensor | None = None
         if subspace_mask is not None:
@@ -176,6 +211,10 @@ class ModernHopfieldNetwork(nn.Module):
 
         if out_buffer is None:
             out_buffer = np.empty((n_queries, n_features), dtype=np.float32)
+
+        prob_buffer: NDArray[np.float32] | None = None
+        if return_probabilities:
+            prob_buffer = np.empty((n_queries, n_features), dtype=np.float32)
 
         for s in range(0, n_queries, batch_size):
             chunk_np: NDArray[np.float32]
@@ -216,6 +255,13 @@ class ModernHopfieldNetwork(nn.Module):
                 weights = torch.softmax(scores, dim=-1)
                 x = weights @ Xi
 
+            if prob_buffer is not None:
+                if self.binary:
+                    p_tensor = torch.clamp((x + 1.0) / 2.0, 0.0, 1.0)
+                else:
+                    p_tensor = torch.clamp(x, 0.0, 1.0)
+                prob_buffer[s : s + batch_size] = p_tensor.numpy().astype(np.float32)
+
             if self.binary:
                 x = (x > self.threshold).float()
 
@@ -225,6 +271,9 @@ class ModernHopfieldNetwork(nn.Module):
         print(
             f"[ModernHopfieldNetwork] Recuperação concluída: {out_buffer.shape} (dtype={out_buffer.dtype})"
         )
+        if return_probabilities:
+            assert prob_buffer is not None
+            return out_buffer, prob_buffer
         return out_buffer
 
     def salvar(self, path: PathType) -> ModernHopfieldNetwork:

@@ -83,6 +83,8 @@ class ExportadorImputacao:
         prefixo_nome: str | None = None,
         substituir_sentinela: bool = True,
         limiar_sentinela: float = 0.5,
+        mask_ausentes: NDArray[np.bool_] | Sequence[int] | None = None,
+        w_probabilidade: MatrixInput | None = None,
     ) -> dict[str, Any]:
         """Executa a exportação completa da matriz imputada em .h5ad, .npy e .json.
 
@@ -120,6 +122,12 @@ class ExportadorImputacao:
             mantendo a expressão original onde ela já existia.
         limiar_sentinela : float, default=0.5
             Valor indicativo de gene ausente na matriz de entrada.
+        mask_ausentes : NDArray[bool] | Sequence[int] | None, optional
+            Máscara booleana ou lista de índices de colunas dos genes ausentes no alvo,
+            injetando `limiar_sentinela` em streaming antes da imputação.
+        w_probabilidade : MatrixInput | None, optional
+            Matriz de ativação ou probabilidades contínuas [0, 1] da rede Hopfield
+            armazenada em layers['probabilidade_imputada'].
 
         Returns
         -------
@@ -139,6 +147,15 @@ class ExportadorImputacao:
             raise ValueError(
                 f"[ExportadorImputacao] Formatos incompatíveis: w_original {w_original.shape} "
                 f"vs w_recuperado {w_recuperado.shape}."
+            )
+
+        if w_probabilidade is not None and w_probabilidade.shape != (
+            n_celulas,
+            n_genes,
+        ):
+            raise ValueError(
+                f"[ExportadorImputacao] Formatos incompatíveis: w_original {w_original.shape} "
+                f"vs w_probabilidade {w_probabilidade.shape}."
             )
 
         base_nome: str
@@ -168,6 +185,7 @@ class ExportadorImputacao:
         csr_x_list: list[sp.csr_matrix] = []
         csr_orig_list: list[sp.csr_matrix] = []
         csr_mask_list: list[sp.csr_matrix] = []
+        csr_prob_list: list[sp.csr_matrix] = []
 
         total_sentinelas: int = 0
         total_imputados_zero: int = 0
@@ -189,6 +207,14 @@ class ExportadorImputacao:
         else:
             w_rec_np = np.asarray(w_recuperado)
 
+        w_prob_csr: sp.csr_matrix | None = None
+        w_prob_np: NDArray[Any] | None = None
+        if w_probabilidade is not None:
+            if sp.issparse(w_probabilidade):
+                w_prob_csr = sp.csr_matrix(w_probabilidade)
+            else:
+                w_prob_np = np.asarray(w_probabilidade)
+
         for start in range(0, n_celulas, self.chunk_size):
             end: int = min(start + self.chunk_size, n_celulas)
 
@@ -198,7 +224,13 @@ class ExportadorImputacao:
                 chunk_orig = w_orig_csr[start:end].toarray().astype(np.float32)
             else:
                 assert w_orig_np is not None
-                chunk_orig = np.asarray(w_orig_np[start:end], dtype=np.float32)
+                chunk_orig = np.asarray(
+                    w_orig_np[start:end], dtype=np.float32, copy=True
+                )
+
+            # Injeção da sentinela nos genes ausentes no buffer de streaming
+            if mask_ausentes is not None:
+                chunk_orig[:, mask_ausentes] = limiar_sentinela
 
             chunk_rec: NDArray[np.float32]
             if w_rec_csr is not None:
@@ -237,6 +269,16 @@ class ExportadorImputacao:
             csr_orig_list.append(sp.csr_matrix(chunk_orig))
             csr_mask_list.append(sp.csr_matrix(mask_sentinela.astype(np.float32)))
 
+            if w_probabilidade is not None:
+                chunk_prob: NDArray[np.float32]
+                if w_prob_csr is not None:
+                    chunk_prob = w_prob_csr[start:end].toarray().astype(np.float32)
+                else:
+                    assert w_prob_np is not None
+                    chunk_prob = np.asarray(w_prob_np[start:end], dtype=np.float32)
+                csr_prob_list.append(sp.csr_matrix(chunk_prob))
+                del chunk_prob
+
             del chunk_orig, chunk_rec, mask_sentinela, chunk_final
             gc.collect()
 
@@ -259,6 +301,13 @@ class ExportadorImputacao:
         mask_csr: sp.csr_matrix = sp.csr_matrix(sp.vstack(csr_mask_list, format="csr"))
         del csr_mask_list
         gc.collect()
+
+        prob_csr: sp.csr_matrix | None = None
+        if len(csr_prob_list) > 0:
+            print("  Concatenando camada esparsa de probabilidades...")
+            prob_csr = sp.csr_matrix(sp.vstack(csr_prob_list, format="csr"))
+            del csr_prob_list
+            gc.collect()
 
         # ---------------------------------------------------------------------
         # Construção dos Metadados Celulares (obs)
@@ -348,11 +397,13 @@ class ExportadorImputacao:
         )
         adata_imp.layers["original"] = orig_csr
         adata_imp.layers["mascara_imputada"] = mask_csr
+        if prob_csr is not None:
+            adata_imp.layers["probabilidade_imputada"] = prob_csr
 
         adata_imp.write_h5ad(path_h5ad, compression=compressao)
         print(f"  Salvo AnnData (.h5ad): {path_h5ad}")
 
-        del X_csr, orig_csr, mask_csr, adata_imp
+        del X_csr, orig_csr, mask_csr, prob_csr, adata_imp
         gc.collect()
 
         # ---------------------------------------------------------------------

@@ -16,7 +16,8 @@ from .extrator_padroes import ExtratorPadroesSubcluster
 from .gerador_conjunto_treinamento import GeradorConjuntoTreinamento
 from .gerador_relatorio import GeradorRelatorio
 from .hopfield import ModernHopfieldNetwork
-from .projetor_sweep import ProjetorSWeePR, ProjetorSWeP, ProjetorSWePR
+from .projetor_sweep import ProjetorSWeePR, ProjetorSWeP
+from .validador_imputacao import ValidadorImputacao
 
 __all__ = [
     "AvaliadorHopfield",
@@ -31,7 +32,7 @@ __all__ = [
     "GeradorRelatorio",
     "ModernHopfieldNetwork",
     "ProjetorSWeP",
-    "ProjetorSWePR",
     "ProjetorSWeePR",
+    "ValidadorImputacao",
     "carregar_labels",
 ]

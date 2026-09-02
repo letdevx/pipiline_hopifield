@@ -81,3 +81,37 @@ def test_escalabilidade_e_complexidade_tempo_memoria():
     assert tempo_gasto < 10.0, (
         f"O tempo de execução excedeu 10s ({tempo_gasto:.2f}s), indicando gargalo $O(f(n))$."
     )
+
+
+def test_hopfield_retrieve_com_probabilidades():
+    """Valida a extração de probabilidades contínuas [0, 1] com return_probabilities=True."""
+    prototipos = np.array(
+        [
+            [1.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
+    queries = np.array(
+        [
+            [1.0, 0.5, 0.0, 0.0],
+            [0.0, 0.0, 0.5, 1.0],
+        ],
+        dtype=np.float32,
+    )
+
+    rede = ModernHopfieldNetwork(beta=8.0, n_iters=1, binary=True)
+    rede.store(prototipos)
+
+    res_bin, res_prob = rede.retrieve(queries, batch_size=2, return_probabilities=True)
+
+    assert res_bin.shape == (2, 4)
+    assert res_prob.shape == (2, 4)
+    assert np.all((res_bin == 0.0) | (res_bin == 1.0))
+    assert np.all((res_prob >= 0.0) & (res_prob <= 1.0))
+
+    # Primeira query deve ter alta ativação nas colunas 0 e 1 e baixa nas colunas 2 e 3
+    assert res_prob[0, 0] > 0.8
+    assert res_prob[0, 1] > 0.8
+    assert res_prob[0, 2] < 0.2
+    assert res_prob[0, 3] < 0.2

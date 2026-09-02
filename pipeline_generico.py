@@ -644,17 +644,18 @@ print(
 
 # 2. Recuperação na rede Hopfield com injeção de 0.5 nos genes ausentes (Lotes OOM-Safe)
 print(
-    "\nRecuperando padrões na Modern Hopfield Network (batch_size=2048, sentinela=0.5)..."
+    "\nRecuperando padrões na Modern Hopfield Network (batch_size=2048, sentinela=0.5, prob=True)..."
 )
-Wrecuperado_m = rede35.retrieve(
+Wrecuperado_m, Wprob_m = rede35.retrieve(
     queries=W_mathys,
     batch_size=40000,
     mask_sentinela_ausentes=mask_ausentes,
     fill_value=0.5,
+    return_probabilities=True,
 )
 print(f"Recuperação concluída! Matriz reconstruída: {Wrecuperado_m.shape}")
 
-# 3. Exportação Estruturada OOM-Safe em AnnData (.h5ad Gzip), .npy e JSON (ADR 017)
+# 3. Exportação Estruturada OOM-Safe em AnnData (.h5ad Gzip), .npy e JSON (ADR 017/ADR 020)
 assert analisador.genes_ordenados is not None
 
 exportador_imp = ExportadorImputacao(out_dir=OUT_IMPUTACAO)
@@ -677,6 +678,8 @@ rel_imp = exportador_imp.exportar(
     exportar_npy=True,
     substituir_sentinela=True,
     limiar_sentinela=0.5,
+    mask_ausentes=mask_ausentes,
+    w_probabilidade=Wprob_m,
 )
 
 PATH_IMPUTADO_H5AD = rel_imp["arquivos_gerados"]["h5ad"]
@@ -688,20 +691,30 @@ PATH_IMPUTADO = os.path.join(OUT_TOP_GENES, "X_mathys_IMPUTADO_rede35.npy")
 if PATH_IMPUTADO_NPY and os.path.exists(PATH_IMPUTADO_NPY):
     shutil.copyfile(PATH_IMPUTADO_NPY, PATH_IMPUTADO)
 
-genes_faltantes_qtd = rel_imp["estatisticas_imputacao"]["total_sentinelas_resolvidos"]
-genes_resolvidos_um = rel_imp["estatisticas_imputacao"]["valores_resolvidos_para_um"]
-genes_resolvidos_zero = rel_imp["estatisticas_imputacao"][
-    "valores_resolvidos_para_zero"
-]
+# 5. Validação Biológica e Estatística da Imputação (ADR 020)
+from treinamento import ValidadorImputacao
 
-print("\n--- Estatísticas da Imputação Cross-Dataset (ADR 017) ---")
-print(f"  Total de coordenadas sentinelas resolvidas: {genes_faltantes_qtd:,}")
-print(
-    f"  Posições ativadas (1.0): {genes_resolvidos_um:,} ({genes_resolvidos_um / max(1, genes_faltantes_qtd) * 100:.2f}%)"
+adata_imp_audit = ad.read_h5ad(PATH_IMPUTADO_H5AD, backed="r")
+validador_imp = ValidadorImputacao()
+metricas_globais = validador_imp.auditar_imputacao_global(
+    adata=adata_imp_audit, mask_ausentes=mask_ausentes
 )
-print(
-    f"  Posições inativadas (0.0): {genes_resolvidos_zero:,} ({genes_resolvidos_zero / max(1, genes_faltantes_qtd) * 100:.2f}%)"
+df_marcadores = validador_imp.auditar_marcadores_biologicos(
+    adata=adata_imp_audit,
+    classes_reais=clo_alvo,
+    map_features=leitor.map_m,
 )
+validador_imp.imprimir_relatorio(metricas_globais, df_marcadores)
+validador_imp.exportar_relatorio(
+    path_relatorio_json=rel_imp["arquivos_gerados"]["relatorio_json"],
+    metricas_globais=metricas_globais,
+    df_marcadores=df_marcadores,
+)
+if hasattr(adata_imp_audit, "file") and adata_imp_audit.file is not None:
+    adata_imp_audit.file.close()
+del adata_imp_audit
+gc.collect()
+
 print(f"\n[Exportação] Matriz AnnData (.h5ad Gzip) : {PATH_IMPUTADO_H5AD}")
 print(f"[Exportação] Matriz NumPy (.npy)        : {PATH_IMPUTADO_NPY}")
 print(f"[Exportação] Retrocompatibilidade (.npy) : {PATH_IMPUTADO}")
