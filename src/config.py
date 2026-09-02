@@ -26,12 +26,15 @@ PATH_ALVO: str = os.path.join(PATH_BASE, "imputs", "matriz_anotada_finalM.h5ad")
 PATH_FEATURES_REFERENCIA: str = os.path.join(PATH_BASE, "imputs", "featuresF.tsv")
 PATH_FEATURES_ALVO: str = os.path.join(PATH_BASE, "imputs", "featuresM.tsv")
 
-# Matrizes SWeeP e Rótulos
+# Matrizes SWeeP, Base Ortonormal Congelada e Rótulos
 PATH_SWEEP_REFERENCIA: str = os.path.join(
-    PATH_BASE, "outputs", "treinamento", "matriz_reduzida_sweepF.csv"
+    PATH_BASE, "outputs", "treinamento", "matriz_reduzida_sweepF.txt"
 )
 PATH_SWEEP_ALVO: str = os.path.join(
-    PATH_BASE, "outputs", "treinamento", "matriz_reduzida_sweepM.csv"
+    PATH_BASE, "outputs", "treinamento", "matriz_reduzida_sweepM.txt"
+)
+PATH_ORTHBASE_RDS: str = os.path.join(
+    PATH_BASE, "outputs", "treinamento", "orthbase_mproj_600d.rds"
 )
 PATH_LABELS_REFERENCIA: str = os.path.join(
     PATH_BASE, "imputs", "cell_types_binarioF.txt"
@@ -68,3 +71,4 @@ PATH_SWEEP_F: str = PATH_SWEEP_REFERENCIA
 PATH_SWEEP_M: str = PATH_SWEEP_ALVO
 PATH_LABELS_F: str = PATH_LABELS_REFERENCIA
 PATH_LABELS_M: str = PATH_LABELS_ALVO
+PATH_ORTHBASE: str = PATH_ORTHBASE_RDS

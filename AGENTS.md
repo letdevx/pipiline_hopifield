@@ -30,6 +30,15 @@ Para garantir o acúmulo contínuo de inteligência, reprodutibilidade e context
 5. **MANUTENÇÃO DA ARQUITETURA DO SISTEMA**: Mantenha o documento `second_brain/01_Projetos/pipeline_hopfield_expandido/arquitetura_do_sistema.md` sincronizado com os componentes de código em `src/`.
 6. **PROIBIÇÃO RIGOROSA DE DIAGRAMAS ASCII**: NUNCA crie diagramas usando apenas texto ASCII ou caixa de caracteres (`┌`, `│`, `└`, `▼`). TODOS os diagramas (arquitetura, fluxo de dados, transformação de matrizes, perfis de memória e hierarquia de componentes) DEVEM ser criados estritamente em **Mermaid** (` ```mermaid `).
 7. **IDIOMA MANDATÓRIO (PT-BR)**: Toda a documentação, notas, metadados, comentários em ADRs e arquivos do Second Brain DEVEM ser redigidos estritamente em **Português do Brasil (PT-BR)**.
+8. **PROIBIÇÃO RIGOROSA DE SINTAXE LATEX MATH (`$$...$$` OU `$...$`):** NUNCA utilize notação matemática em LaTeX com delimitadores (`$$ ... $$` ou `$ ... $`) em respostas, documentações ou notas, pois essa sintaxe não renderiza na interface do Google Antigravity IDE. Para descrever formulações matemáticas, operações vetoriais e transformações matriciais, utilize SEMPRE alternativas 100% compatíveis com Markdown padrão:
+   - **Código inline ou blocos de código:** ex.: `proj = W × Q (40.913 células × 600 dimensões)`;
+   - **Caracteres Unicode legíveis:** símbolos diretos de texto como `×`, `∈`, `≈`, `→`, `·`, subscritos/sobrescritos e dimensões explícitas (ex.: `Wswp = W0 × R_expandido`, matriz de `40.913 × 600`);
+   - **Tabelas ou listas estruturadas:** para mapear dimensões, variáveis e operações matriciais;
+   - **Diagramas Mermaid:** para ilustrar etapas e transformações dimensionais.
+9. **OBRIGATORIEDADE IRREVOGÁVEL DO ALGORITMO rSWeeP (PACOTE R OFICIAL DA UFPR) E PROIBIÇÃO DE FALLBACKS:**
+   - Esta pesquisa científica fundamenta-se obrigatoriamente na metodologia SWeeP desenvolvida pelo laboratório AIBIALab/UFPR (De Pierri et al., 2020). É TERMINANTEMENTE PROIBIDO substituir o algoritmo do pacote R `rSWeeP` por qualquer aproximação, projeção aleatória direta, decomposição QR sintética em Python ou qualquer outro método, mesmo diante de lentidão ou limitações de memória. Substituir o SWeeP não é uma opção e nunca deve ser considerado.
+   - A projeção DEVE ser executada estritamente através do pacote R `rSWeeP` via script R, aplicando a base gerada por `orthBase()` e projetada por `SWeeP()`, com suporte a congelamento de base em arquivo `.rds` (`path_orthbase`).
+   - Caso o ambiente R, dependências ou a execução falhem, o sistema DEVE disparar `RuntimeError` imediatamente com o log do R (`stderr`) e interromper o pipeline. Todo e qualquer fallback ou mecanismo de bypass está expressamente proibido.
 
 ---
 

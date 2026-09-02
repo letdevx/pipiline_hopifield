@@ -1,12 +1,17 @@
 """Testes unitários para validação de projeção ortonormal no espaço rSWeeP com micro-datasets."""
 
+from pathlib import Path
+
 import numpy as np
+import pytest
+import scipy.io as sio
+import scipy.sparse as sp
 
 from src.synthetic.gerador_ground_truth import GeradorGroundTruthSintetico
-from src.treinamento.projetor_sweep import ProjetorSWeP
+from src.treinamento.projetor_sweep import ProjetorSWeePR, ProjetorSWeP
 
 
-def test_projetor_sweep_dimensao_adaptavel():
+def test_projetor_sweep_dimensao_adaptavel() -> None:
     """Verifica se o projetor SWeeP executa sem falhas com matrizes onde N_genes <= n_componentes,
     ajustando automaticamente a dimensão ou operando via decomposição QR adaptativa."""
     n_celulas = 12
@@ -23,6 +28,7 @@ def test_projetor_sweep_dimensao_adaptavel():
 
     # Verifica ortogonalidade da matriz R
     R = projetor.R
+    assert R is not None
     assert R.shape == (n_genes, n_comp_alvo), (
         f"Base R esperada {(n_genes, n_comp_alvo)}, obtida {R.shape}"
     )
@@ -35,13 +41,13 @@ def test_projetor_sweep_dimensao_adaptavel():
     # Projeta os dados
     projetor.projetar(matriz)
     Wswp = projetor.Wswp
-
+    assert Wswp is not None
     assert Wswp.shape == (n_celulas, n_comp_alvo), (
         "A projeção Wswp deve ter dimensões (células × componentes)."
     )
 
 
-def test_projetor_sweep_preserva_separabilidade_de_classes():
+def test_projetor_sweep_preserva_separabilidade_de_classes() -> None:
     """Comprova que células do mesmo tipo biológico permanecem mais próximas no espaço SWeeP do que de outros tipos."""
     gerador = GeradorGroundTruthSintetico(n_celulas=12, n_genes=8, n_classes=3, seed=55)
     matriz = gerador.gerar_matriz_pura(formato="numpy")
@@ -50,6 +56,7 @@ def test_projetor_sweep_preserva_separabilidade_de_classes():
     projetor = ProjetorSWeP(n_features=8, n_componentes=6, seed=123)
     projetor.gerar_base().projetar(matriz)
     Wswp = projetor.Wswp
+    assert Wswp is not None
 
     # Distância L2 entre duas células do mesmo tipo (C0 e C1 - Tipo A)
     dist_mesma_classe = np.linalg.norm(Wswp[0] - Wswp[1])
@@ -60,3 +67,74 @@ def test_projetor_sweep_preserva_separabilidade_de_classes():
     assert dist_mesma_classe < dist_classes_distintas, (
         "A projeção SWeeP deve preservar a topologia e separabilidade biológica."
     )
+
+
+def test_projetor_sweepr_execucao_r_canonica_e_congelamento(tmp_path: Path) -> None:
+    """Valida a execução oficial do ProjetorSWeePR chamando o script R canônico com congelamento de base."""
+    n_celulas = 15
+    n_genes = 20
+    n_comp = 6
+
+    rng = np.random.default_rng(42)
+    mat_esparsa = sp.csr_matrix(
+        rng.integers(0, 2, size=(n_celulas, n_genes), dtype=np.int32)
+    )
+
+    path_mtx = tmp_path / "micro_teste.mtx"
+    path_saida1 = tmp_path / "saida_sweep1.txt"
+    path_saida2 = tmp_path / "saida_sweep2.txt"
+    path_orthbase = tmp_path / "orthbase_congelada.rds"
+
+    sio.mmwrite(str(path_mtx), mat_esparsa)
+
+    # 1. Primeira projeção — gera e congela base
+    projetor1 = ProjetorSWeePR(
+        path_matriz=path_mtx,
+        path_saida=path_saida1,
+        n_componentes=n_comp,
+        seed=42,
+        path_orthbase=path_orthbase,
+    )
+    projetor1.projetar()
+
+    assert path_saida1.exists(), "Arquivo de saída .txt deve existir."
+    assert path_orthbase.exists(), "Arquivo RDS de base congelada deve existir."
+    assert projetor1.Wswp is not None
+    assert projetor1.Wswp.shape == (n_celulas, n_comp), (
+        f"Shape inesperado: {projetor1.Wswp.shape}"
+    )
+
+    # 2. Segunda projeção — reutiliza base congelada e deve dar resultado idêntico
+    projetor2 = ProjetorSWeePR(
+        path_matriz=path_mtx,
+        path_saida=path_saida2,
+        n_componentes=n_comp,
+        seed=999,  # semente diferente mas base congelada carregada
+        path_orthbase=path_orthbase,
+    )
+    projetor2.projetar()
+
+    assert projetor2.Wswp is not None
+    np.testing.assert_allclose(
+        projetor1.Wswp,
+        projetor2.Wswp,
+        rtol=1e-5,
+        atol=1e-5,
+        err_msg="A reutilização da base congelada deve produzir projeções matematicamente idênticas.",
+    )
+
+
+def test_projetor_sweepr_falha_estrita_sem_fallback(tmp_path: Path) -> None:
+    """Verifica que ProjetorSWeePR dispara RuntimeError estrito e não mascara erros com fallbacks."""
+    path_invalido = tmp_path / "arquivo_inexistente.mtx"
+    path_saida = tmp_path / "saida_invalida.txt"
+
+    projetor = ProjetorSWeePR(
+        path_matriz=path_invalido,
+        path_saida=path_saida,
+        n_componentes=6,
+        seed=42,
+    )
+
+    with pytest.raises(RuntimeError, match=r"FALHA CRÍTICA no subprocesso R"):
+        projetor.projetar()

@@ -252,13 +252,15 @@ print("[Otimização I/O] Conjunto de treinamento preservado nas matrizes binár
 # %%
 
 
-PATH_SWEEP_F_EXPANDIDO = os.path.join(OUT_TREINAMENTO, 'matriz_reduzida_sweepF_completo_36k.csv')
+PATH_SWEEP_F_EXPANDIDO = os.path.join(OUT_TREINAMENTO, 'matriz_reduzida_sweepF_completo_36k.txt')
+PATH_ORTHBASE_RDS = os.path.join(OUT_TREINAMENTO, 'orthbase_mproj_600d.rds')
 
 projetor_r = ProjetorSWeePR(
     path_matriz   = path_f_expandido,
     path_saida    = PATH_SWEEP_F_EXPANDIDO,
     n_componentes = 600,
     seed          = SEED,
+    path_orthbase = PATH_ORTHBASE_RDS,
 )
 projetor_r.projetar()
 

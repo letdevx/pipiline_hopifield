@@ -1,7 +1,7 @@
 """Módulo de Projeção Espectral Dimensional SWeeP e rSWeeP.
 
 Projeta vetores de expressão genômica em subespaços ortogonais compactos
-utilizando decomposição QR ou pontes de integração externa via Rscript.
+utilizando estritamente a biblioteca oficial rSWeeP da UFPR via Rscript.
 """
 
 from __future__ import annotations
@@ -14,6 +14,8 @@ from typing import Any
 import anndata as ad
 import numpy as np
 import pandas as pd
+import polars as pl
+import scipy.io as sio
 import scipy.sparse as sp
 from numpy.typing import NDArray
 
@@ -23,11 +25,10 @@ PathType = str | os.PathLike[str]
 
 
 class ProjetorSWeP:
-    """Projeta dados binários no espaço SWeeP usando base ortogonal rSWeeP.
+    """Consome representações no espaço SWeeP e gerencia base ortogonal rSWeeP.
 
-    Pode gerar uma base sintética via decomposição QR (quando a base R5k pré-determinada
-    não está disponível) ou carregar a base a partir de arquivo. Aplica opcionalmente PCA sem
-    centralização sobre as projeções geradas.
+    Permite carregar bases pré-existentes, definir projeções pré-computadas
+    e calcular PCA sem centralização sobre as coordenadas projetadas.
 
     Parameters
     ----------
@@ -36,7 +37,7 @@ class ProjetorSWeP:
     n_componentes : int, default=600
         Dimensão do espaço latente SWeeP (colunas da base R).
     seed : int, default=42
-        Semente pseudoaleatória para geração da base ortonormal.
+        Semente pseudoaleatória para geração da base.
 
     Attributes
     ----------
@@ -68,7 +69,10 @@ class ProjetorSWeP:
         self.Wpc: NDArray[np.float32] | None = None
 
     def gerar_base(self) -> ProjetorSWeP:
-        """Gera base ortonormal sintética via decomposição QR.
+        """Gera base ortonormal sintética em memória estritamente para testes de unidade locais.
+
+        Aviso: Para treinamento e pipelines científicos de produção, o uso do ProjetorSWeePR
+        com o pacote oficial rSWeeP é obrigatório por diretriz mandatória de projeto.
 
         Returns
         -------
@@ -76,7 +80,7 @@ class ProjetorSWeP:
             A própria instância com o atributo R preenchido.
         """
         print(
-            f"[ProjetorSWeP] Gerando base sintética QR "
+            f"[ProjetorSWeP] Base em memória para testes "
             f"({self.n_features} × {self.n_componentes}, seed={self.seed})..."
         )
         rng = np.random.default_rng(self.seed)
@@ -107,6 +111,7 @@ class ProjetorSWeP:
             self.R = np.load(path_str).astype(np.float32)
         else:
             self.R = np.loadtxt(path_str, dtype=np.float32)
+        assert self.R is not None
         print(f"[ProjetorSWeP] Base carregada: {self.R.shape}")
         return self
 
@@ -129,16 +134,17 @@ class ProjetorSWeP:
             )
         print(f"[ProjetorSWeP] Projetando W {W.shape} → SWeeP...")
         if sp.issparse(W):
-            self.Wswp = sp.csr_matrix(W).dot(self.R).astype(np.float32, copy=False)
+            self.Wswp = np.asarray(sp.csr_matrix(W).dot(self.R), dtype=np.float32)
         else:
-            self.Wswp = (np.asarray(W, dtype=np.float32) @ self.R).astype(np.float32)
+            self.Wswp = np.asarray(W, dtype=np.float32) @ self.R
+        assert self.Wswp is not None
         print(f"[ProjetorSWeP] Wswp shape: {self.Wswp.shape}")
         return self
 
     def usar_sweep_precomputado(
         self, Wswp: NDArray[Any] | Sequence[Sequence[float]]
     ) -> ProjetorSWeP:
-        """Configura projeções SWeeP já calculadas externamente.
+        """Configura projeções SWeeP já calculadas externamente via rSWeeP em R.
 
         Parameters
         ----------
@@ -190,32 +196,37 @@ class ProjetorSWeP:
 
 
 class ProjetorSWeePR:
-    """Executa a projeção rSWeeP via script R externo (subprocess) ou fallback NumPy.
+    """Executa a projeção rSWeeP exclusivamente via script R externo (subprocess).
 
-    Lê a matriz binária de entrada, executa o script R `projetar_sweep.R`
-    e salva o resultado em formato CSV.
+    Garante a conformidade estrita com a regra mandatória da pesquisa, executando
+    o algoritmo canônico orthBase() + SWeeP() da biblioteca R oficial rSWeeP (AIBIALab/UFPR).
+    Todos os fallbacks sintéticos foram sumariamente eliminados.
 
     Parameters
     ----------
     path_matriz : str | os.PathLike[str]
-        Caminho do arquivo de expressão de entrada.
+        Caminho do arquivo de expressão de entrada (.mtx, .h5ad ou .npy).
     path_saida : str | os.PathLike[str]
-        Caminho do CSV de destino.
+        Caminho do arquivo de texto tabulado (.txt) de destino.
     n_componentes : int, default=600
         Dimensão do espaço latente.
     seed : int, default=42
         Semente pseudoaleatória.
+    path_orthbase : str | os.PathLike[str] | None, default=None
+        Caminho do arquivo .rds para congelamento e reutilização da base ortonormal.
 
     Attributes
     ----------
     path_matriz : str
         Caminho de entrada.
     path_saida : str
-        Caminho de saída.
+        Caminho de saída (.txt tabulado).
     n_componentes : int
-        Dimensão.
+        Dimensão latente.
     seed : int
-        Semente.
+        Semente aleatória.
+    path_orthbase : str | None
+        Caminho da base congelada em RDS.
     Wswp : NDArray[np.float32] | None
         Matriz de projeção latente calculada.
     """
@@ -228,107 +239,141 @@ class ProjetorSWeePR:
         path_saida: PathType,
         n_componentes: int = 600,
         seed: int = 42,
+        path_orthbase: PathType | None = None,
     ) -> None:
         self.path_matriz: str = str(path_matriz)
         self.path_saida: str = str(path_saida)
         self.n_componentes: int = int(n_componentes)
         self.seed: int = int(seed)
+        self.path_orthbase: str | None = (
+            str(path_orthbase) if path_orthbase is not None else None
+        )
         self.Wswp: NDArray[np.float32] | None = None
 
     def projetar(self) -> ProjetorSWeePR:
         """Executa a projeção rSWeeP via Rscript e carrega o resultado.
 
-        Pula a execução se o arquivo de saída já existir.
+        Garante a conversão para Matrix Market (.mtx) se a entrada for h5ad/npy,
+        executa o script R oficial sem fallbacks e dispara RuntimeError se houver falha.
 
         Returns
         -------
         ProjetorSWeePR
-            A própria instância com os dados projetados.
+            A própria instância com os dados projetados carregados em Wswp.
+
+        Raises
+        ------
+        RuntimeError
+            Se o ambiente R, o script ou a projeção falharem.
         """
         if os.path.exists(self.path_saida):
-            print(f"[ProjetorSWeePR] Arquivo já existe, carregando: {self.path_saida}")
+            print(
+                f"[ProjetorSWeePR] Arquivo de projeção já existente, carregando: {self.path_saida}"
+            )
             self._carregar()
             return self
 
-        if self.path_matriz.endswith(".npy") or self.path_matriz.endswith(".h5ad"):
-            print(
-                f"[ProjetorSWeePR] Matriz binária (.npy/.h5ad) detectada: {self.path_matriz}"
-            )
-            print(
-                "[ProjetorSWeePR] Executando rSWeeP via motor nativo Python/NumPy QR (otimização OOM sem parser de texto)..."
-            )
-            self._fallback_python()
-            return self
+        # 1. Preparação da Matriz de Entrada no formato Matrix Market (.mtx) OOM-Safe
+        path_mtx: str
 
-        print("[ProjetorSWeePR] Executando rSWeeP via R...")
-        print(f"  entrada : {self.path_matriz}")
-        print(f"  saída   : {self.path_saida}")
-        print(f"  dim_proj: {self.n_componentes}, seed: {self.seed}")
+        if self.path_matriz.endswith(".mtx") or self.path_matriz.endswith(".mtx.gz"):
+            path_mtx = self.path_matriz
+        elif self.path_matriz.endswith(".h5ad"):
+            path_mtx = self.path_matriz.rsplit(".h5ad", 1)[0] + ".mtx"
+            if not os.path.exists(path_mtx):
+                print(
+                    f"[ProjetorSWeePR] Exportando camada esparsa do h5ad para Matrix Market: {path_mtx}..."
+                )
+                adata_tmp: ad.AnnData = ad.read_h5ad(self.path_matriz, backed="r")
+                x_raw: Any = adata_tmp.X
+                x_mat: Any = x_raw.to_memory() if hasattr(x_raw, "to_memory") else x_raw
+
+                if not sp.issparse(x_mat):
+                    x_mat = sp.csr_matrix(x_mat)
+                os.makedirs(os.path.dirname(os.path.abspath(path_mtx)), exist_ok=True)
+                sio.mmwrite(path_mtx, x_mat)
+                adata_tmp.file.close()
+                del adata_tmp, x_raw, x_mat
+            else:
+                print(
+                    f"[ProjetorSWeePR] Arquivo .mtx correspondente já disponível: {path_mtx}"
+                )
+        elif self.path_matriz.endswith(".npy"):
+            path_mtx = self.path_matriz.rsplit(".npy", 1)[0] + ".mtx"
+            if not os.path.exists(path_mtx):
+                print(
+                    f"[ProjetorSWeePR] Convertendo array NumPy para Matrix Market esparso: {path_mtx}..."
+                )
+                arr = np.load(self.path_matriz, mmap_mode="r")
+                sp_arr = sp.csr_matrix(arr)
+                os.makedirs(os.path.dirname(os.path.abspath(path_mtx)), exist_ok=True)
+                sio.mmwrite(path_mtx, sp_arr)
+                del arr, sp_arr
+            else:
+                print(
+                    f"[ProjetorSWeePR] Arquivo .mtx correspondente já disponível: {path_mtx}"
+                )
+        else:
+            path_mtx = self.path_matriz
+
+        # 2. Configuração e Disparo do Subprocesso R Canônico
+        print("[ProjetorSWeePR] Executando projeção oficial rSWeeP em R...")
+        print(f"  script R   : {self._R_SCRIPT}")
+        print(f"  entrada    : {path_mtx}")
+        print(f"  saída      : {self.path_saida}")
+        print(f"  dim_proj   : {self.n_componentes}, seed: {self.seed}")
+        print(
+            f"  base RDS   : {self.path_orthbase or 'Geração determinística (sem salvamento)'}"
+        )
 
         cmd: list[str] = [
             "Rscript",
             self._R_SCRIPT,
-            self.path_matriz,
+            path_mtx,
             self.path_saida,
             str(self.n_componentes),
             str(self.seed),
         ]
+        if self.path_orthbase:
+            cmd.append(self.path_orthbase)
+
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.returncode != 0:
-            print("[ProjetorSWeePR] R falhou — usando fallback Python (QR).")
-            print(f"[ProjetorSWeePR] Detalhe R:\n{result.stderr}")
-            self._fallback_python()
-            return self
+            msg_erro: str = (
+                f"[ProjetorSWeePR] FALHA CRÍTICA no subprocesso R (código {result.returncode}).\n"
+                f"Por diretriz mandatória do projeto (ADR 019), nenhum fallback sintético é tolerado.\n"
+                f"--- ERRO DO R (stderr) ---\n{result.stderr}\n"
+                f"--- SAÍDA DO R (stdout) ---\n{result.stdout}"
+            )
+            raise RuntimeError(msg_erro)
 
         print(result.stdout)
+
+        # 3. Carregamento do Resultado Gerado em R
         self._carregar()
         return self
 
-    def _fallback_python(self) -> None:
-        """Fallback: projeção via base ortogonal QR gerada em Python (100% OOM-Safe)."""
-        print(
-            f"[ProjetorSWeePR] Carregando matriz no motor Python/NumPy: {self.path_matriz}"
-        )
-
-        W: NDArray[Any] | sp.spmatrix
-        n_features: int
-        if self.path_matriz.endswith(".npy"):
-            W = np.load(self.path_matriz, mmap_mode="r")
-            n_features = int(W.shape[1])
-        elif self.path_matriz.endswith(".h5ad"):
-            adata_tmp: ad.AnnData = ad.read_h5ad(self.path_matriz)
-            W = adata_tmp.X  # Mantém formato esparso CSR se disponível
-            n_features = int(adata_tmp.n_vars)
-            del adata_tmp
-        else:
-            W = pd.read_csv(self.path_matriz, index_col=0).to_numpy(dtype=np.float32)
-            n_features = int(W.shape[1])
-
-        print(
-            f"[ProjetorSWeePR] Matriz {W.shape} → projetando para {self.n_componentes} componentes (QR)..."
-        )
-        rng = np.random.default_rng(self.seed)
-        Q, _ = np.linalg.qr(rng.standard_normal((n_features, self.n_componentes)))
-        R: NDArray[np.float32] = Q.astype(np.float32)
-
-        proj: NDArray[np.float32]
-        if sp.issparse(W):
-            proj = sp.csr_matrix(W).dot(R).astype(np.float32, copy=False)
-        else:
-            proj = (np.asarray(W, dtype=np.float32) @ R).astype(np.float32, copy=False)
-
-        os.makedirs(os.path.dirname(os.path.abspath(self.path_saida)), exist_ok=True)
-        pd.DataFrame(proj).to_csv(self.path_saida, index=False)
-        print(
-            f"[ProjetorSWeePR] Projeção SWeeP salva com sucesso em: {self.path_saida}"
-        )
-        self._carregar()
-
     def _carregar(self) -> None:
-        self.Wswp = pd.read_csv(self.path_saida).to_numpy(dtype=np.float32)
+        """Carrega a matriz projetada gravada pelo script R em formato tabulado."""
+        if not os.path.exists(self.path_saida):
+            raise FileNotFoundError(
+                f"[ProjetorSWeePR] Arquivo de saída não encontrado: {self.path_saida}"
+            )
+
+        # Tenta ler com Polars primeiro por velocidade; se falhar, usa Pandas
+        try:
+            df = pl.read_csv(self.path_saida, separator="\t", has_header=False)
+            self.Wswp = df.to_numpy().astype(np.float32)
+        except Exception:
+            self.Wswp = pd.read_csv(self.path_saida, sep=r"\s+", header=None).to_numpy(
+                dtype=np.float32
+            )
+
         assert self.Wswp is not None
-        print(f"[ProjetorSWeePR] Wswp carregado: {self.Wswp.shape}")
+        print(
+            f"[ProjetorSWeePR] Wswp carregado com sucesso absoluto: {self.Wswp.shape}"
+        )
 
     def __repr__(self) -> str:
         """Representação textual do projetor SWeeP em R."""
@@ -339,6 +384,7 @@ class ProjetorSWeePR:
             f"  path_saida    = {self.path_saida}\n"
             f"  n_componentes = {self.n_componentes}\n"
             f"  seed          = {self.seed}\n"
+            f"  base_rds      = {self.path_orthbase}\n"
             f"  Wswp          = {wswp}\n"
             f")"
         )

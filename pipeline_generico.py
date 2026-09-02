@@ -142,7 +142,9 @@ from config import (
     PATH_FEATURES_REFERENCIA,
     PATH_LABELS_ALVO,
     PATH_LABELS_REFERENCIA,
+    PATH_ORTHBASE_RDS,
     PATH_REFERENCIA,
+    PATH_SWEEP_ALVO,
     PATH_SWEEP_REFERENCIA,
 )
 
@@ -356,6 +358,7 @@ projetor_r = ProjetorSWeePR(
     path_saida=PATH_SWEEP_REFERENCIA,
     n_componentes=600,
     seed=SEED,
+    path_orthbase=PATH_ORTHBASE_RDS,
 )
 projetor_r.projetar()
 
@@ -714,6 +717,20 @@ if hasattr(adata_imp_loaded, "file") and adata_imp_loaded.file is not None:
     adata_imp_loaded.file.close()
 del adata_imp_loaded
 gc.collect()
+
+# 7. Projeção SWeeP do Alvo Imputado (Garantia de Mesma Base Ortonormal Congelada - ADR 018/019)
+path_mtx_alvo_imputado = os.path.join(OUT_MTX_ALVO_IMPUTADO, "matrix.mtx")
+print(
+    f"\n[SWeeP Alvo Imputado] Projetando {path_mtx_alvo_imputado} com a mesma base congelada..."
+)
+projetor_m_r = ProjetorSWeePR(
+    path_matriz=path_mtx_alvo_imputado,
+    path_saida=PATH_SWEEP_ALVO,
+    n_componentes=600,
+    seed=SEED,
+    path_orthbase=PATH_ORTHBASE_RDS,
+)
+projetor_m_r.projetar()
 
 # 5. Avaliação do Tipo Celular Cross-Dataset
 avaliador_m = AvaliadorHopfield(

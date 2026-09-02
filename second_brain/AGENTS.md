@@ -40,3 +40,16 @@ resumo: "Resumo objetivo em uma frase em português brasileiro."
 - **Atomicidade de Conceitos:** Salve novas ideias teóricas, métodos ou descobertas como notas atômicas em `03_Conhecimento/` e adicione o wikilink em `03_Conhecimento/index.md`.
 - **Links Internos (`[[Wikilinks]]`):** Use sempre a sintaxe do Obsidian `[[Caminho/Nome-da-Nota|Texto]]` para conectar arquivos.
 - **Registros formais de Arquitetura (ADRs):** Decisões arquiteturais importantes devem ser salvas em `04_Recursos/adrs/` e vinculadas ao índice `04_Recursos/adrs/index.md`.
+
+## 6. Proibição de Sintaxe LaTeX Math ($$...$$ ou $...$)
+- **INCOMPATIBILIDADE DE RENDERIZAÇÃO:** O Google Antigravity IDE não renderiza blocos matemáticos em LaTeX (`$$ ... $$` ou `$ ... $`).
+- **ABORDAGENS OBRIGATÓRIAS COMPATÍVEIS:**
+  - Código inline ou blocos (` `proj = W × Q (40.913 células × 600 dimensões)` `);
+  - Caracteres Unicode legíveis (`×`, `∈`, `≈`, `→`, `·`, subscritos/sobrescritos);
+  - Tabelas e listas estruturadas em Markdown;
+  - Diagramas Mermaid para transformações dimensionais.
+
+## 7. Obrigatoriedade Irrevogável do Algoritmo rSWeeP (R Nativo)
+- **PROIBIÇÃO TOTAL DE FALLBACKS:** É terminantemente proibido substituir o algoritmo `rSWeeP` (AIBIALab/UFPR) por qualquer rotina sintética ou aproximação linear (ex.: decomposição QR com matriz Gaussiana). O pipeline só tem validade científica com o `rSWeeP` oficial.
+- **EXECUÇÃO CANÔNICA EM R:** A projeção deve ser realizada via script R (`projetar_sweep.R`) com `orthBase()` + `SWeeP()`, congelando e reutilizando a base em `.rds`.
+- **FALHA RÍGIDA:** Qualquer erro no R deve interromper imediatamente o processo com `RuntimeError`.

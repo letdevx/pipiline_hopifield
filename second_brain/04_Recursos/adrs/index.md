@@ -32,6 +32,7 @@ Esta pasta armazena o repositório de decisões formais de arquitetura para gara
 * 📜 **[[04_Recursos/adrs/adr_016_migracao_gerenciador_pacotes_uv|ADR 016: Migração do Gerenciador de Pacotes para uv e Travamento Determinístico com uv.lock]]**
 * 📜 **[[04_Recursos/adrs/adr_017_exportador_anndata_imputacao_cross_dataset|ADR 017: Exportação Estruturada de Imputação Cross-Dataset em AnnData OOM-Safe com Camadas de Rastreabilidade]]**
 * 📜 **[[04_Recursos/adrs/adr_018_validacao_ordem_genes_exportacao_mtx|ADR 018: Validação Estrita de Ordem Gênica, Exportação Padronizada Matrix Market (.mtx) e Congelamento da Base Ortonormal SWeeP]]**
+* 📜 **[[04_Recursos/adrs/adr_019_obrigatoriedade_rsweep_r_e_congelamento_orthbase|ADR 019: Obrigatoriedade Irrevogável do Algoritmo rSWeeP em R, Execução Canônica via orthBase() + SWeeP() e Eliminação de Fallbacks]]**
 
 ---
 
