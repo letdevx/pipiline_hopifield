@@ -42,6 +42,55 @@ NOMES_CLASSES_CEREBRO: dict[int, str] = {
 }
 
 
+def _is_sparse_like(mat: Any) -> bool:
+    """Verifica se a matriz é esparsa SciPy ou dataset esparso backed do AnnData."""
+    if mat is None:
+        return False
+    if sp.issparse(mat):
+        return True
+    return bool(
+        hasattr(mat, "to_memory") and getattr(mat, "format", None) in ("csr", "csc")
+    )
+
+
+def _para_csr_matrix(mat: Any) -> sp.csr_matrix:
+    """Converte transparentemente matrizes em memória ou datasets backed para sp.csr_matrix."""
+    if hasattr(mat, "to_memory"):
+        return sp.csr_matrix(mat.to_memory())
+    if sp.issparse(mat):
+        return sp.csr_matrix(mat)
+    return sp.csr_matrix(mat)
+
+
+def _para_array_denso(mat: Any) -> NDArray[Any]:
+    """Converte representações densas (numpy, h5py Dataset, backed ArrayView) para NDArray."""
+    if hasattr(mat, "to_memory"):
+        return np.asarray(mat.to_memory().toarray())
+    if sp.issparse(mat):
+        return np.asarray(mat.toarray())
+    if (
+        hasattr(mat, "shape")
+        and hasattr(mat, "__getitem__")
+        and not isinstance(mat, np.ndarray)
+    ):
+        return np.asarray(mat[:])
+    return np.asarray(mat)
+
+
+def _extrair_coluna_1d(mat: Any, col: int) -> NDArray[Any]:
+    """Extrai uma única coluna 1D de qualquer matriz (SciPy, NumPy, AnnData backed CSR/CSC ou Dataset)."""
+    if mat is None:
+        return np.array([])
+    col_slice = mat[:, col]
+    if hasattr(col_slice, "toarray"):
+        return np.asarray(col_slice.toarray()).ravel()
+    if hasattr(col_slice, "to_memory"):
+        return np.asarray(col_slice.to_memory().toarray()).ravel()
+    if sp.issparse(col_slice):
+        return np.asarray(col_slice.toarray()).ravel()
+    return np.asarray(col_slice).ravel()
+
+
 class ValidadorImputacao:
     """Validador e auditor de qualidade e biologia da imputação cross-dataset.
 
@@ -79,24 +128,26 @@ class ValidadorImputacao:
 
         mask_csr: sp.csr_matrix | None = None
         if "mascara_imputada" in adata.layers:
-            mask_csr = sp.csr_matrix(adata.layers["mascara_imputada"])
+            mask_csr = _para_csr_matrix(adata.layers["mascara_imputada"])
 
         total_sentinelas: int = 0
         total_ativados: int = 0
         total_inativados: int = 0
 
         X_mat = adata.X
+        is_sparse = _is_sparse_like(X_mat)
+
         if mask_csr is not None and mask_csr.nnz > 0:
             total_sentinelas = int(mask_csr.nnz)
             # Elementos onde mask_csr é 1.0
-            if sp.issparse(X_mat):
-                X_csr = sp.csr_matrix(X_mat)
+            if is_sparse:
+                X_csr = _para_csr_matrix(X_mat)
                 # Interseção esparsa de X com a máscara
                 X_imputados = X_csr.multiply(mask_csr)
                 total_ativados = int(np.sum(X_imputados.data > 0.0))
                 total_inativados = total_sentinelas - total_ativados
             else:
-                X_arr = np.asarray(X_mat)
+                X_arr = _para_array_denso(X_mat)
                 mask_dense = mask_csr.toarray().astype(bool)
                 vals = X_arr[mask_dense]
                 total_ativados = int(np.sum(vals > 0.0))
@@ -111,12 +162,12 @@ class ValidadorImputacao:
             n_ausentes = len(cols_ausentes)
             total_sentinelas = n_celulas * n_ausentes
 
-            if sp.issparse(X_mat):
-                X_csr = sp.csr_matrix(X_mat)[:, cols_ausentes]
+            if is_sparse:
+                X_csr = _para_csr_matrix(X_mat)[:, cols_ausentes]
                 total_ativados = int(np.sum(X_csr.data > 0.0))
                 total_inativados = total_sentinelas - total_ativados
             else:
-                X_arr = np.asarray(X_mat)[:, cols_ausentes]
+                X_arr = _para_array_denso(X_mat)[:, cols_ausentes]
                 total_ativados = int(np.sum(X_arr > 0.0))
                 total_inativados = int(np.sum(X_arr == 0.0))
 
@@ -136,9 +187,9 @@ class ValidadorImputacao:
 
         conf_media: float | None = None
         if "probabilidade_imputada" in adata.layers:
-            prob_mat = adata.layers["probabilidade_imputada"]
-            if sp.issparse(prob_mat):
-                prob_mat = sp.csr_matrix(prob_mat)
+            prob_raw = adata.layers["probabilidade_imputada"]
+            if _is_sparse_like(prob_raw):
+                prob_mat = _para_csr_matrix(prob_raw)
                 if mask_csr is not None and mask_csr.nnz > 0:
                     prob_imp = prob_mat.multiply(mask_csr)
                     # Média sobre as posições imputadas
@@ -148,14 +199,14 @@ class ValidadorImputacao:
                         float(prob_mat.data.mean()) if prob_mat.nnz > 0 else 0.0
                     )
             else:
-                prob_arr = np.asarray(prob_mat)
+                prob_arr = _para_array_denso(prob_raw)
                 conf_media = float(np.mean(prob_arr))
 
         # Esparsidade global da matriz final
-        if sp.issparse(X_mat):
-            nnz_final = sp.csr_matrix(X_mat).nnz
+        if is_sparse:
+            nnz_final = int(_para_csr_matrix(X_mat).nnz)
         else:
-            nnz_final = int(np.sum(np.asarray(X_mat) > 0.0))
+            nnz_final = int(np.sum(_para_array_denso(X_mat) > 0.0))
         densidade_final = (
             (nnz_final / total_coordenadas * 100.0) if total_coordenadas > 0 else 0.0
         )
@@ -216,13 +267,10 @@ class ValidadorImputacao:
         if "gene_imputado" in adata.var:
             genes_imputados_flags = adata.var["gene_imputado"].to_numpy().astype(bool)
         elif "mascara_imputada" in adata.layers:
-            m_csr = sp.csr_matrix(adata.layers["mascara_imputada"])
+            m_csr = _para_csr_matrix(adata.layers["mascara_imputada"])
             genes_imputados_flags = np.asarray(m_csr.sum(axis=0)).ravel() > 0
         else:
             genes_imputados_flags = np.zeros(adata.n_vars, dtype=bool)
-
-        X_csr = sp.csr_matrix(adata.X) if sp.issparse(adata.X) else None
-        X_arr = np.asarray(adata.X) if not sp.issparse(adata.X) else None
 
         prob_mat = adata.layers.get("probabilidade_imputada")
 
@@ -255,11 +303,7 @@ class ValidadorImputacao:
                     continue
 
                 foi_imp = bool(genes_imputados_flags[col])
-                if X_csr is not None:
-                    col_data = X_csr[:, col].toarray().ravel()
-                else:
-                    assert X_arr is not None
-                    col_data = X_arr[:, col]
+                col_data = _extrair_coluna_1d(adata.X, col)
 
                 val_alvo = col_data[mask_classe] if n_cel_alvo > 0 else np.array([])
                 val_outras = col_data[mask_outras] if n_cel_outras > 0 else np.array([])
@@ -281,11 +325,12 @@ class ValidadorImputacao:
 
                 conf_gene: float | None = None
                 if prob_mat is not None:
-                    if sp.issparse(prob_mat):
-                        prob_csr = sp.csr_matrix(prob_mat)
-                        col_prob = prob_csr[:, col].toarray().ravel()[mask_classe]
-                    else:
-                        col_prob = np.asarray(prob_mat)[:, col][mask_classe]
+                    col_prob_all = _extrair_coluna_1d(prob_mat, col)
+                    col_prob = (
+                        col_prob_all[mask_classe]
+                        if len(col_prob_all) > 0
+                        else np.array([])
+                    )
                     conf_gene = (
                         round(float(np.mean(col_prob)), 4)
                         if len(col_prob) > 0

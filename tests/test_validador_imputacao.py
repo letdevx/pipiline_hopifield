@@ -122,3 +122,83 @@ def test_validador_imputacao_global_e_marcadores(tmp_path: Path) -> None:
         ]
         == 40
     )
+
+
+def test_validador_imputacao_backed(tmp_path: Path) -> None:
+    """Valida que o auditor funciona perfeitamente com AnnData aberto em modo backed='r'."""
+    n_celulas = 15
+    n_genes = 4
+    classes_reais = np.array([1] * 8 + [3] * 7)
+
+    X = np.zeros((n_celulas, n_genes), dtype=np.float32)
+    # Gene 0: GFAP (Astrocyte)
+    X[:6, 0] = 1.0
+    # Gene 1: SLC17A7 (Excitatory)
+    X[8:, 1] = 1.0
+    # Gene 2: imputado ativo
+    X[:5, 2] = 1.0
+
+    mascara_imp = np.zeros((n_celulas, n_genes), dtype=np.float32)
+    mascara_imp[:, 2] = 1.0
+    mascara_imp[:, 3] = 1.0
+
+    prob_imp = np.zeros((n_celulas, n_genes), dtype=np.float32)
+    prob_imp[:5, 2] = 0.90
+    prob_imp[5:, 2] = 0.10
+
+    var_df = pd.DataFrame(
+        {
+            "gene_symbol": ["GFAP", "SLC17A7", "AQP4", "GAD1"],
+            "gene_imputado": [False, False, True, True],
+        },
+        index=["ENSG0", "ENSG1", "ENSG2", "ENSG3"],
+    )
+
+    adata = ad.AnnData(
+        X=sp.csr_matrix(X),
+        obs=pd.DataFrame({"tipo_celular_real": classes_reais}),
+        var=var_df,
+    )
+    adata.layers["mascara_imputada"] = sp.csr_matrix(mascara_imp)
+    adata.layers["probabilidade_imputada"] = sp.csr_matrix(prob_imp)
+
+    path_h5ad = tmp_path / "teste_imputado_backed.h5ad"
+    adata.write_h5ad(path_h5ad)
+
+    # Abre em modo backed='r' (onde X é _CSRDataset)
+    adata_backed = ad.read_h5ad(path_h5ad, backed="r")
+    validador = ValidadorImputacao()
+
+    try:
+        # 1. Auditoria global em modo backed
+        metricas = validador.auditar_imputacao_global(adata_backed)
+        assert metricas["n_celulas"] == 15
+        assert metricas["n_genes"] == 4
+        assert metricas["total_sentinelas_resolvidos"] == 30  # 15 * 2
+        assert metricas["posicoes_ativadas"] == 5
+        assert metricas["posicoes_inativadas"] == 25
+        assert metricas["confianca_media_imputacao"] is not None
+
+        # 2. Auditoria biológica em modo backed
+        map_features = {
+            "ENSG0": "GFAP",
+            "ENSG1": "SLC17A7",
+            "ENSG2": "AQP4",
+            "ENSG3": "GAD1",
+        }
+        df_marcadores = validador.auditar_marcadores_biologicos(
+            adata=adata_backed,
+            classes_reais=classes_reais,
+            map_features=map_features,
+        )
+        assert not df_marcadores.empty
+        gfap_row = df_marcadores[df_marcadores["gene_marcador"] == "GFAP"].iloc[0]
+        assert gfap_row["ativacao_no_tipo_pct"] == 75.0  # 6 / 8
+        assert gfap_row["ativacao_outros_pct"] == 0.0
+
+        aqp4_row = df_marcadores[df_marcadores["gene_marcador"] == "AQP4"].iloc[0]
+        assert aqp4_row["foi_imputado"]
+        assert aqp4_row["ativacao_no_tipo_pct"] == 62.5  # 5 / 8
+    finally:
+        if hasattr(adata_backed, "file") and adata_backed.file is not None:
+            adata_backed.file.close()
