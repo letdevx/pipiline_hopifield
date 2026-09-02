@@ -37,7 +37,7 @@ PATH_ORTHBASE_RDS: str = os.path.join(
     PATH_BASE, "outputs", "treinamento", "orthbase_mproj_600d.rds"
 )
 PATH_LABELS_REFERENCIA: str = os.path.join(
-    PATH_BASE, "imputs", "PanNumerico.txt"
+    PATH_BASE, "imputs", "PanNumerico.csv"
 )
 PATH_LABELS_ALVO: str = os.path.join(
     PATH_BASE, "imputs", "cell_types_binarioF.txt"
