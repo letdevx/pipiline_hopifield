@@ -15,8 +15,32 @@
 # ---
 
 # %% vscode={"languageId": "r"}
-if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
-BiocManager::install("Biostrings")
+# Configuração automatizada e segura de dependências (CRAN / Bioconductor)
+# Compatível com Google Colab e ambientes não-interativos (evita travamentos)
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+    install.packages("BiocManager")
+}
+
+# Instalação segura do Biostrings sem travar em prompts interativos de update (ask = FALSE, update = FALSE)
+if (!requireNamespace("Biostrings", quietly = TRUE)) {
+    BiocManager::install("Biostrings", update = FALSE, ask = FALSE)
+}
+
+# Garante pacotes fundamentais para o processamento matricial e paralelismo
+pacotes_necessarios <- c("Matrix", "doParallel", "foreach")
+for (pkg in pacotes_necessarios) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+        install.packages(pkg)
+    }
+}
+
+if (!requireNamespace("rSWeeP", quietly = TRUE)) {
+    BiocManager::install("rSWeeP", update = FALSE, ask = FALSE)
+}
+
+cat("Dependências (Biostrings, Matrix, doParallel, foreach, rSWeeP) verificadas com sucesso!\n")
 
 
 # %% vscode={"languageId": "r"}

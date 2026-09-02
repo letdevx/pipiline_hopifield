@@ -250,6 +250,44 @@ class ProjetorSWeePR:
         )
         self.Wswp: NDArray[np.float32] | None = None
 
+    @staticmethod
+    def verificar_e_instalar_dependencias_r() -> None:
+        """Verifica e instala o pacote oficial rSWeeP (Bioconductor) e Matrix no ambiente R.
+
+        Configurado com flags não-interativas (ask=FALSE, update=FALSE) para compatibilidade
+        estrita com Google Colab e ambientes em nuvem.
+        """
+        import shutil
+
+        if shutil.which("Rscript") is None:
+            raise RuntimeError(
+                "[ProjetorSWeePR] Rscript não foi encontrado no PATH do sistema. "
+                "Certifique-se de que o R está instalado e disponível."
+            )
+
+        r_code = """
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+    install.packages("BiocManager")
+}
+if (!requireNamespace("rSWeeP", quietly = TRUE)) {
+    message("[ProjetorSWeePR] Instalando rSWeeP via BiocManager (não-interativo)...")
+    BiocManager::install("rSWeeP", update = FALSE, ask = FALSE)
+}
+if (!requireNamespace("Matrix", quietly = TRUE)) {
+    install.packages("Matrix")
+}
+library(rSWeeP)
+cat("[ProjetorSWeePR] Ambiente R pronto. rSWeeP versao:", as.character(packageVersion("rSWeeP")), "\\n")
+"""
+        print("[ProjetorSWeePR] Verificando dependências R no ambiente...")
+        res = subprocess.run(["Rscript", "-e", r_code], capture_output=True, text=True)
+        if res.returncode != 0:
+            raise RuntimeError(
+                f"[ProjetorSWeePR] Falha ao instalar rSWeeP no ambiente R:\n{res.stderr}"
+            )
+        print(res.stdout)
+
     def projetar(self) -> ProjetorSWeePR:
         """Executa a projeção rSWeeP via Rscript e carrega o resultado.
 
@@ -346,6 +384,18 @@ class ProjetorSWeePR:
                 f"--- ERRO DO R (stderr) ---\n{result.stderr}\n"
                 f"--- SAÍDA DO R (stdout) ---\n{result.stdout}"
             )
+            if "rSWeeP" in result.stderr and (
+                "não encontrado" in result.stderr or "not found" in result.stderr
+            ):
+                msg_erro += (
+                    "\n\n[DICA DE RESOLUÇÃO NO COLAB/LINUX]\n"
+                    "O pacote rSWeeP não está instalado no seu ambiente R.\n"
+                    "Para instalá-lo com segurança e sem travamentos, execute no notebook:\n"
+                    "  from treinamento.projetor_sweep import ProjetorSWeePR\n"
+                    "  ProjetorSWeePR.verificar_e_instalar_dependencias_r()\n"
+                    "Ou em uma célula bash:\n"
+                    '  !Rscript -e \'options(repos = c(CRAN = "https://cloud.r-project.org")); if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager"); BiocManager::install("rSWeeP", update = FALSE, ask = FALSE)\'\n'
+                )
             raise RuntimeError(msg_erro)
 
         print(result.stdout)

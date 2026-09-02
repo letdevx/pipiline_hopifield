@@ -353,6 +353,10 @@ gc.collect()
 # #### 5. Projeção SWeeP (rSWeeP via R ) 📚
 
 # %%
+# Garante que o pacote oficial rSWeeP (Bioconductor) está instalado no ambiente R (essencial no Google Colab)
+ProjetorSWeePR.verificar_e_instalar_dependencias_r()
+
+# %%
 projetor_r = ProjetorSWeePR(
     path_matriz=path_f_completo,
     path_saida=PATH_SWEEP_REFERENCIA,
