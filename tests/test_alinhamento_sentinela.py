@@ -1,5 +1,7 @@
 """Testes para auditar o comportamento de alinhamento e impacto dos valores sentinela (0.0 vs 0.5)."""
 
+from pathlib import Path
+
 import anndata as ad
 import numpy as np
 import pandas as pd
@@ -138,3 +140,45 @@ def test_retrieve_com_mascara_sentinela_ausentes():
     np.testing.assert_array_equal(recuperado[0], np.array([1.0, 1.0, 0.0, 0.0]))
     # A query 1 deve reconstruir perfeitamente o protótipo 1 [0, 0, 1, 1]
     np.testing.assert_array_equal(recuperado[1], np.array([0.0, 0.0, 1.0, 1.0]))
+
+
+def test_idempotencia_artefatos_cap4(tmp_path: Path) -> None:
+    """Verifica se a detecção de artefatos do Capítulo 4 valida a integridade sem reprocessamento."""
+    import scipy.sparse as sp
+
+    from src.alinhamento.exportador_mtx import ExportadorMTX
+    from src.alinhamento.validador_ordem_genes import ValidadorOrdemGenes
+
+    genes = ["ENSG00000000001", "ENSG00000000002", "ENSG00000000003"]
+    barcodes = ["cel_1", "cel_2"]
+    matriz = sp.csr_matrix(
+        np.array([[1.0, 0.5, 0.0], [0.0, 0.5, 1.0]], dtype=np.float32)
+    )
+
+    out_dir = tmp_path / "mtx_alvo_sentinela"
+    path_todos_genes = tmp_path / "genes_canonicos_completos.csv"
+
+    # 1. Salva os arquivos simulando execução prévia do Capítulo 4
+    pd.DataFrame({"gene": genes}).to_csv(path_todos_genes, index=False)
+    validador = ValidadorOrdemGenes()
+    exportador = ExportadorMTX(out_dir=out_dir, validador=validador)
+    exportador.exportar(
+        matriz=matriz, genes=genes, genes_referencia=genes, barcodes=barcodes
+    )
+
+    # 2. Checa se todos os 4 arquivos existem
+    path_mtx = out_dir / "matrix.mtx"
+    path_genes = out_dir / "genes_referencia.tsv"
+    path_barcodes = out_dir / "barcodes.tsv"
+
+    arquivos_existem = (
+        path_todos_genes.exists()
+        and path_mtx.exists()
+        and path_genes.exists()
+        and path_barcodes.exists()
+    )
+    assert arquivos_existem is True
+
+    # 3. Validação rápida de conformidade da pasta existente (sem recriar matriz)
+    relatorio = validador.validar_pasta_mtx(str(out_dir), genes_referencia=genes)
+    assert relatorio["status"] == "APROVADO"
