@@ -15,15 +15,15 @@ PATH_BASE: str = (
 )
 
 # Entrada Conjunto de Referência
-PATH_REFERENCIA: str = os.path.join(
-    PATH_BASE, "imputs", "pan_anotado.h5ad"
-)
+PATH_REFERENCIA: str = os.path.join(PATH_BASE, "imputs", "pan_anotado.h5ad")
 
 # Entrada Conjunto Alvo
 PATH_ALVO: str = os.path.join(PATH_BASE, "imputs", "matrizFiltradaeNormalizadaF.h5ad")
 
 # Features
-PATH_FEATURES_REFERENCIA: str = os.path.join(PATH_BASE, "imputs", "featuresPANcorrigido.tsv")
+PATH_FEATURES_REFERENCIA: str = os.path.join(
+    PATH_BASE, "imputs", "featuresPANcorrigido.tsv"
+)
 PATH_FEATURES_ALVO: str = os.path.join(PATH_BASE, "imputs", "featuresF.tsv")
 
 # Matrizes SWeeP, Base Ortonormal Congelada e Rótulos
@@ -33,15 +33,14 @@ PATH_SWEEP_REFERENCIA: str = os.path.join(
 PATH_SWEEP_ALVO: str = os.path.join(
     PATH_BASE, "outputs", "treinamento", "matriz_reduzida_sweepALVO.txt"
 )
+PATH_SWEEP_ALVO_SENTINELA: str = os.path.join(
+    PATH_BASE, "outputs", "treinamento", "matriz_reduzida_sweepALVO_sentinela.txt"
+)
 PATH_ORTHBASE_RDS: str = os.path.join(
     PATH_BASE, "outputs", "treinamento", "orthbase_mproj_600d.rds"
 )
-PATH_LABELS_REFERENCIA: str = os.path.join(
-    PATH_BASE, "imputs", "PanNumerico.csv"
-)
-PATH_LABELS_ALVO: str = os.path.join(
-    PATH_BASE, "imputs", "cell_types_binarioF.txt"
-)
+PATH_LABELS_REFERENCIA: str = os.path.join(PATH_BASE, "imputs", "PanNumerico.csv")
+PATH_LABELS_ALVO: str = os.path.join(PATH_BASE, "imputs", "cell_types_binarioF.txt")
 
 # ---------------------------------------------------------------------------
 # Saídas — geradas automaticamente dentro da raiz do projeto
@@ -69,6 +68,7 @@ PATH_FEATURES_F: str = PATH_FEATURES_REFERENCIA
 PATH_FEATURES_M: str = PATH_FEATURES_ALVO
 PATH_SWEEP_F: str = PATH_SWEEP_REFERENCIA
 PATH_SWEEP_M: str = PATH_SWEEP_ALVO
+PATH_SWEEP_M_SENTINELA: str = PATH_SWEEP_ALVO_SENTINELA
 PATH_LABELS_F: str = PATH_LABELS_REFERENCIA
 PATH_LABELS_M: str = PATH_LABELS_ALVO
 PATH_ORTHBASE: str = PATH_ORTHBASE_RDS

@@ -145,6 +145,7 @@ from config import (
     PATH_ORTHBASE_RDS,
     PATH_REFERENCIA,
     PATH_SWEEP_ALVO,
+    PATH_SWEEP_ALVO_SENTINELA,
     PATH_SWEEP_REFERENCIA,
 )
 
@@ -365,6 +366,33 @@ projetor_r = ProjetorSWeePR(
     path_orthbase=PATH_ORTHBASE_RDS,
 )
 projetor_r.projetar()
+
+
+# %% [markdown]
+# ##### 5.1. Projeção SWeeP do Alvo Pré-Hopfield (com Sentinela 0.5) 🎯
+# Projeta a matriz `mtx_alvo_sentinela` (gerada no Cap. 4) reutilizando estritamente
+# a mesma base ortonormal congelada (`orthbase_mproj_600d.rds`) criada pela referência (ADR 018 / ADR 019).
+
+# %%
+path_mtx_sentinela = os.path.join(OUT_MTX_ALVO_SENTINELA, "matrix.mtx")
+print(f"\n[SWeeP Alvo Sentinela] Projetando {path_mtx_sentinela} via rSWeeP...")
+
+projetor_sentinela_r = ProjetorSWeePR(
+    path_matriz=path_mtx_sentinela,
+    path_saida=PATH_SWEEP_ALVO_SENTINELA,
+    n_componentes=600,
+    seed=SEED,
+    path_orthbase=PATH_ORTHBASE_RDS,
+)
+projetor_sentinela_r.projetar()
+
+assert projetor_sentinela_r.Wswp is not None
+assert not np.isnan(projetor_sentinela_r.Wswp).any(), (
+    "Detectado NaN na projeção sentinela!"
+)
+print(
+    f"[SWeeP Alvo Sentinela] Projeção concluída com sucesso: {projetor_sentinela_r.Wswp.shape}"
+)
 
 
 # %%

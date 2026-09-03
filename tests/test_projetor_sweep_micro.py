@@ -138,3 +138,37 @@ def test_projetor_sweepr_falha_estrita_sem_fallback(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match=r"FALHA CRÍTICA no subprocesso R"):
         projetor.projetar()
+
+
+def test_projetor_sweepr_suporta_diretorio_mtx(tmp_path: Path) -> None:
+    """Verifica se ProjetorSWeePR aceita um diretório contendo matrix.mtx (padrão ExportadorMTX)."""
+    n_celulas = 10
+    n_genes = 15
+    n_comp = 5
+
+    rng = np.random.default_rng(42)
+    mat_esparsa = sp.csr_matrix(
+        rng.integers(0, 2, size=(n_celulas, n_genes), dtype=np.int32)
+    )
+
+    pasta_mtx = tmp_path / "mtx_alvo_sentinela"
+    pasta_mtx.mkdir()
+    path_mtx = pasta_mtx / "matrix.mtx"
+    sio.mmwrite(str(path_mtx), mat_esparsa)
+
+    path_saida = tmp_path / "saida_diretorio_sweep.txt"
+    path_orthbase = tmp_path / "orthbase_dir.rds"
+
+    # Passa o diretório diretamente como path_matriz
+    projetor = ProjetorSWeePR(
+        path_matriz=pasta_mtx,
+        path_saida=path_saida,
+        n_componentes=n_comp,
+        seed=42,
+        path_orthbase=path_orthbase,
+    )
+    projetor.projetar()
+
+    assert path_saida.exists()
+    assert projetor.Wswp is not None
+    assert projetor.Wswp.shape == (n_celulas, n_comp)

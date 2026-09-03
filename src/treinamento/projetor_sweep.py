@@ -314,7 +314,19 @@ cat("[ProjetorSWeePR] Ambiente R pronto. rSWeeP versao:", as.character(packageVe
         # 1. Preparação da Matriz de Entrada no formato Matrix Market (.mtx) OOM-Safe
         path_mtx: str
 
-        if self.path_matriz.endswith(".mtx") or self.path_matriz.endswith(".mtx.gz"):
+        if os.path.isdir(self.path_matriz):
+            candidato_mtx = os.path.join(self.path_matriz, "matrix.mtx")
+            candidato_gz = os.path.join(self.path_matriz, "matrix.mtx.gz")
+            if os.path.exists(candidato_mtx):
+                path_mtx = candidato_mtx
+            elif os.path.exists(candidato_gz):
+                path_mtx = candidato_gz
+            else:
+                raise FileNotFoundError(
+                    f"[ProjetorSWeePR] Nenhum arquivo matrix.mtx ou matrix.mtx.gz "
+                    f"encontrado no diretório: {self.path_matriz}"
+                )
+        elif self.path_matriz.endswith(".mtx") or self.path_matriz.endswith(".mtx.gz"):
             path_mtx = self.path_matriz
         elif self.path_matriz.endswith(".h5ad"):
             path_mtx = self.path_matriz.rsplit(".h5ad", 1)[0] + ".mtx"
