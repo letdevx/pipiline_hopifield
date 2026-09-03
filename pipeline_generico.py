@@ -145,9 +145,27 @@ from config import (
     PATH_ORTHBASE_RDS,
     PATH_REFERENCIA,
     PATH_SWEEP_ALVO,
-    PATH_SWEEP_ALVO_SENTINELA,
     PATH_SWEEP_REFERENCIA,
 )
+
+# Importação defensiva com fallback para compatibilidade com ambientes Colab sem git pull
+try:
+    from config import PATH_SWEEP_ALVO_SENTINELA
+except ImportError:
+    PATH_SWEEP_ALVO_SENTINELA = getattr(
+        config,
+        "PATH_SWEEP_ALVO_SENTINELA",
+        os.path.join(
+            getattr(
+                config,
+                "PATH_BASE",
+                r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop",
+            ),
+            "outputs",
+            "treinamento",
+            "matriz_reduzida_sweepALVO_sentinela.txt",
+        ),
+    )
 
 importlib.reload(preprocessing)
 import alinhamento
