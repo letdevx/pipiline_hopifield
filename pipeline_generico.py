@@ -25,9 +25,6 @@ except ImportError:
     # !pip install -q "pandas==2.2.3" anndata scanpy
 
 # %%
-# !git push origin Teste_sem_binarização_dados_brutos
-
-# %%
 """Notebook executável do Pipeline Genérico Hopfield para scRNA-seq.
 
 Executa o fluxo fim a fim:
@@ -68,13 +65,16 @@ else:
     print("Atualizando código na VM...")
     # !cd {DEST_PATH} && git pull
 
-# !cd {DEST_PATH} && git checkout teste_pipeline_generico_F
+# !cd {DEST_PATH} && git checkout teste-pipeline_genereico_Pan_F
 
 # Adiciona a raiz do repo e a pasta 'src' da VM ao path do Python
 for _p in (DEST_PATH, os.path.join(DEST_PATH, "src")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+
+# %%
+# !git push origin teste-pipeline_genereico_Pan_F
 
 # %%
 try:
