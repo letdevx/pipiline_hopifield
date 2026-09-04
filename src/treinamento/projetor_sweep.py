@@ -19,6 +19,14 @@ import scipy.io as sio
 import scipy.sparse as sp
 from numpy.typing import NDArray
 
+try:
+    from src.config import PATH_ORTHBASE_RDS  # pyright: ignore[reportMissingImports]
+except ImportError:
+    try:
+        from config import PATH_ORTHBASE_RDS  # type: ignore[import-not-found]
+    except ImportError:
+        from ..config import PATH_ORTHBASE_RDS  # type: ignore[import-not-found]
+
 from .hopfield_utils import princomp_
 
 PathType = str | os.PathLike[str]
@@ -214,6 +222,10 @@ class ProjetorSWeePR:
         Semente pseudoaleatória.
     path_orthbase : str | os.PathLike[str] | None, default=None
         Caminho do arquivo .rds para congelamento e reutilização da base ortonormal.
+        Se None, assume automaticamente a base canônica configurada em `src.config.PATH_ORTHBASE_RDS`.
+    forcar_recriacao : bool, default=False
+        Se True, ignora a base existente em disco e força a geração e sobrescrita
+        de uma nova base ortonormal canônica via `orthBase()`.
 
     Attributes
     ----------
@@ -225,8 +237,10 @@ class ProjetorSWeePR:
         Dimensão latente.
     seed : int
         Semente aleatória.
-    path_orthbase : str | None
+    path_orthbase : str
         Caminho da base congelada em RDS.
+    forcar_recriacao : bool
+        Indica se a base será regenerada e sobrescrita.
     Wswp : NDArray[np.float32] | None
         Matriz de projeção latente calculada.
     """
@@ -240,14 +254,16 @@ class ProjetorSWeePR:
         n_componentes: int = 600,
         seed: int = 42,
         path_orthbase: PathType | None = None,
+        forcar_recriacao: bool = False,
     ) -> None:
         self.path_matriz: str = str(path_matriz)
         self.path_saida: str = str(path_saida)
         self.n_componentes: int = int(n_componentes)
         self.seed: int = int(seed)
-        self.path_orthbase: str | None = (
-            str(path_orthbase) if path_orthbase is not None else None
+        self.path_orthbase: str = (
+            str(path_orthbase) if path_orthbase is not None else str(PATH_ORTHBASE_RDS)
         )
+        self.forcar_recriacao: bool = bool(forcar_recriacao)
         self.Wswp: NDArray[np.float32] | None = None
 
     @staticmethod
@@ -304,7 +320,7 @@ cat("[ProjetorSWeePR] Ambiente R pronto. rSWeeP versao:", as.character(packageVe
         RuntimeError
             Se o ambiente R, o script ou a projeção falharem.
         """
-        if os.path.exists(self.path_saida):
+        if os.path.exists(self.path_saida) and not self.forcar_recriacao:
             print(
                 f"[ProjetorSWeePR] Arquivo de projeção já existente, carregando: {self.path_saida}"
             )
@@ -366,14 +382,19 @@ cat("[ProjetorSWeePR] Ambiente R pronto. rSWeeP versao:", as.character(packageVe
         else:
             path_mtx = self.path_matriz
 
-        # 2. Configuração e Disparo do Subprocesso R Canônico
-        print("[ProjetorSWeePR] Executando projeção oficial rSWeeP em R...")
-        print(f"  script R   : {self._R_SCRIPT}")
-        print(f"  entrada    : {path_mtx}")
-        print(f"  saída      : {self.path_saida}")
-        print(f"  dim_proj   : {self.n_componentes}, seed: {self.seed}")
+        # 2. Configuração e Disparo do Subprocesso R Canônico com Auditoria
         print(
-            f"  base RDS   : {self.path_orthbase or 'Geração determinística (sem salvamento)'}"
+            "[ProjetorSWeePR] ========================================================="
+        )
+        print("[ProjetorSWeePR] [AUDITORIA] Executando projeção oficial rSWeeP em R...")
+        print(f"  script R         : {self._R_SCRIPT}")
+        print(f"  entrada          : {path_mtx}")
+        print(f"  saída            : {self.path_saida}")
+        print(f"  dim_proj         : {self.n_componentes}, seed: {self.seed}")
+        print(f"  base RDS padrão  : {self.path_orthbase}")
+        print(f"  forçar recriação : {self.forcar_recriacao}")
+        print(
+            "[ProjetorSWeePR] ========================================================="
         )
 
         cmd: list[str] = [
@@ -383,9 +404,9 @@ cat("[ProjetorSWeePR] Ambiente R pronto. rSWeeP versao:", as.character(packageVe
             self.path_saida,
             str(self.n_componentes),
             str(self.seed),
+            self.path_orthbase,
+            str(self.forcar_recriacao).upper(),
         ]
-        if self.path_orthbase:
-            cmd.append(self.path_orthbase)
 
         result = subprocess.run(cmd, capture_output=True, text=True)
 
@@ -442,12 +463,13 @@ cat("[ProjetorSWeePR] Ambiente R pronto. rSWeeP versao:", as.character(packageVe
         wswp = self.Wswp.shape if self.Wswp is not None else "não gerada"
         return (
             f"ProjetorSWeePR(\n"
-            f"  path_matriz   = {self.path_matriz}\n"
-            f"  path_saida    = {self.path_saida}\n"
-            f"  n_componentes = {self.n_componentes}\n"
-            f"  seed          = {self.seed}\n"
-            f"  base_rds      = {self.path_orthbase}\n"
-            f"  Wswp          = {wswp}\n"
+            f"  path_matriz      = {self.path_matriz}\n"
+            f"  path_saida       = {self.path_saida}\n"
+            f"  n_componentes    = {self.n_componentes}\n"
+            f"  seed             = {self.seed}\n"
+            f"  base_rds         = {self.path_orthbase}\n"
+            f"  forcar_recriacao = {self.forcar_recriacao}\n"
+            f"  Wswp             = {wswp}\n"
             f")"
         )
 

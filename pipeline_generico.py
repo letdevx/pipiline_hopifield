@@ -25,7 +25,7 @@ except ImportError:
     # !pip install -q "pandas==2.2.3" anndata scanpy
 
 # %%
-# !git push origin Teste_sem_binarização_dados_brutos
+# !git push origin teste_pipeline_genereico_Pan_F
 
 # %%
 """Notebook executável do Pipeline Genérico Hopfield para scRNA-seq.
@@ -68,7 +68,7 @@ else:
     print("Atualizando código na VM...")
     # !cd {DEST_PATH} && git pull
 
-# !cd {DEST_PATH} && git checkout teste_pipeline_generico_F
+# !cd {DEST_PATH} && git checkout teste_pipeline_genereico_Pan_F
 
 # Adiciona a raiz do repo e a pasta 'src' da VM ao path do Python
 for _p in (DEST_PATH, os.path.join(DEST_PATH, "src")):
@@ -415,7 +415,6 @@ projetor_r = ProjetorSWeePR(
     path_saida=PATH_SWEEP_REFERENCIA,
     n_componentes=600,
     seed=SEED,
-    path_orthbase=PATH_ORTHBASE_RDS,
 )
 projetor_r.projetar()
 
@@ -434,7 +433,6 @@ projetor_sentinela_r = ProjetorSWeePR(
     path_saida=PATH_SWEEP_ALVO_SENTINELA,
     n_componentes=600,
     seed=SEED,
-    path_orthbase=PATH_ORTHBASE_RDS,
 )
 projetor_sentinela_r.projetar()
 
@@ -825,7 +823,6 @@ projetor_m_r = ProjetorSWeePR(
     path_saida=PATH_SWEEP_ALVO,
     n_componentes=600,
     seed=SEED,
-    path_orthbase=PATH_ORTHBASE_RDS,
 )
 projetor_m_r.projetar()
 

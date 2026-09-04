@@ -22,20 +22,25 @@ if (length(args) < 2) {
   stop("[rSWeeP] Uso obrigatório: Rscript projetar_sweep.R <path_entrada> <path_saida> [dim_proj] [seed] [path_orthbase]")
 }
 
-path_entrada  <- args[1]
-path_saida    <- args[2]
-dim_proj      <- if (length(args) >= 3) as.integer(args[3]) else 600L
-seed          <- if (length(args) >= 4) as.integer(args[4]) else 42L
-path_orthbase <- if (length(args) >= 5 && nzchar(args[5])) args[5] else NULL
+path_entrada     <- args[1]
+path_saida       <- args[2]
+dim_proj         <- if (length(args) >= 3) as.integer(args[3]) else 600L
+seed             <- if (length(args) >= 4) as.integer(args[4]) else 42L
+path_orthbase    <- if (length(args) >= 5 && nzchar(args[5])) args[5] else NULL
+forcar_recriacao <- if (length(args) >= 6 && nzchar(args[6])) as.logical(args[6]) else FALSE
+if (is.na(forcar_recriacao)) {
+  forcar_recriacao <- FALSE
+}
 
 cat("=================================================================\n")
 cat("          PROJEÇÃO CANÔNICA rSWeeP (UFPR / AIBIALab)             \n")
 cat("=================================================================\n")
-cat("[rSWeeP] Entrada         :", path_entrada, "\n")
-cat("[rSWeeP] Saída           :", path_saida, "\n")
-cat("[rSWeeP] Dimensão Alvo   :", dim_proj, "\n")
-cat("[rSWeeP] Semente         :", seed, "\n")
-cat("[rSWeeP] Base Congelada  :", ifelse(is.null(path_orthbase), "Não informada", path_orthbase), "\n")
+cat("[rSWeeP] Entrada           :", path_entrada, "\n")
+cat("[rSWeeP] Saída             :", path_saida, "\n")
+cat("[rSWeeP] Dimensão Alvo     :", dim_proj, "\n")
+cat("[rSWeeP] Semente           :", seed, "\n")
+cat("[rSWeeP] Base Congelada    :", ifelse(is.null(path_orthbase), "Não informada", path_orthbase), "\n")
+cat("[rSWeeP] Forçar Recriação  :", forcar_recriacao, "\n")
 
 # 1. Leitura OOM-Safe da Matriz de Entrada
 cat("[rSWeeP] Carregando matriz de entrada...\n")
@@ -66,14 +71,23 @@ cat("[rSWeeP]   Não-zeros (nnz)  :", length(mat@x), "\n")
 
 # 2. Obtenção / Congelamento da Base Ortonormal Canônica (orthBase)
 base <- NULL
-if (!is.null(path_orthbase) && file.exists(path_orthbase)) {
-  cat("[rSWeeP] Base congelada encontrada. Carregando:", path_orthbase, "\n")
+if (!is.null(path_orthbase) && file.exists(path_orthbase) && !forcar_recriacao) {
+  cat("[rSWeeP] =========================================================\n")
+  cat("[rSWeeP] [AUDITORIA] Reutilizando base congelada canônica padrão:\n")
+  cat("[rSWeeP]   Arquivo :", path_orthbase, "\n")
+  t_load <- proc.time()
   base <- readRDS(path_orthbase)
+  cat(sprintf("[rSWeeP]   Carga concluída em %.2f s. Dimensões: %d x %d\n",
+              (proc.time() - t_load)[[3]], nrow(base$mat), ncol(base$mat)))
+  cat("[rSWeeP] =========================================================\n")
   if (nrow(base$mat) != n_genes || ncol(base$mat) != dim_proj) {
     stop(sprintf("[rSWeeP] Incompatibilidade dimensional da base congelada: esperava (%d x %d), mas arquivo tem (%d x %d).",
                  n_genes, dim_proj, nrow(base$mat), ncol(base$mat)))
   }
 } else {
+  if (forcar_recriacao && !is.null(path_orthbase) && file.exists(path_orthbase)) {
+    cat("[rSWeeP] [AVISO] Flag forcar_recriacao=TRUE ativada: regenerando e sobrescrevendo base existente!\n")
+  }
   cat(sprintf("[rSWeeP] Gerando base ortonormal canônica via orthBase(lin=%d, col=%d, seed=%d)...\n",
               n_genes, dim_proj, seed))
   t_base <- proc.time()

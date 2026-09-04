@@ -56,7 +56,7 @@ graph TD
 ## 2. Taxonomia dos Módulos (`src/`)
 
 ### 2.1. `src/config.py` — Central de Configuração
-Define os caminhos absolutos e relativos para arquivos de dados brutos (`.h5ad`), listas de features, diretórios de saída e relatórios. Garante a reprodutibilidade dos caminhos em diferentes ambientes.
+Centraliza variáveis de ambiente, caminhos de entrada e saídas de dados com resolução dinâmica inteligente de ambiente (Google Colab com Drive, Windows Local da pesquisadora ou raiz do repositório local). Atua como a **fonte única da verdade** para a localização da base ortonormal canônica congelada `PATH_ORTHBASE_RDS` (`orthbase_mproj_600d.rds`). Veja **[[04_Recursos/adrs/adr_021_centralizacao_orthbase_config_e_reuso_canonico|ADR 021]]**.
 
 ### 2.2. `src/preprocessing/` — Binarização
 - **`binarizador.py` (`Binarizador`)**: Converte matrizes contínuas/contagens de arquivos `.h5ad` para matrizes de presença/ausência binária ($x > 0 \rightarrow 1$, $x \le 0 \rightarrow 0$). Veja **[[03_Conhecimento/binarizacao_expressao_genica|Conceito Atômico]]** e **[[04_Recursos/adrs/adr_001_binarizacao_expressao_genica|ADR 001]]**.
@@ -73,7 +73,7 @@ Define os caminhos absolutos e relativos para arquivos de dados brutos (`.h5ad`)
 - **`analisador_cobertura.py` (`AnalisadorCobertura`)**: Avalia a taxa de preenchimento e presenças no espaço gênico expandido.
 
 ### 2.4. `src/treinamento/` — Aprendizado Associativo e Recuperação
-- **`projetor_sweep.py` (`ProjetorSWeePR`, `ProjetorSWeP`)**: Projeta as matrizes binárias de ~11.000 genes para o espaço reduzido de 600 dimensões através da matriz ortonormal rSWeeP. Veja **[[03_Conhecimento/projecao_rsweep_600d|Conceito Atômico]]** e **[[04_Recursos/adrs/adr_004_projecao_rsweep_600d_kmeans|ADR 004]]**.
+- **`projetor_sweep.py` (`ProjetorSWeePR`, `ProjetorSWeP`)**: Projeta as matrizes binárias de expressão gênica para o espaço reduzido de 600 dimensões através da base ortonormal rSWeeP oficial da UFPR. Assume por padrão a base canônica congelada `PATH_ORTHBASE_RDS` definida em `config.py`, suporta recriação controlada via `forcar_recriacao=True` e emite logs de auditoria detalhados. Veja **[[03_Conhecimento/projecao_rsweep_600d|Conceito Atômico]]**, **[[04_Recursos/adrs/adr_004_projecao_rsweep_600d_kmeans|ADR 004]]**, **[[04_Recursos/adrs/adr_019_obrigatoriedade_rsweep_r_e_congelamento_orthbase|ADR 019]]** e **[[04_Recursos/adrs/adr_021_centralizacao_orthbase_config_e_reuso_canonico|ADR 021]]**.
 - **`carregador_dados_fujita.py` (`CarregadorDadosFujita`)**: Carrega a matriz binária original $W_0$, os rótulos de tipo celular `clo` e as projeções SWeeP $W_{\text{swp}}$.
 - **`extrator_padroes.py` (`ExtratorPadroesSubcluster`)**: Agrupa as células de cada uma das 7 classes biológicas no espaço SWeeP 600D utilizando K-Means ($nc=30$ subclusters). Seleciona a célula real binária mais próxima ($k=1$) no espaço de 11.000 genes de cada centroide. Veja **[[03_Conhecimento/amostragem_prototipos_kmeans|Conceito Atômico]]**.
 - **`hopfield.py` (`ModernHopfieldNetwork`)**: Implementação PyTorch da Modern Hopfield Network (Ramsauer et al., 2020). Veja **[[03_Conhecimento/atencao_softmax_hopfield|Conceito Atômico]]** e **[[04_Recursos/adrs/adr_005_rede_hopfield_moderna_parametros|ADR 005]]**.
@@ -93,7 +93,7 @@ Define os caminhos absolutos e relativos para arquivos de dados brutos (`.h5ad`)
 | **Alinhamento** | Genes Alinhados | `.h5ad` / `.txt` | `outputs/alinhamento/` | Referência Ensembl unificada |
 | **Expansão Gênica** | Top 5k + Exclusivos | `.csv` / `.npy` | `outputs/top_genes/` | Matrizes filtradas no espaço de ~11.000 genes |
 | **Projeção SWeeP** | Embeddings 600D | `.csv` / `.npy` | `outputs/treinamento/` | Coordenadas compactas para clusterização K-Means |
-| **Base Ortonormal SWeeP** | Matriz de Projeção Congelada | `.rds` (R Matrix) | `orthbase_mproj_600d.rds` | Base determinística compartilhada entre treino e inferência (ADR 018) |
+| **Base Ortonormal SWeeP** | Matriz de Projeção Congelada | `.rds` (R Matrix) | `PATH_ORTHBASE_RDS` (`orthbase_mproj_600d.rds`) | Base canônica determinística compartilhada entre treino, sentinelas e inferência (ADR 018, ADR 019, ADR 021) |
 | **Rede Treinada** | Pesos & Metadados | `.pt` / `.json` | `outputs/hopfield/` | Modelo de memória associativa salvo (210 padrões) |
 | **Imputação Cross-Dataset** | Expressão Reconstruída com Layers & Metadados | `.h5ad` (CSR Gzip) / `.npy` / `.json` | `outputs/imputacao/` | AnnData com camadas `original`, `mascara_imputada` e `probabilidade_imputada`, metadados de células/genes e relatório (ADR 017/020) |
 | **Exportação MTX (ML)** | Matriz Market + Features + Barcodes | `.mtx` + 2×`.tsv` | `outputs/alinhamento/mtx_referencia/`<br/>`outputs/alinhamento/mtx_alvo_sentinela/`<br/>`outputs/imputacao/mtx_alvo_imputado/` | Trio interoperável auditado (células × genes) para Machine Learning (ADR 018) |

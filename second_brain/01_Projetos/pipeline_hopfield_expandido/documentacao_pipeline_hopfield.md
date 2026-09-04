@@ -108,12 +108,12 @@ flowchart TD
 - **Sequência:** Ocorre após o alinhamento para garantir que os IDs rastreados correspondem exatamente aos índices da matriz.
 - **Recursos e Gargalos:** Filtragem e escrita dos arquivos `.npy`. Aloca ~1.8 GB para Fujita e ~2.0 GB para Mathys em formato `float32`.
 
-### Seção 5: Projeção SWeeP (rSWeeP 600D)
-- **Objetivo:** Reduzir a matriz Fujita expandida (~11.000 genes) para 600 dimensões através da matriz ortonormal rSWeeP. Veja **[[03_Conhecimento/projecao_rsweep_600d|Conceito Atômico]]** e **[[04_Recursos/adrs/adr_004_projecao_rsweep_600d_kmeans|ADR 004]]**.
-- **Intuição Biológica:** Comprime o perfil transcriptômico mantendo as relações de distância biológica e similaridade entre tipos celulares.
-- **Intuição Técnica:** Evita rodar K-Means no espaço denso de 11.000 genes, acelerando o tempo de execução do algoritmo em ordens de grandeza.
+### Seção 5: Projeção SWeeP (rSWeeP 600D Canônica com Congelamento de Base)
+- **Objetivo:** Reduzir a matriz de expressão gênica para 600 dimensões latentes através do algoritmo oficial do pacote R `rSWeeP` (AIBIALab/UFPR), utilizando uma base ortonormal canônica congelada compartilhada entre todos os datasets. Veja **[[03_Conhecimento/projecao_rsweep_600d|Conceito Atômico]]**, **[[04_Recursos/adrs/adr_004_projecao_rsweep_600d_kmeans|ADR 004]]**, **[[04_Recursos/adrs/adr_019_obrigatoriedade_rsweep_r_e_congelamento_orthbase|ADR 019]]** e **[[04_Recursos/adrs/adr_021_centralizacao_orthbase_config_e_reuso_canonico|ADR 021]]**.
+- **Intuição Biológica:** Comprime o perfil transcriptômico mantendo com alta fidelidade as relações de distância biológica e similaridade entre tipos celulares (Lema de Johnson-Lindenstrauss).
+- **Intuição Técnica:** A projeção é executada via subprocesso R pelo `ProjetorSWeePR`. O arquivo `orthbase_mproj_600d.rds` é centralizado via `src.config.PATH_ORTHBASE_RDS`, gerado deterministicamente na primeira execução e automaticamente reutilizado em todas as etapas subsequentes (Referência, Alvo Sentinela e Alvo Imputado).
 - **Sequência:** Deve preceder o carregamento de dados e a extração de protótipos, pois os centroides serão calculados sobre o espaço SWeeP 600D.
-- **Recursos e Gargalos:** Multiplicação de matrizes $(40.000 \times 11.279) \times (11.279 \times 600)$. Duração: ~15 a 30 segundos. Gera arquivo CSV de ~96 MB.
+- **Recursos e Gargalos:** Projeção esparsa direta OOM-Safe via `Matrix::readMM()` e `rSWeeP::SWeeP()`. Duração típica: ~3 a 15 segundos. Gera matriz tabular de saída `.txt` de ~96 MB.
 
 ### Seção 6: Carregamento dos Dados de Treinamento
 - **Objetivo:** Carregar em memória a matriz binária $W_0$, os rótulos de tipo celular `labels` e o embedding SWeeP $W_{\text{swp}}$ do Fujita, além da matriz expandida do Mathys ($W_{\text{mathys}}$).
