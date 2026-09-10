@@ -55,7 +55,7 @@ class Binarizador:
 
         Parameters
         ----------
-        nome_arquivo : str, default="matrizBinarizadaM.h5ad"
+        nome_arquivo : str
             Nome do arquivo .h5ad resultante.
 
         Returns

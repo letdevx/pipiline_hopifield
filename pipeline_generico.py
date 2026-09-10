@@ -25,9 +25,6 @@ except ImportError:
     # !pip install -q "pandas==2.2.3" anndata scanpy
 
 # %%
-# !git push origin teste_pipeline_genereico_Pan_F
-
-# %%
 """Notebook executável do Pipeline Genérico Hopfield para scRNA-seq.
 
 Executa o fluxo fim a fim:
@@ -68,7 +65,7 @@ else:
     print("Atualizando código na VM...")
     # !cd {DEST_PATH} && git pull
 
-# !cd {DEST_PATH} && git checkout teste_pipeline_genereico_Pan_F
+# !cd {DEST_PATH} && git checkout teste-pipeline_genereico_Pan_F
 
 # Adiciona a raiz do repo e a pasta 'src' da VM ao path do Python
 for _p in (DEST_PATH, os.path.join(DEST_PATH, "src")):
@@ -90,10 +87,6 @@ DRIVE_INPUTS = (
     "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs"
 )
 # !ls "{DRIVE_INPUTS}"
-
-# %%
-# !cd /content/pipiline_hopifield && git pull
-
 
 # %%
 import config
@@ -224,8 +217,8 @@ else:
 binarizador_ref = Binarizador(path_h5ad=PATH_REFERENCIA, out_dir=OUT_BINARIZACAO)
 binarizador_alvo = Binarizador(path_h5ad=PATH_ALVO, out_dir=OUT_BINARIZACAO)
 
-binarizador_ref.binarizar()
-binarizador_alvo.binarizar()
+binarizador_ref.binarizar(os.path.split(PATH_REFERENCIA)[-1])
+binarizador_alvo.binarizar(os.path.split(PATH_ALVO)[-1])
 
 print("Referência binarizada em:", binarizador_ref.path_binarizada)
 print("Alvo binarizado em:", binarizador_alvo.path_binarizada)
