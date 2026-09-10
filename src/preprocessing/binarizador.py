@@ -24,8 +24,6 @@ class Binarizador:
         Caminho para o arquivo .h5ad de entrada contendo a matriz de expressão gênica.
     out_dir : str | os.PathLike[str] | None, optional
         Diretório geral de saída do pipeline. Se None, utiliza o diretório 'outputs'.
-    out_dir_binarizada : str | os.PathLike[str] | None, optional
-        Pasta específica onde o .h5ad binarizado será salvo. Se None, usa out_dir.
 
     Attributes
     ----------
@@ -33,8 +31,6 @@ class Binarizador:
         Caminho normalizado do arquivo de entrada.
     out_dir : str
         Diretório base de saída.
-    out_dir_binarizada : str
-        Diretório específico de destino dos arquivos binarizados.
     path_binarizada : str | None
         Caminho completo do arquivo binarizado gerado, preenchido após .binarizar().
     """
@@ -42,8 +38,7 @@ class Binarizador:
     def __init__(
         self,
         path_h5ad: PathType,
-        out_dir: PathType | None = None,
-        out_dir_binarizada: PathType | None = None,
+        out_dir: PathType | None = None
     ) -> None:
         self.path_h5ad: str = str(path_h5ad)
         self.out_dir: str = (
@@ -51,12 +46,9 @@ class Binarizador:
             if out_dir is not None
             else os.path.join(os.getcwd(), "outputs")
         )
-        self.out_dir_binarizada: str = (
-            str(out_dir_binarizada) if out_dir_binarizada is not None else self.out_dir
-        )
         self.path_binarizada: str | None = None
 
-    def binarizar(self, nome_arquivo: str = "matrizBinarizadaM.h5ad") -> Binarizador:
+    def binarizar(self, nome_arquivo: str) -> Binarizador:
         """Binariza a matriz de expressão e salva como .h5ad no diretório de saída.
 
         Valores > 0 viram 1, zeros permanecem 0 (dtype int8).
@@ -72,7 +64,7 @@ class Binarizador:
             A própria instância para encadeamento fluente de chamadas.
         """
         nome_entrada: str = os.path.splitext(os.path.basename(self.path_h5ad))[0]
-        pasta_saida: str = os.path.join(self.out_dir_binarizada, nome_entrada)
+        pasta_saida: str = os.path.join(self.out_dir, nome_entrada)
         self.path_binarizada = os.path.join(pasta_saida, nome_arquivo)
 
         if os.path.exists(self.path_binarizada):
@@ -124,7 +116,6 @@ class Binarizador:
             f"Binarizador(\n"
             f"  path_h5ad          = {self.path_h5ad}\n"
             f"  out_dir            = {self.out_dir}\n"
-            f"  out_dir_binarizada = {self.out_dir_binarizada}\n"
             f"  path_binarizada    = {binarizada}\n"
             f")"
         )

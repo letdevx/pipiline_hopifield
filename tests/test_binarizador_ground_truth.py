@@ -34,7 +34,7 @@ def test_binarizacao_preserva_assinaturas(temp_dir):
     adata_continuo.write_h5ad(path_input)
 
     # Executa a binarização
-    binarizador = Binarizador(path_input, out_dir=temp_dir, out_dir_binarizada=temp_dir)
+    binarizador = Binarizador(path_input, out_dir=temp_dir)
     binarizador.binarizar(nome_arquivo="binarizado_resultado.h5ad")
 
     adata_resultado = binarizador.carregar_binarizada()
