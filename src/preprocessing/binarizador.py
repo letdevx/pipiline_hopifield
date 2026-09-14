@@ -35,11 +35,7 @@ class Binarizador:
         Caminho completo do arquivo binarizado gerado, preenchido após .binarizar().
     """
 
-    def __init__(
-        self,
-        path_h5ad: PathType,
-        out_dir: PathType | None = None
-    ) -> None:
+    def __init__(self, path_h5ad: PathType, out_dir: PathType | None = None) -> None:
         self.path_h5ad: str = str(path_h5ad)
         self.out_dir: str = (
             str(out_dir)

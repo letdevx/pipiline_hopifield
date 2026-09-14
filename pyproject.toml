@@ -89,6 +89,8 @@ extend-exclude = [
     "teste.py",
     "ProjeçãoSweepEstavel.ipynb",
     "ProjeçãoSweepEstavel.py",
+    "ausentesPan.ipynb",
+    "ausentesPan.py",
 ]
 
 [tool.ruff.lint]
