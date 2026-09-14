@@ -16,21 +16,27 @@
 # %% [markdown]
 #
 
-# %%
-from __future__ import annotations
+# %% [raw]
+#
 
-import os
-import sys
+# %% [markdown]
+#
 
-try:
-    import anndata
-    import scanpy
-except ImportError:
-    print("Instalando dependências compatíveis com o ambiente do Colab...")
-    # Mantém o pandas travado na versão esperada pelo Colab (2.2.3)
-    # !pip install -q "pandas==2.2.3" anndata scanpy
+# %% [raw]
+# from __future__ import annotations
+#
+# import os
+# import sys
+#
+# try:
+#     import anndata
+#     import scanpy
+# except ImportError:
+#     print("Instalando dependências compatíveis com o ambiente do Colab...")
+#     # Mantém o pandas travado na versão esperada pelo Colab (2.2.3)
+#     !pip install -q "pandas==2.2.3" anndata scanpy
 
-# %%
+# %% vscode={"languageId": "python"}
 REPO_NAME = "pipiline_hopifield"
 REPO_URL = "https://github.com/letdevx/pipiline_hopifield.git"
 DEST_PATH = f"/content/{REPO_NAME}"
@@ -51,7 +57,7 @@ for _p in (DEST_PATH, os.path.join(DEST_PATH, "src")):
     if os.path.exists(_p) and _p not in sys.path:
         sys.path.insert(0, _p)
 
-# %%
+# %% vscode={"languageId": "python"}
 try:
     from google.colab import drive  # type: ignore
 
@@ -61,7 +67,7 @@ try:
 except (ImportError, Exception):
     pass
 
-# %%
+# %% vscode={"languageId": "python"}
 import gc
 import os
 import sys
@@ -72,7 +78,7 @@ import polars as pl
 import scipy.io as sio
 import scipy.sparse as sp
 
-# %%
+# %% vscode={"languageId": "python"}
 # Resolução dinâmica e robusta do diretório raiz e de src/ (Colab e Local)
 for _raiz in [
     Path.cwd(),
@@ -109,7 +115,7 @@ print(f"Diretório de saída pronto: {DIR_PROJECAO_AUSENTES}")
 print(f"OrthBase canônica configurada: {PATH_ORTHBASE_RDS}")
 
 
-# %%
+# %% vscode={"languageId": "python"}
 # Resolução dinâmica dos arquivos de entrada (Colab Google Drive com fallback para local PATH_BASE)
 caminho_tracking_colab = (
     r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop"
@@ -136,15 +142,15 @@ matriz_pan = (
 print(f"Tracking CSV : {tracking_pan_F} (Existe: {os.path.exists(tracking_pan_F)})")
 print(f"Matriz Pan   : {matriz_pan} (Existe: {os.path.exists(matriz_pan)})")
 
-# %%
+# %% vscode={"languageId": "python"}
 posicao_genes_none_p_f = pl.read_csv(tracking_pan_F)
 posicao_genes_none_p_f.head(5)
 
-# %%
+# %% vscode={"languageId": "python"}
 posicao_coluna_pan = posicao_genes_none_p_f["posicao_coluna"]
 print(f"Total de genes ausentes mapeados: {posicao_coluna_pan.shape[0]}")
 
-# %%
+# %% vscode={"languageId": "python"}
 indice_pan = posicao_coluna_pan.to_list()
 print(f"Primeiros 10 índices de colunas ausentes: {indice_pan[:10]}")
 
@@ -153,7 +159,7 @@ print(f"Primeiros 10 índices de colunas ausentes: {indice_pan[:10]}")
 # Injeta o valor sentinela neutro 0.5 (canônico do pipeline Hopfield) nas colunas de genes ausentes.
 # A operação preserva o formato esparso da matriz AnnData para economizar memória RAM e evitar OOM.
 
-# %%
+# %% vscode={"languageId": "python"}
 print(f"Carregando matriz AnnData: {matriz_pan}...")
 adata = ad.read_h5ad(matriz_pan)
 
@@ -163,7 +169,7 @@ if sp.issparse(adata.X):
     X_mod[:, indice_pan] = 0.5
     X_mod = X_mod.tocsr()
 else:
-    X_mod = np.asarray(adata.X, dtype=np.float32).copy()
+    X_mod = np.asarray(adata.X, dtype=np.float16).copy()
     X_mod[:, indice_pan] = 0.5
     X_mod = sp.csr_matrix(X_mod)
 
@@ -173,7 +179,7 @@ print(f"Matriz modificada: {X_mod.shape[0]} células × {X_mod.shape[1]} genes (
 # ### Persistência da Matriz Modificada em .h5ad
 # Salva o objeto AnnData atualizado contendo o sentinela 0.5 em formato `.h5ad` comprimido (gzip).
 
-# %%
+# %% vscode={"languageId": "python"}
 print(f"Salvando AnnData modificado em: {PATH_SAIDA_H5AD}...")
 adata.X = X_mod
 adata.write_h5ad(str(PATH_SAIDA_H5AD), compression="gzip")
@@ -183,7 +189,7 @@ print(f"Arquivo .h5ad gravado com sucesso! ({PATH_SAIDA_H5AD.stat().st_size / 1e
 # ### Exportação Direta no Formato Matrix Market (.mtx)
 # Salva a matriz esparsa modificada em disco via `scipy.io.mmwrite` de forma rápida e enxuta.
 
-# %%
+# %% vscode={"languageId": "python"}
 print(f"Exportando matriz para formato Matrix Market (.mtx): {PATH_MTX_ENTRADA}...")
 sio.mmwrite(str(PATH_MTX_ENTRADA), X_mod)
 print(f"Exportação MTX concluída com sucesso: {PATH_MTX_ENTRADA.stat().st_size / 1e6:.2f} MB")
@@ -197,11 +203,11 @@ gc.collect()
 # Executa a projeção rSWeeP oficial reutilizando a base ortonormal canônica congelada (`PATH_ORTHBASE_RDS`).
 # O resultado compactado (600 dimensões) é persistido em `.txt` e `.npy`.
 
-# %%
+# %% vscode={"languageId": "python"}
 # Garante que dependências R estejam disponíveis caso executado no Colab
 ProjetorSWeePR.verificar_e_instalar_dependencias_r()
 
-# %%
+# %% vscode={"languageId": "python"}
 print(f"[rSWeeP] Inicializando projetor oficial para {PATH_MTX_ENTRADA}...")
 projetor = ProjetorSWeePR(
     path_matriz=str(PATH_MTX_ENTRADA),

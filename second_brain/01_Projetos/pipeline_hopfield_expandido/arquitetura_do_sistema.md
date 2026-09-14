@@ -24,6 +24,7 @@ graph TD
     subgraph Presentation["Camada de Apresentação & Execução (Controle de Experimentos)"]
         NB11K["pipeline_hopfield_expandido (.ipynb / .py)<br/>Seleção Diferencial ~11k Genes"]
         NB36K["pipeline_hopfield_completo_36k (.ipynb / .py)<br/>Genoma Completo 36.591 Genes (ADR 007)"]
+        SWPAN["sweepPan.py<br/>Automação Projeção Pan05 rSWeeP 600D"]
     end
 
     subgraph Preprocessing["Camada de Pré-processamento"]
