@@ -101,6 +101,7 @@ DIR_PROJECAO_AUSENTES.mkdir(parents=True, exist_ok=True)
 
 # 2. Caminhos dos arquivos de entrada e saída
 PATH_MTX_ENTRADA = DIR_PROJECAO_AUSENTES / "matrix.mtx"
+PATH_SAIDA_H5AD = DIR_PROJECAO_AUSENTES / "pan_com_sentinela_05.h5ad"
 PATH_SAIDA_TXT = DIR_PROJECAO_AUSENTES / "matriz_sweep_ausentes.txt"
 PATH_SAIDA_NPY = DIR_PROJECAO_AUSENTES / "matriz_sweep_ausentes.npy"
 
@@ -167,6 +168,16 @@ else:
     X_mod = sp.csr_matrix(X_mod)
 
 print(f"Matriz modificada: {X_mod.shape[0]} células × {X_mod.shape[1]} genes (nnz: {X_mod.nnz})")
+
+# %% [markdown]
+# ### Persistência da Matriz Modificada em .h5ad
+# Salva o objeto AnnData atualizado contendo o sentinela 0.5 em formato `.h5ad` comprimido (gzip).
+
+# %%
+print(f"Salvando AnnData modificado em: {PATH_SAIDA_H5AD}...")
+adata.X = X_mod
+adata.write_h5ad(str(PATH_SAIDA_H5AD), compression="gzip")
+print(f"Arquivo .h5ad gravado com sucesso! ({PATH_SAIDA_H5AD.stat().st_size / 1e6:.2f} MB)")
 
 # %% [markdown]
 # ### Exportação Direta no Formato Matrix Market (.mtx)
