@@ -76,6 +76,7 @@ OUT_TREINAMENTO: str = os.path.join(OUTPUTS, "treinamento")
 OUT_HOPFIELD: str = os.path.join(OUTPUTS, "hopfield")
 OUT_IMPUTACAO: str = os.path.join(OUTPUTS, "imputacao")
 OUT_RELATORIO: str = os.path.join(OUTPUTS, "relatorio")
+OUT_SWEEP_POS_IMPUTACAO: str = os.path.join(OUTPUTS, "projecao_pos_imputacao")
 
 # Diretórios dedicados para exportação Matrix Market (MTX)
 OUT_MTX_REFERENCIA: str = os.path.join(OUT_ALINHAMENTO, "mtx_referencia")

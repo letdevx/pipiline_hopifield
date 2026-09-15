@@ -92,7 +92,7 @@ if os.path.exists("/content") and not os.path.exists("/content/pipiline_hopifiel
         if _p not in sys.path:
             sys.path.insert(0, _p)
 
-from src.config import OUTPUTS, PATH_BASE, PATH_ORTHBASE_RDS
+from src.config import PATH_REFERENCIA, PATH_BASE, PATH_ORTHBASE_RDS, OUTPUTS
 from src.treinamento import ProjetorSWeePR
 
 # 1. Definição e criação do diretório usando Pathlib
@@ -100,37 +100,32 @@ DIR_PROJECAO_AUSENTES = Path(OUTPUTS) / "projecao_ausentes_pan"
 DIR_PROJECAO_AUSENTES.mkdir(parents=True, exist_ok=True)
 
 # 2. Caminhos dos arquivos de entrada e saída
-PATH_MTX_ENTRADA = DIR_PROJECAO_AUSENTES / "matrix.mtx"
+PATH_MTX_ENTRADA = Path(PATH_BASE) / "imputs" / "matrix_Pan.mtx"
 PATH_SAIDA_TXT = DIR_PROJECAO_AUSENTES / "matriz_sweep_ausentes.txt"
 PATH_SAIDA_NPY = DIR_PROJECAO_AUSENTES / "matriz_sweep_ausentes.npy"
 
 print(f"Diretório de saída pronto: {DIR_PROJECAO_AUSENTES}")
 print(f"OrthBase canônica configurada: {PATH_ORTHBASE_RDS}")
+print(f"Caminho entrada MTX: {PATH_MTX_ENTRADA}")
+print(f"Caminho saida TXT: {PATH_SAIDA_TXT}")
+print(f"Caminho saida NPY: {PATH_SAIDA_NPY}")
 
 
 # %%
 # Resolução dinâmica dos arquivos de entrada (Colab Google Drive com fallback para local PATH_BASE)
 caminho_tracking_colab = (
     r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop"
-    r"/outputs/alinhamento/tracking_genes_adicionados_mathys.csv"
+    r"/outputsPan-->F/alinhamento/tracking_genes_adicionados_Fujita.csv"
 )
-caminho_tracking_local = os.path.join(
-    PATH_BASE, "outputs", "alinhamento", "tracking_genes_adicionados_mathys.csv"
-)
-tracking_pan_F = (
-    caminho_tracking_colab
-    if os.path.exists(caminho_tracking_colab)
-    else caminho_tracking_local
-)
+
+tracking_pan_F = caminho_tracking_colab
 
 caminho_pan_colab = (
     r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop"
-    r"/imputs/PAN_Bin/pan_anotado.h5ad"
+    r"/imputs/pan_anotado.h5ad"
 )
-caminho_pan_local = os.path.join(PATH_BASE, "imputs", "pan_anotado.h5ad")
-matriz_pan = (
-    caminho_pan_colab if os.path.exists(caminho_pan_colab) else caminho_pan_local
-)
+
+matriz_pan = caminho_pan_colab
 
 print(f"Tracking CSV : {tracking_pan_F} (Existe: {os.path.exists(tracking_pan_F)})")
 print(f"Matriz Pan   : {matriz_pan} (Existe: {os.path.exists(matriz_pan)})")
@@ -175,7 +170,7 @@ print(f"Matriz modificada: {X_mod.shape[0]} células × {X_mod.shape[1]} genes (
 # %%
 print(f"Exportando matriz para formato Matrix Market (.mtx): {PATH_MTX_ENTRADA}...")
 sio.mmwrite(str(PATH_MTX_ENTRADA), X_mod)
-print(f"Exportação MTX concluída com sucesso: {PATH_MTX_ENTRADA.stat().st_size / 1e6:.2f} MB")
+print(f"Exportação MTX concluída com sucesso")
 
 # Liberação preventiva de memória RAM
 del adata, X_mod
@@ -191,6 +186,9 @@ gc.collect()
 ProjetorSWeePR.verificar_e_instalar_dependencias_r()
 
 # %%
+if "imputs" not in PATH_MTX_ENTRADA.parts:
+    raise ValueError(f"O caminho de entrada '{PATH_MTX_ENTRADA}' é inválido: a pasta 'imputs' não foi encontrada.")
+
 print(f"[rSWeeP] Inicializando projetor oficial para {PATH_MTX_ENTRADA}...")
 projetor = ProjetorSWeePR(
     path_matriz=str(PATH_MTX_ENTRADA),

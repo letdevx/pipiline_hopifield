@@ -65,7 +65,7 @@ else:
     print("Atualizando código na VM...")
     # !cd {DEST_PATH} && git pull
 
-# !cd {DEST_PATH} && git checkout teste-pipeline_genereico_Pan_F
+# !cd {DEST_PATH} && git checkout teste_recontrucao_Pan_Pan_ausentes
 
 # Adiciona a raiz do repo e a pasta 'src' da VM ao path do Python
 for _p in (DEST_PATH, os.path.join(DEST_PATH, "src")):
@@ -524,7 +524,7 @@ extrator = ExtratorPadroesSubcluster(
     labels=clo_ref,
     classes=[1, 2, 3, 4, 5, 6, 7],
     seed=SEED,
-    nc=50,
+    nc=30,
     k=10,
 )
 extrator.extrair(projetor.Wswp)
@@ -570,7 +570,7 @@ print("Rede Hopfield e metadados salvos com sucesso em outputs/hopfield/!")
 # %%
 
 
-NC = 50
+NC = 30
 CLASSES_ARR = np.array([1, 2, 3, 4, 5, 6, 7])
 
 assert carregador.W0 is not None
@@ -622,7 +622,7 @@ plt.show()
 
 
 # %% [markdown]
-# #### 12. Auto-imputação — Fujita → Fujita
+# #### 12. Auto-imputação — Ref → Ref
 # Baseline interno: a rede treinada em Fujita recebe as próprias células Fujita.Esperamos alta taxa de reconstrução e classificação.
 
 # %%

@@ -67,3 +67,4 @@ logs/
 *.parquet
 *.h5ad
 *.tsv
+*.mtx
