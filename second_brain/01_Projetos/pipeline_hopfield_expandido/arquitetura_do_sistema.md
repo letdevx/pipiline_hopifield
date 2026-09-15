@@ -59,6 +59,8 @@ graph TD
 ### 2.1. `src/config.py` — Central de Configuração
 Centraliza variáveis de ambiente, caminhos de entrada e saídas de dados com resolução dinâmica inteligente de ambiente (Google Colab com Drive, Windows Local da pesquisadora ou raiz do repositório local). Atua como a **fonte única da verdade** para a localização da base ortonormal canônica congelada `PATH_ORTHBASE_RDS` (`orthbase_mproj_600d.rds`). Veja **[[04_Recursos/adrs/adr_021_centralizacao_orthbase_config_e_reuso_canonico|ADR 021]]**.
 
+Além disso, gerencia a estrutura de saídas de forma **100% automática e dinâmica** no padrão `output_<nome_ref>_<nome_alvo>/`, derivando os identificadores diretamente dos arquivos `.h5ad` configurados (`PATH_REFERENCIA` e `PATH_ALVO`). Disponibiliza a função `configurar_diretorios(path_referencia, path_alvo, nome_ref, nome_alvo, criar_diretorios)` para reconfiguração imediata em tempo de execução sem risco de sobrescrever execuções anteriores.
+
 ### 2.2. `src/preprocessing/` — Binarização
 - **`binarizador.py` (`Binarizador`)**: Converte matrizes contínuas/contagens de arquivos `.h5ad` para matrizes de presença/ausência binária ($x > 0 \rightarrow 1$, $x \le 0 \rightarrow 0$). Veja **[[03_Conhecimento/binarizacao_expressao_genica|Conceito Atômico]]** e **[[04_Recursos/adrs/adr_001_binarizacao_expressao_genica|ADR 001]]**.
 
@@ -90,14 +92,14 @@ Centraliza variáveis de ambiente, caminhos de entrada e saídas de dados com re
 | Estágio | Tipo de Dado | Formato de Arquivo | Localização / Artefato | Função no Sistema |
 | :--- | :--- | :--- | :--- | :--- |
 | **Entrada Bruta** | Expressão Contínua | `.h5ad` (AnnData) | `PATH_REFERENCIA`, `PATH_ALVO` | Leituras originais do sequenciamento scRNA-seq |
-| **Binarização** | Matriz Binária $\{0, 1\}$ | `.h5ad` | `outputs/binarizacao/` | Preservação de assinaturas ON/OFF de expressão |
-| **Alinhamento** | Genes Alinhados | `.h5ad` / `.txt` | `outputs/alinhamento/` | Referência Ensembl unificada |
-| **Expansão Gênica** | Top 5k + Exclusivos | `.csv` / `.npy` | `outputs/top_genes/` | Matrizes filtradas no espaço de ~11.000 genes |
-| **Projeção SWeeP** | Embeddings 600D | `.csv` / `.npy` | `outputs/treinamento/` | Coordenadas compactas para clusterização K-Means |
+| **Binarização** | Matriz Binária {0, 1} | `.h5ad` | `OUTPUTS/binarizacao/` | Preservação de assinaturas ON/OFF de expressão |
+| **Alinhamento** | Genes Alinhados | `.h5ad` / `.txt` | `OUTPUTS/alinhamento/` | Referência Ensembl unificada |
+| **Expansão Gênica** | Top 5k + Exclusivos | `.csv` / `.npy` | `OUTPUTS/top_genes/` | Matrizes filtradas no espaço de ~11.000 genes |
+| **Projeção SWeeP** | Embeddings 600D | `.csv` / `.npy` | `OUTPUTS/treinamento/` | Coordenadas compactas para clusterização K-Means |
 | **Base Ortonormal SWeeP** | Matriz de Projeção Congelada | `.rds` (R Matrix) | `PATH_ORTHBASE_RDS` (`orthbase_mproj_600d.rds`) | Base canônica determinística compartilhada entre treino, sentinelas e inferência (ADR 018, ADR 019, ADR 021) |
-| **Rede Treinada** | Pesos & Metadados | `.pt` / `.json` | `outputs/hopfield/` | Modelo de memória associativa salvo (210 padrões) |
-| **Imputação Cross-Dataset** | Expressão Reconstruída com Layers & Metadados | `.h5ad` (CSR Gzip) / `.npy` / `.json` | `outputs/imputacao/` | AnnData com camadas `original`, `mascara_imputada` e `probabilidade_imputada`, metadados de células/genes e relatório (ADR 017/020) |
-| **Exportação MTX (ML)** | Matriz Market + Features + Barcodes | `.mtx` + 2×`.tsv` | `outputs/alinhamento/mtx_referencia/`<br/>`outputs/alinhamento/mtx_alvo_sentinela/`<br/>`outputs/imputacao/mtx_alvo_imputado/` | Trio interoperável auditado (células × genes) para Machine Learning (ADR 018) |
+| **Rede Treinada** | Pesos & Metadados | `.pt` / `.json` | `OUTPUTS/hopfield/` | Modelo de memória associativa salvo (210 padrões) |
+| **Imputação Cross-Dataset** | Expressão Reconstruída com Layers & Metadados | `.h5ad` (CSR Gzip) / `.npy` / `.json` | `OUTPUTS/imputacao/` | AnnData com camadas `original`, `mascara_imputada` e `probabilidade_imputada`, metadados de células/genes e relatório (ADR 017/020) |
+| **Exportação MTX (ML)** | Matriz Market + Features + Barcodes | `.mtx` + 2×`.tsv` | `OUTPUTS/alinhamento/mtx_referencia/`<br/>`OUTPUTS/alinhamento/mtx_alvo_sentinela/`<br/>`OUTPUTS/imputacao/mtx_alvo_imputado/` | Trio interoperável auditado (células × genes) para Machine Learning (ADR 018) |
 
 ---
 

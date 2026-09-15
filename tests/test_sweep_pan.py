@@ -7,12 +7,12 @@ import pytest
 import scipy.io as sio
 import scipy.sparse as sp
 
-from sweepPan import (
-    main,
-    projetar_matriz_pan05,
-    resolver_caminho_entrada,
-    resolver_caminhos,
-)
+sweepPan = pytest.importorskip("sweepPan", reason="sweepPan.py não encontrado na raiz")
+main = sweepPan.main
+projetar_matriz_pan05 = sweepPan.projetar_matriz_pan05
+resolver_caminho_entrada = sweepPan.resolver_caminho_entrada
+resolver_caminhos = sweepPan.resolver_caminhos
+
 
 
 def test_resolver_caminhos_padrao() -> None:

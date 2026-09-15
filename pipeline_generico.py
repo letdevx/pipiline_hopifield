@@ -61,11 +61,8 @@ DEST_PATH = f"/content/{REPO_NAME}"
 if not os.path.exists(DEST_PATH):
     print("Clonando código para a VM...")
     # !git clone {REPO_URL} {DEST_PATH}
-else:
-    print("Atualizando código na VM...")
-    # !cd {DEST_PATH} && git pull
 
-# !cd {DEST_PATH} && git checkout teste-pipeline_genereico_Pan_F
+# !cd {DEST_PATH} && git checkout teste_recontrucao_Pan_Pan_ausentes && git pull
 
 # Adiciona a raiz do repo e a pasta 'src' da VM ao path do Python
 for _p in (DEST_PATH, os.path.join(DEST_PATH, "src")):
@@ -130,6 +127,9 @@ from config import (
     OUT_MTX_ALVO_SENTINELA,
     OUT_MTX_REFERENCIA,
     OUT_TOP_GENES,
+    OUT_SWEEP_ALVO_POS_IMPUTACAO,
+    OUT_SWEEP_POS_IMPUTACAO,
+    OUTPUTS,
     PATH_ALVO,
     PATH_FEATURES_ALVO,
     PATH_FEATURES_REFERENCIA,
@@ -139,6 +139,7 @@ from config import (
     PATH_REFERENCIA,
     PATH_SWEEP_ALVO,
     PATH_SWEEP_REFERENCIA,
+    configurar_diretorios,
 )
 
 # Importação defensiva com fallback para compatibilidade com ambientes Colab sem git pull
@@ -151,14 +152,15 @@ except ImportError:
         os.path.join(
             getattr(
                 config,
-                "PATH_BASE",
-                r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop",
+                "OUT_TREINAMENTO",
+                os.path.join(OUTPUTS, "treinamento"),
             ),
-            "outputs",
-            "treinamento",
             "matriz_reduzida_sweepALVO_sentinela.txt",
         ),
     )
+
+print(f"[Config] Diretório de saídas ativo: {OUTPUTS}")
+print(f"[Config] Referência: '{getattr(config, 'NOME_REF', 'ref')}' | Alvo: '{getattr(config, 'NOME_ALVO', 'alvo')}'")
 
 importlib.reload(preprocessing)
 import alinhamento
@@ -393,8 +395,6 @@ else:
     gc.collect()
 
 
-# %%
-
 # %% [markdown]
 # #### 5. Projeção SWeeP (rSWeeP via R ) 📚
 
@@ -524,7 +524,7 @@ extrator = ExtratorPadroesSubcluster(
     labels=clo_ref,
     classes=[1, 2, 3, 4, 5, 6, 7],
     seed=SEED,
-    nc=50,
+    nc=30,
     k=10,
 )
 extrator.extrair(projetor.Wswp)
@@ -570,7 +570,7 @@ print("Rede Hopfield e metadados salvos com sucesso em outputs/hopfield/!")
 # %%
 
 
-NC = 50
+NC = 30
 CLASSES_ARR = np.array([1, 2, 3, 4, 5, 6, 7])
 
 assert carregador.W0 is not None
@@ -622,7 +622,7 @@ plt.show()
 
 
 # %% [markdown]
-# #### 12. Auto-imputação — Fujita → Fujita
+# #### 12. Auto-imputação — Ref → Ref
 # Baseline interno: a rede treinada em Fujita recebe as próprias células Fujita.Esperamos alta taxa de reconstrução e classificação.
 
 # %%
@@ -813,7 +813,7 @@ print(
 )
 projetor_m_r = ProjetorSWeePR(
     path_matriz=path_mtx_alvo_imputado,
-    path_saida=PATH_SWEEP_ALVO,
+    path_saida=os.path.join(OUT_SWEEP_POS_IMPUTACAO, "sweep_alvo_pos_imputacao.txt"),
     n_componentes=600,
     seed=SEED,
 )
