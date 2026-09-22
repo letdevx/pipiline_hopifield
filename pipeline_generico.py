@@ -538,7 +538,7 @@ print(
 
 
 # %%
-rede35 = ModernHopfieldNetwork(beta=50.0, n_iters=1, binary=True, threshold=0.0)
+rede35 = ModernHopfieldNetwork(beta=50.0, n_iters=0, binary=True, threshold=0.0)
 # A rede agora mapeará e armazenará apenas a versão original W0-Binária
 rede35.store(perf35)
 meta_eval = extrator.meta  # mapeamento padrao -> classe
@@ -644,15 +644,6 @@ avaliador_f = AvaliadorHopfield(
     padroes=perf35,
     classes=[1, 2, 3, 4, 5, 6, 7],
     nc=50,
-    nomes_classes=[
-        "Excitatory",
-        "Inhibitory",
-        "Astrocytes",
-        "Microglia",
-        "Oligodendrocytes",
-        "OPC",
-        "Pericytes",
-    ],
     meta=meta_eval,
 )
 
@@ -661,7 +652,7 @@ avaliador_f.avaliar(Wrecuperado_f, clo_ref)
 print(avaliador_f)
 
 # 2. Plota a Matriz de Confusão
-avaliador_f.plotar(titulo="Confusão — rede35 (Fujita → Fujita)")
+avaliador_f.plotar(titulo="Confusão — rede35 (PAN → PAN)")
 
 
 # %% [markdown]
@@ -827,6 +818,6 @@ avaliador_m = AvaliadorHopfield(
     meta=meta_eval,
 )
 avaliador_m.avaliar(Wrecuperado_m, clo_alvo).plotar(
-    titulo="Confusão — rede35 (Mathys → Fujita, Sentinela 0.5)"
+    titulo="Confusão — rede35 (PAN→ PAN, Sentinela 0.5)"
 )
 print(avaliador_m)
