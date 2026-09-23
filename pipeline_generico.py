@@ -126,9 +126,9 @@ from config import (
     OUT_MTX_ALVO_IMPUTADO,
     OUT_MTX_ALVO_SENTINELA,
     OUT_MTX_REFERENCIA,
-    OUT_TOP_GENES,
     OUT_SWEEP_ALVO_POS_IMPUTACAO,
     OUT_SWEEP_POS_IMPUTACAO,
+    OUT_TOP_GENES,
     OUTPUTS,
     PATH_ALVO,
     PATH_FEATURES_ALVO,
@@ -160,7 +160,9 @@ except ImportError:
     )
 
 print(f"[Config] Diretório de saídas ativo: {OUTPUTS}")
-print(f"[Config] Referência: '{getattr(config, 'NOME_REF', 'ref')}' | Alvo: '{getattr(config, 'NOME_ALVO', 'alvo')}'")
+print(
+    f"[Config] Referência: '{getattr(config, 'NOME_REF', 'ref')}' | Alvo: '{getattr(config, 'NOME_ALVO', 'alvo')}'"
+)
 
 importlib.reload(preprocessing)
 import alinhamento
@@ -468,7 +470,7 @@ else:
 # ==============================================================================
 # Carregamento e Remapeamento dos Rótulos (Referência e Alvo)
 # ==============================================================================
-from treinamento import carregar_labels
+from treinamento import carregar_labels, remapear_labels_canonicos
 
 # 1. Carregamento robusto dos rótulos brutos
 labels_referencia = carregar_labels(PATH_LABELS_REFERENCIA)
@@ -476,30 +478,30 @@ labels_alvo = carregar_labels(PATH_LABELS_ALVO)
 assert labels_referencia is not None and labels_alvo is not None
 
 print(
-    f"[Labels] Referência : {len(labels_referencia)} células | Tipos: {np.unique(labels_referencia)}"
+    f"[Labels] Referência : {len(labels_referencia)} células | Tipos brutos: {np.unique(labels_referencia)}"
 )
 print(
-    f"[Labels] Alvo       : {len(labels_alvo)} células | Tipos: {np.unique(labels_alvo)}"
+    f"[Labels] Alvo       : {len(labels_alvo)} células | Tipos brutos: {np.unique(labels_alvo)}"
 )
 
-# 2. Remapeamento canônico (clo_ref e clo_alvo)
-# Classes não presentes em [1, 3, 4, 5, 6, 7, 0] são remapeadas para a classe 2
-clo_ref = labels_referencia.copy()
-clo_ref[~np.isin(clo_ref, [1, 3, 4, 5, 6, 7, 0])] = 2
-
-clo_alvo = labels_alvo.copy()
-clo_alvo[~np.isin(clo_alvo, [1, 3, 4, 5, 6, 7, 0])] = 2
+# 2. Remapeamento canônico estrito e anti-viés (Etapa 1)
+# Preserva as 7 classes canônicas [1..7] e isola rótulos fora delas como desconhecidos (0)
+CLASSES_CANONICAS: list[int] = [1, 2, 3, 4, 5, 6, 7]
+clo_ref, stats_ref = remapear_labels_canonicos(
+    labels_referencia, classes_validas=CLASSES_CANONICAS, label_desconhecido=0
+)
+clo_alvo, stats_alvo = remapear_labels_canonicos(
+    labels_alvo, classes_validas=CLASSES_CANONICAS, label_desconhecido=0
+)
 
 # 3. Exibição das distribuições
-print("\nDistribuição Referência (clo_ref):")
-vals_r, counts_r = np.unique(clo_ref, return_counts=True)
-for v, c in zip(vals_r, counts_r):
-    print(f"  classe {v}: {c:>6d} células")
+print("\nDistribuição Canônica Referência (clo_ref):")
+for k, v in stats_ref.items():
+    print(f"  {k}: {v:>6d} células")
 
-print("\nDistribuição Alvo (clo_alvo):")
-vals_a, counts_a = np.unique(clo_alvo, return_counts=True)
-for v, c in zip(vals_a, counts_a):
-    print(f"  classe {v}: {c:>6d} células")
+print("\nDistribuição Canônica Alvo (clo_alvo):")
+for k, v in stats_alvo.items():
+    print(f"  {k}: {v:>6d} células")
 
 
 # %%
@@ -522,7 +524,7 @@ assert projetor.Wswp is not None
 extrator = ExtratorPadroesSubcluster(
     W0=carregador.W0,
     labels=clo_ref,
-    classes=[1, 2, 3, 4, 5, 6, 7],
+    classes=CLASSES_CANONICAS,
     seed=SEED,
     nc=30,
     k=10,
@@ -533,7 +535,7 @@ perf35 = extrator.padroes
 meta_eval = extrator.meta
 print(extrator)
 print(
-    f"perf35 shape: {perf35.shape}  (esperado: (210, {len(analisador.genes_ordenados)}))"
+    f"perf35 shape: {perf35.shape}  (esperado: ({len(CLASSES_CANONICAS) * 30}, {len(analisador.genes_ordenados)}))"
 )
 
 
@@ -560,8 +562,8 @@ rede35.salvar_com_metadados(
     path_pt=PATH_PT,
     path_meta=PATH_META,
     meta=extrator.meta,
-    classes=[1, 2, 3, 4, 5, 6, 7],
-    nc=50,
+    classes=CLASSES_CANONICAS,
+    nc=30,
 )
 
 print("Rede Hopfield e metadados salvos com sucesso em outputs/hopfield/!")
@@ -571,7 +573,7 @@ print("Rede Hopfield e metadados salvos com sucesso em outputs/hopfield/!")
 
 
 NC = 30
-CLASSES_ARR = np.array([1, 2, 3, 4, 5, 6, 7])
+CLASSES_ARR = np.array(CLASSES_CANONICAS)
 
 assert carregador.W0 is not None
 assert perf35 is not None
@@ -642,8 +644,8 @@ print(f"Auto-imputação concluída! Shape: {Wrecuperado_f.shape}")
 assert perf35 is not None
 avaliador_f = AvaliadorHopfield(
     padroes=perf35,
-    classes=[1, 2, 3, 4, 5, 6, 7],
-    nc=50,
+    classes=CLASSES_CANONICAS,
+    nc=30,
     meta=meta_eval,
 )
 
@@ -813,7 +815,7 @@ projetor_m_r.projetar()
 # 5. Avaliação do Tipo Celular Cross-Dataset
 avaliador_m = AvaliadorHopfield(
     padroes=perf35,
-    classes=[1, 2, 3, 4, 5, 6, 7],
+    classes=CLASSES_CANONICAS,
     nc=30,
     meta=meta_eval,
 )

@@ -14,13 +14,13 @@ resolver_caminho_entrada = sweepPan.resolver_caminho_entrada
 resolver_caminhos = sweepPan.resolver_caminhos
 
 
-
 def test_resolver_caminhos_padrao() -> None:
     """Verifica se os caminhos padrão do pipeline são resolvidos adequadamente."""
     c_mat, c_txt, c_npy, c_rds = resolver_caminhos()
 
     assert any(
-        nome in c_mat.lower() for nome in ["matrix_pan", "matriz_pan", "pan05", "pan-05"]
+        nome in c_mat.lower()
+        for nome in ["matrix_pan", "matriz_pan", "pan05", "pan-05"]
     )
     assert c_txt.endswith("matriz_reduzida_sweepPan05.txt")
     assert c_npy.endswith("matriz_reduzida_sweepPan05.npy")

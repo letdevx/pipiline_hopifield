@@ -5,6 +5,7 @@ from .carregador_dados_fujita import (
     CarregadorDados,
     CarregadorDadosFujita,
     carregar_labels,
+    remapear_labels_canonicos,
 )
 from .estrategias_clusterizacao import (
     EstrategiaHDBSCAN,
@@ -35,4 +36,5 @@ __all__ = [
     "ProjetorSWeePR",
     "ValidadorImputacao",
     "carregar_labels",
+    "remapear_labels_canonicos",
 ]

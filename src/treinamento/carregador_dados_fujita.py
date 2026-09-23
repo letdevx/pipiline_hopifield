@@ -57,6 +57,57 @@ def carregar_labels(
     return labels
 
 
+def remapear_labels_canonicos(
+    labels: NDArray[Any] | Sequence[int] | pd.Series,
+    classes_validas: Sequence[int] = (1, 2, 3, 4, 5, 6, 7),
+    map_de_para: dict[int, int] | None = None,
+    label_desconhecido: int = 0,
+) -> tuple[NDArray[np.int_], dict[str, int]]:
+    """Remapeia rótulos celulares para o espaço canônico, isolando rótulos desconhecidos.
+
+    Garante que apenas células genuinamente anotadas com as classes canônicas
+    permaneçam nas classes válidas (1 a 7). Células fora do conjunto canônico
+    (rótulos ambíguos, negativos ou não identificados) são atribuídas a um
+    rótulo neutro (padrão: 0), evitando contaminação espúria da classe 2.
+
+    Parameters
+    ----------
+    labels : NDArray | Sequence[int] | pd.Series
+        Vetor de rótulos celulares originais.
+    classes_validas : Sequence[int], default=(1, 2, 3, 4, 5, 6, 7)
+        Conjunto de identificadores válidos de classes biológicas ativas.
+    map_de_para : dict[int, int] | None, optional
+        Mapeamento explícito de conversão de categorias antigas para as novas.
+    label_desconhecido : int, default=0
+        Rótulo atribuído a células cuja anotação não pertence às classes válidas.
+
+    Returns
+    -------
+    tuple[NDArray[np.int_], dict[str, int]]
+        Tupla contendo:
+        - Array de rótulos remapeados (tipo int).
+        - Dicionário com estatísticas de contagem por classe e contagem de desconhecidos.
+    """
+    arr: NDArray[np.int_] = np.asarray(labels, dtype=int).ravel()
+    remapeados: NDArray[np.int_] = arr.copy()
+
+    if map_de_para is not None:
+        for k_orig, v_dest in map_de_para.items():
+            remapeados[arr == k_orig] = int(v_dest)
+
+    classes_set = set(int(c) for c in classes_validas)
+    mask_desconhecidos: NDArray[np.bool_] = ~np.isin(remapeados, list(classes_set))
+    remapeados[mask_desconhecidos] = int(label_desconhecido)
+
+    stats: dict[str, int] = {
+        f"classe_{c}": int(np.sum(remapeados == c)) for c in sorted(classes_set)
+    }
+    stats["desconhecidos"] = int(np.sum(mask_desconhecidos))
+    stats["total"] = len(remapeados)
+
+    return remapeados, stats
+
+
 class CarregadorDados:
     """Carregador unificado de dados scRNA-seq para análise com rede Hopfield.
 
