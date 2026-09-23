@@ -541,7 +541,7 @@ print(
 
 # %%
 rede180 = ModernHopfieldNetwork(
-    beta=25.0, n_iters=1, binary=True, threshold=0.0, normalize=True
+    beta=50.0, n_iters=1, binary=True, threshold=0.0, normalize=False
 )
 # A rede agora mapeará e armazenará apenas a versão original W0-Binária
 rede180.store(perf180)
@@ -554,9 +554,9 @@ import os
 PATH_PT = os.path.join(OUT_HOPFIELD, "rede180.pt")
 PATH_META = os.path.join(OUT_HOPFIELD, "rede180.json")
 
-# 1. Cria e armazena os padrões na rede Hopfield com normalização esférica
+# 1. Cria e armazena os padrões na rede Hopfield
 rede180 = ModernHopfieldNetwork(
-    beta=25.0, n_iters=1, binary=True, threshold=0.0, normalize=True
+    beta=50.0, n_iters=1, binary=True, threshold=0.0, normalize=False
 )
 rede180.store(perf180)
 meta_eval = extrator.meta
@@ -596,16 +596,9 @@ print(f"hopf_ts(Wswp[:{n_test}], rede180): shape {Wtes.shape}")
 
 perf180_f = perf180.astype(np.float64)
 Wtes_f = Wtes.astype(np.float64)
-if getattr(rede180, "normalize", False):
-    w_norms = np.linalg.norm(Wtes_f, axis=1, keepdims=True)
-    w_norms[w_norms == 0] = 1.0
-    p_norms = np.linalg.norm(perf180_f, axis=1, keepdims=True)
-    p_norms[p_norms == 0] = 1.0
-    idx_proto = ((Wtes_f / w_norms) @ (perf180_f / p_norms).T).argmax(axis=1)
-else:
-    a2 = (Wtes_f**2).sum(axis=1, keepdims=True)
-    b2 = (perf180_f**2).sum(axis=1, keepdims=True).T
-    idx_proto = (a2 + b2 - 2 * (Wtes_f @ perf180_f.T)).argmin(axis=1)
+a2 = (Wtes_f**2).sum(axis=1, keepdims=True)
+b2 = (perf180_f**2).sum(axis=1, keepdims=True).T
+idx_proto = (a2 + b2 - 2 * (Wtes_f @ perf180_f.T)).argmin(axis=1)
 pred_sub = CLASSES_ARR[idx_proto // NC]
 
 acc_sub = (pred_sub == 3).mean()
@@ -658,7 +651,7 @@ avaliador_f = AvaliadorHopfield(
     classes=CLASSES_CANONICAS,
     nc=30,
     meta=meta_eval,
-    metrica="cosseno",
+    metrica="euclidiana",
 )
 
 # 1. Avalia a recuperação contra os rótulos verdadeiros
@@ -830,7 +823,7 @@ avaliador_m = AvaliadorHopfield(
     classes=CLASSES_CANONICAS,
     nc=30,
     meta=meta_eval,
-    metrica="cosseno",
+    metrica="euclidiana",
 )
 avaliador_m.avaliar(Wrecuperado_m, clo_alvo).plotar(
     titulo="Confusão — rede180 (PAN → PAN, Sentinela 0.5)"

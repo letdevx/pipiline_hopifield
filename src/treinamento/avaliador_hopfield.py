@@ -83,7 +83,7 @@ class AvaliadorHopfield:
         nc: int = 10,
         nomes_classes: Sequence[str] | None = None,
         meta: Sequence[tuple[int, int]] | None = None,
-        metrica: str = "cosseno",
+        metrica: str = "euclidiana",
     ) -> None:
         self.padroes: NDArray[np.float32] = np.asarray(padroes, dtype=np.float32)
         self.classes: list[int] = list(classes)
