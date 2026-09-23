@@ -116,6 +116,37 @@ class ModernHopfieldNetwork(nn.Module):
         out_buffer: NDArray[np.float32] | None = None,
         *,
         return_probabilities: Literal[True],
+        return_attention_weights: Literal[True],
+    ) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.float32]]: ...
+
+    @overload
+    def retrieve(
+        self,
+        queries: InputQueries,
+        batch_size: int = 1024,
+        normalize: bool | None = None,
+        subspace_mask: NDArray[Any] | torch.Tensor | None = None,
+        mask_sentinela_ausentes: NDArray[np.bool_] | Sequence[int] | None = None,
+        fill_value: float = 0.5,
+        out_buffer: NDArray[np.float32] | None = None,
+        *,
+        return_probabilities: Literal[True],
+        return_attention_weights: Literal[False] = False,
+    ) -> tuple[NDArray[np.float32], NDArray[np.float32]]: ...
+
+    @overload
+    def retrieve(
+        self,
+        queries: InputQueries,
+        batch_size: int = 1024,
+        normalize: bool | None = None,
+        subspace_mask: NDArray[Any] | torch.Tensor | None = None,
+        mask_sentinela_ausentes: NDArray[np.bool_] | Sequence[int] | None = None,
+        fill_value: float = 0.5,
+        out_buffer: NDArray[np.float32] | None = None,
+        *,
+        return_probabilities: Literal[False] = False,
+        return_attention_weights: Literal[True],
     ) -> tuple[NDArray[np.float32], NDArray[np.float32]]: ...
 
     @overload
@@ -129,6 +160,7 @@ class ModernHopfieldNetwork(nn.Module):
         fill_value: float = 0.5,
         out_buffer: NDArray[np.float32] | None = None,
         return_probabilities: Literal[False] = False,
+        return_attention_weights: Literal[False] = False,
     ) -> NDArray[np.float32]: ...
 
     @torch.no_grad()
@@ -142,7 +174,8 @@ class ModernHopfieldNetwork(nn.Module):
         fill_value: float = 0.5,
         out_buffer: NDArray[np.float32] | None = None,
         return_probabilities: bool = False,
-    ) -> NDArray[np.float32] | tuple[NDArray[np.float32], NDArray[np.float32]]:
+        return_attention_weights: bool = False,
+    ) -> Any:
         """Recupera o padrão de memória associativa mais próximo para cada query.
 
         Parameters
@@ -162,13 +195,16 @@ class ModernHopfieldNetwork(nn.Module):
         out_buffer : NDArray[np.float32] | None, optional
             Buffer pré-alocado opcional para escrita direta dos resultados.
         return_probabilities : bool, default=False
-            Se True, retorna uma tupla (matriz_binaria, matriz_probabilidade), onde a
-            probabilidade contínua [0, 1] reflete o grau de certeza da rede na ativação.
+            Se True, retorna uma tupla com probabilidades contínuas [0, 1].
+        return_attention_weights : bool, default=False
+            Se True, retorna também a matriz de pesos de atenção Softmax da Hopfield
+            (n_queries × n_padroes), habilitando Softmax Class Pooling.
 
         Returns
         -------
-        NDArray[np.float32] | tuple[NDArray[np.float32], NDArray[np.float32]]
-            Matriz recuperada e imputada (ou tupla com probabilidades contínuas se return_probabilities=True).
+        NDArray[np.float32] | tuple
+            Matriz recuperada e imputada (ou tupla contendo probabilidades contínuas
+            e/ou pesos de atenção Softmax).
         """
         if self.patterns.numel() == 0:
             raise RuntimeError(
@@ -180,6 +216,7 @@ class ModernHopfieldNetwork(nn.Module):
         )
 
         Xi: torch.Tensor = self.patterns.to(dtype=torch.float32, device="cpu")
+        n_patterns: int = int(Xi.shape[0])
         is_sparse: bool = sp.issparse(queries)
 
         n_queries: int
@@ -216,6 +253,10 @@ class ModernHopfieldNetwork(nn.Module):
         if return_probabilities:
             prob_buffer = np.empty((n_queries, n_features), dtype=np.float32)
 
+        att_buffer: NDArray[np.float32] | None = None
+        if return_attention_weights:
+            att_buffer = np.empty((n_queries, n_patterns), dtype=np.float32)
+
         Xi_att: torch.Tensor = (
             Xi[:, subspace_tensor] if subspace_tensor is not None else Xi
         )
@@ -243,6 +284,7 @@ class ModernHopfieldNetwork(nn.Module):
             if self.binary:
                 x = 2.0 * x - 1.0
 
+            weights: torch.Tensor | None = None
             for _ in range(self.n_iters):
                 x_att: torch.Tensor = (
                     x[:, subspace_tensor] if subspace_tensor is not None else x
@@ -256,6 +298,12 @@ class ModernHopfieldNetwork(nn.Module):
                     scores = self.beta * (x_att @ Xi_att.T)
                 weights = torch.softmax(scores, dim=-1)
                 x = weights @ Xi
+
+            if att_buffer is not None:
+                assert weights is not None
+                att_buffer[s : s + batch_size] = (
+                    weights.cpu().numpy().astype(np.float32)
+                )
 
             if prob_buffer is not None:
                 if self.binary:
@@ -273,10 +321,138 @@ class ModernHopfieldNetwork(nn.Module):
         print(
             f"[ModernHopfieldNetwork] Recuperação concluída: {out_buffer.shape} (dtype={out_buffer.dtype})"
         )
+        if return_probabilities and return_attention_weights:
+            assert prob_buffer is not None and att_buffer is not None
+            return out_buffer, prob_buffer, att_buffer
         if return_probabilities:
             assert prob_buffer is not None
             return out_buffer, prob_buffer
+        if return_attention_weights:
+            assert att_buffer is not None
+            return out_buffer, att_buffer
         return out_buffer
+
+    @torch.no_grad()
+    def compute_attention_weights(
+        self,
+        queries: InputQueries,
+        batch_size: int = 2048,
+        normalize: bool | None = None,
+        subspace_mask: NDArray[Any] | torch.Tensor | None = None,
+        mask_sentinela_ausentes: NDArray[np.bool_] | Sequence[int] | None = None,
+        fill_value: float = 0.5,
+    ) -> NDArray[np.float32]:
+        """Calcula os pesos de atenção Softmax da Hopfield sobre os padrões armazenados.
+
+        Evita reconstruir o perfil completo de genes quando apenas a atenção / classificação
+        por Softmax Class Pooling for necessária, economizando memória e tempo de execução.
+
+        Parameters
+        ----------
+        queries : InputQueries
+            Matriz de entrada (esparsa CSR ou densa).
+        batch_size : int, default=2048
+            Tamanho do lote OOM-Safe.
+        normalize : bool | None, optional
+            Sobrescreve a normalização L2 da rede.
+        subspace_mask : NDArray | torch.Tensor | None, optional
+            Máscara de subespaço para cálculo da atenção.
+        mask_sentinela_ausentes : NDArray[bool] | Sequence[int] | None, optional
+            Máscara de genes ausentes para injeção de fill_value.
+        fill_value : float, default=0.5
+            Valor dos genes ausentes (0.5 vira 0.0 no espaço bipolar).
+
+        Returns
+        -------
+        NDArray[np.float32]
+            Matriz de pesos de atenção Softmax (n_queries × n_padroes).
+        """
+        if self.patterns.numel() == 0:
+            raise RuntimeError(
+                "[ModernHopfieldNetwork] Execute .store() antes de .compute_attention_weights()."
+            )
+
+        norm_active: bool = (
+            normalize if normalize is not None else getattr(self, "normalize", False)
+        )
+
+        Xi: torch.Tensor = self.patterns.to(dtype=torch.float32, device="cpu")
+        n_patterns: int = int(Xi.shape[0])
+        is_sparse: bool = sp.issparse(queries)
+
+        n_queries: int
+        queries_np: NDArray[Any] | None
+        queries_csr: sp.csr_matrix | None = None
+
+        if is_sparse:
+            queries_csr = sp.csr_matrix(queries)
+            assert queries_csr is not None and queries_csr.shape is not None
+            n_queries = int(queries_csr.shape[0])
+            queries_np = None
+        else:
+            if isinstance(queries, torch.Tensor):
+                queries_np = queries.detach().cpu().numpy()
+            else:
+                queries_np = np.asarray(queries)
+            assert queries_np is not None and queries_np.shape is not None
+            n_queries = int(queries_np.shape[0])
+
+        subspace_tensor: torch.Tensor | None = None
+        if subspace_mask is not None:
+            if isinstance(subspace_mask, np.ndarray):
+                subspace_tensor = torch.from_numpy(subspace_mask).to(device="cpu")
+            elif isinstance(subspace_mask, torch.Tensor):
+                subspace_tensor = subspace_mask.to(device="cpu")
+
+        Xi_att: torch.Tensor = (
+            Xi[:, subspace_tensor] if subspace_tensor is not None else Xi
+        )
+        Xi_norm: torch.Tensor | None = None
+        if norm_active:
+            Xi_norm = F.normalize(Xi_att, p=2, dim=-1, eps=1e-8)
+
+        att_buffer: NDArray[np.float32] = np.empty(
+            (n_queries, n_patterns), dtype=np.float32
+        )
+
+        for s in range(0, n_queries, batch_size):
+            chunk_np: NDArray[np.float32]
+            if is_sparse:
+                assert queries_csr is not None
+                chunk_np = queries_csr[s : s + batch_size].toarray().astype(np.float32)
+            else:
+                assert queries_np is not None
+                chunk_np = queries_np[s : s + batch_size].astype(
+                    np.float32,
+                    copy=mask_sentinela_ausentes is not None,
+                )
+
+            if mask_sentinela_ausentes is not None:
+                chunk_np[:, mask_sentinela_ausentes] = fill_value
+
+            x: torch.Tensor = torch.from_numpy(chunk_np).to(device="cpu")
+            if self.binary:
+                x = 2.0 * x - 1.0
+
+            weights: torch.Tensor | None = None
+            for _ in range(self.n_iters):
+                x_att: torch.Tensor = (
+                    x[:, subspace_tensor] if subspace_tensor is not None else x
+                )
+                if norm_active:
+                    assert Xi_norm is not None
+                    x_norm = F.normalize(x_att, p=2, dim=-1, eps=1e-8)
+                    scores = self.beta * (x_norm @ Xi_norm.T)
+                else:
+                    scores = self.beta * (x_att @ Xi_att.T)
+                weights = torch.softmax(scores, dim=-1)
+                if self.n_iters > 1:
+                    x = weights @ Xi
+
+            assert weights is not None
+            att_buffer[s : s + batch_size] = weights.cpu().numpy().astype(np.float32)
+
+        return att_buffer
 
     def salvar(self, path: PathType) -> ModernHopfieldNetwork:
         """Salva os parâmetros da rede e a matriz de padrões em disco (.pt).

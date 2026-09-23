@@ -591,18 +591,25 @@ W0_arr: NDArray[np.float32] = (
 Wk4_res = wsort(W0_arr[clo_ref == 3])
 Wk4: NDArray[np.float32] = np.asarray(Wk4_res, dtype=np.float32)
 n_test: int = min(1000, int(Wk4.shape[0]))
-Wtes: NDArray[np.float32] = rede180.retrieve(Wk4[:n_test], batch_size=4096)
+Wtes, att_sub = rede180.retrieve(
+    Wk4[:n_test], batch_size=4096, return_attention_weights=True
+)
 print(f"hopf_ts(Wswp[:{n_test}], rede180): shape {Wtes.shape}")
 
-perf180_f = perf180.astype(np.float64)
-Wtes_f = Wtes.astype(np.float64)
-a2 = (Wtes_f**2).sum(axis=1, keepdims=True)
-b2 = (perf180_f**2).sum(axis=1, keepdims=True).T
-idx_proto = (a2 + b2 - 2 * (Wtes_f @ perf180_f.T)).argmin(axis=1)
-pred_sub = CLASSES_ARR[idx_proto // NC]
+# Classificação direta por Softmax Class Pooling (Atenção Agregada da Hopfield)
+avaliador_sub = AvaliadorHopfield(
+    padroes=perf180,
+    classes=CLASSES_CANONICAS,
+    nc=30,
+    meta=meta_eval,
+    metrica="euclidiana",
+)
+avaliador_sub.avaliar_por_atencao(att_sub, np.full(n_test, 3))
+pred_sub = avaliador_sub.y_pred
+assert pred_sub is not None
 
 acc_sub = (pred_sub == 3).mean()
-print(f"\nAcurácia subclasse clo_ref==3: {acc_sub * 100:.2f}%")
+print(f"\nAcurácia Softmax Class Pooling subclasse clo_ref==3: {acc_sub * 100:.2f}%")
 
 
 y_true_sub = np.full(n_test, 3)
@@ -640,7 +647,9 @@ plt.show()
 # ==============================================================================
 print("\n=== Auto-imputação: Fujita → Fujita ===")
 assert carregador.W0 is not None
-Wrecuperado_f = rede180.retrieve(carregador.W0, batch_size=2048)
+Wrecuperado_f, att_f = rede180.retrieve(
+    carregador.W0, batch_size=2048, return_attention_weights=True
+)
 print(f"Auto-imputação concluída! Shape: {Wrecuperado_f.shape}")
 
 
@@ -654,12 +663,12 @@ avaliador_f = AvaliadorHopfield(
     metrica="euclidiana",
 )
 
-# 1. Avalia a recuperação contra os rótulos verdadeiros
-avaliador_f.avaliar(Wrecuperado_f, clo_ref)
+# 1. Avalia a recuperação contra os rótulos verdadeiros via Softmax Class Pooling
+avaliador_f.avaliar_por_atencao(att_f, clo_ref)
 print(avaliador_f)
 
 # 2. Plota a Matriz de Confusão
-avaliador_f.plotar(titulo="Confusão — rede180 (PAN → PAN)")
+avaliador_f.plotar(titulo="Confusão Softmax Pooling — rede180 (PAN → PAN)")
 
 
 # %% [markdown]
@@ -715,12 +724,13 @@ print(
 print(
     "\nRecuperando padrões na Modern Hopfield Network (batch_size=2048, sentinela=0.5, prob=True)..."
 )
-Wrecuperado_m, Wprob_m = rede180.retrieve(
+Wrecuperado_m, Wprob_m, att_m = rede180.retrieve(
     queries=W_mathys,
     batch_size=40000,
     mask_sentinela_ausentes=mask_ausentes,
     fill_value=0.5,
     return_probabilities=True,
+    return_attention_weights=True,
 )
 print(f"Recuperação concluída! Matriz reconstruída: {Wrecuperado_m.shape}")
 
@@ -817,7 +827,7 @@ projetor_m_r = ProjetorSWeePR(
 )
 projetor_m_r.projetar()
 
-# 5. Avaliação do Tipo Celular Cross-Dataset
+# 5. Avaliação do Tipo Celular Cross-Dataset via Softmax Class Pooling
 avaliador_m = AvaliadorHopfield(
     padroes=perf180,
     classes=CLASSES_CANONICAS,
@@ -825,7 +835,7 @@ avaliador_m = AvaliadorHopfield(
     meta=meta_eval,
     metrica="euclidiana",
 )
-avaliador_m.avaliar(Wrecuperado_m, clo_alvo).plotar(
-    titulo="Confusão — rede180 (PAN → PAN, Sentinela 0.5)"
+avaliador_m.avaliar_por_atencao(att_m, clo_alvo).plotar(
+    titulo="Confusão Softmax Pooling — rede180 (Mathys, Sentinela 0.5)"
 )
 print(avaliador_m)

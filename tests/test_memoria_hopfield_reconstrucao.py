@@ -139,3 +139,52 @@ def test_hopfield_retrieve_normalizacao_esferica():
     # Com normalização esférica ativada, os resultados devem ser idênticos
     np.testing.assert_allclose(prob_peq, prob_grd, atol=1e-5)
     np.testing.assert_allclose(res_peq, res_grd, atol=1e-5)
+
+
+def test_hopfield_softmax_class_pooling():
+    """Valida o mecanismo de Softmax Class Pooling (Atenção Agregada da Hopfield)."""
+    from src.treinamento.avaliador_hopfield import AvaliadorHopfield
+
+    # 4 protótipos: 2 da Classe 1 e 2 da Classe 2
+    prototipos = np.array(
+        [
+            [1.0, 1.0, 0.0, 0.0],  # Classe 1 - Subcluster A
+            [1.0, 0.9, 0.1, 0.0],  # Classe 1 - Subcluster B
+            [0.0, 0.0, 1.0, 1.0],  # Classe 2 - Subcluster A
+            [0.0, 0.1, 0.9, 1.0],  # Classe 2 - Subcluster B
+        ],
+        dtype=np.float32,
+    )
+    meta = [(1, 0), (1, 1), (2, 0), (2, 1)]
+
+    # Query que compartilha atenção entre os dois subclusters da Classe 1
+    query = np.array([[1.0, 0.95, 0.05, 0.0]], dtype=np.float32)
+
+    rede = ModernHopfieldNetwork(beta=5.0, n_iters=1, binary=False)
+    rede.store(prototipos)
+
+    # 1. Valida retrieve com return_attention_weights=True
+    _res_rec, att = rede.retrieve(query, return_attention_weights=True)
+    assert att.shape == (1, 4)
+    assert np.isclose(att.sum(), 1.0, atol=1e-4)
+
+    # 2. Valida compute_attention_weights direto
+    att_direct = rede.compute_attention_weights(query)
+    np.testing.assert_allclose(att, att_direct, atol=1e-5)
+
+    # 3. Valida avaliar_por_atencao
+    avaliador = AvaliadorHopfield(
+        padroes=prototipos,
+        classes=[1, 2],
+        nc=2,
+        meta=meta,
+    )
+    avaliador.avaliar_por_atencao(att, labels=[1])
+
+    assert avaliador.acuracia == 1.0
+    assert avaliador.f1_macro == 1.0
+    assert avaliador.prob_classes is not None
+    assert avaliador.prob_classes.shape == (1, 2)
+    # A probabilidade somada da Classe 1 deve ser superior à da Classe 2
+    assert avaliador.prob_classes[0, 0] > avaliador.prob_classes[0, 1]
+    assert avaliador.prob_classes[0, 0] > 0.8

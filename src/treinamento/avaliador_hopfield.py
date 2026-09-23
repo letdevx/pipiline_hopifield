@@ -104,6 +104,90 @@ class AvaliadorHopfield:
         self.y_true: NDArray[np.int_] | None = None
         self.y_pred: NDArray[np.int_] | None = None
         self.idx_proto: NDArray[np.intp] | None = None
+        self.prob_classes: NDArray[np.float32] | None = None
+
+    def avaliar_por_atencao(
+        self,
+        attention_weights: NDArray[Any] | Sequence[Sequence[float]],
+        labels: NDArray[Any] | Sequence[int],
+        priors: NDArray[Any] | Sequence[float] | None = None,
+    ) -> AvaliadorHopfield:
+        """Avalia a classificação via Softmax Class Pooling (Atenção Agregada da Hopfield).
+
+        Agrega a probabilidade de atenção de todos os subclusters pertencentes a cada
+        classe canônica para formar a distribuição a posteriori P(classe | célula),
+        eliminando a fragilidade e o viés do 1-NN pontual.
+
+        Parameters
+        ----------
+        attention_weights : NDArray | Sequence
+            Matriz de pesos de atenção Softmax da Hopfield (n_células × n_padrões).
+        labels : NDArray | Sequence
+            Vetor com os rótulos verdadeiros de cada célula.
+        priors : NDArray | Sequence, optional
+            Pesos a priori por classe para balanceamento opcional.
+
+        Returns
+        -------
+        AvaliadorHopfield
+            A própria instância com as métricas preenchidas.
+        """
+        classes_arr: NDArray[np.int_] = np.array(self.classes, dtype=int)
+        labels_arr: NDArray[np.int_] = np.asarray(labels, dtype=int)
+        att_arr: NDArray[np.float32] = np.asarray(attention_weights, dtype=np.float32)
+
+        n_obs: int = int(att_arr.shape[0])
+        n_padroes: int = int(att_arr.shape[1])
+
+        pattern_classes: NDArray[np.int_]
+        if self._pattern_classes is not None:
+            pattern_classes = self._pattern_classes
+        else:
+            pattern_classes = np.array(
+                [classes_arr[j // self.nc] for j in range(n_padroes)], dtype=int
+            )
+
+        prob_matrix: NDArray[np.float32] = np.zeros(
+            (n_obs, len(self.classes)), dtype=np.float32
+        )
+        for k, c in enumerate(self.classes):
+            cols = np.where(pattern_classes == c)[0]
+            if len(cols) > 0:
+                prob_matrix[:, k] = att_arr[:, cols].sum(axis=1)
+
+        if priors is not None:
+            priors_arr: NDArray[np.float32] = np.asarray(priors, dtype=np.float32)
+            prob_matrix = prob_matrix * priors_arr
+            s = prob_matrix.sum(axis=1, keepdims=True)
+            s[s == 0] = 1.0
+            prob_matrix = (prob_matrix / s).astype(np.float32)
+
+        self.prob_classes = prob_matrix
+        pred: NDArray[np.int_] = classes_arr[prob_matrix.argmax(axis=1)]
+        self.idx_proto = np.asarray(att_arr.argmax(axis=1), dtype=np.intp)
+
+        mask: NDArray[np.bool_] = np.isin(labels_arr, self.classes)
+        self.y_true = labels_arr[mask]
+        self.y_pred = pred[mask]
+
+        self.acuracia = float((self.y_true == self.y_pred).mean())
+        self.f1_macro = float(
+            f1_score(self.y_true, self.y_pred, average="macro", zero_division=0)
+        )
+        self.f1_weighted = float(
+            f1_score(self.y_true, self.y_pred, average="weighted", zero_division=0)
+        )
+        self.matriz_conf = confusion_matrix(
+            self.y_true, self.y_pred, labels=self.classes
+        )
+
+        print(
+            f"[AvaliadorHopfield - Softmax Class Pooling] Acurácia: {self.acuracia * 100:.2f}% (n={mask.sum():,})"
+        )
+        print(
+            f"[AvaliadorHopfield - Softmax Class Pooling] F1 macro={self.f1_macro:.4f}, F1 ponderado={self.f1_weighted:.4f}"
+        )
+        return self
 
     def avaliar(
         self,
