@@ -80,21 +80,37 @@ class AvaliadorHopfield:
         self,
         padroes: NDArray[Any] | Sequence[Sequence[float]],
         classes: Sequence[int],
-        nc: int = 10,
+        nc: int | dict[int, int] = 10,
         nomes_classes: Sequence[str] | None = None,
         meta: Sequence[tuple[int, int]] | None = None,
         metrica: str = "euclidiana",
     ) -> None:
         self.padroes: NDArray[np.float32] = np.asarray(padroes, dtype=np.float32)
         self.classes: list[int] = list(classes)
-        self.nc: int = int(nc)
+
+        if isinstance(nc, dict):
+            self.nc_map: dict[int, int] | None = {int(k): int(v) for k, v in nc.items()}
+            self.nc: int = round(float(np.mean(list(self.nc_map.values()))))
+        else:
+            self.nc = int(nc)
+            self.nc_map = None
+
         self.nomes_classes: list[str] | None = (
             list(nomes_classes) if nomes_classes is not None else None
         )
         self.metrica: str = str(metrica).lower()
-        self._pattern_classes: NDArray[np.int_] | None = (
-            np.array([m[0] for m in meta], dtype=int) if meta is not None else None
-        )
+
+        if meta is not None:
+            self._pattern_classes: NDArray[np.int_] | None = np.array(
+                [m[0] for m in meta], dtype=int
+            )
+        elif self.nc_map is not None:
+            p_classes: list[int] = []
+            for c in self.classes:
+                p_classes.extend([c] * self.nc_map.get(c, self.nc))
+            self._pattern_classes = np.array(p_classes, dtype=int)
+        else:
+            self._pattern_classes = None
         self.acuracia: float | None = None
         self.f1_macro: float | None = None
         self.f1_weighted: float | None = None
@@ -244,12 +260,14 @@ class AvaliadorHopfield:
                 sim_matrix = w_norm @ perf_f_norm.T
                 idx_chunk = np.asarray(sim_matrix.argmax(axis=1), dtype=np.intp)
                 diff = W_chunk_f - perf_f[idx_chunk]
-                min_sq_dist = (diff**2).sum(axis=1)
+                min_sq_dist = np.asarray((diff**2).sum(axis=1), dtype=np.float32)
             else:
                 a2_chunk = (W_chunk_f**2).sum(axis=1, keepdims=True)
                 sq_dist_chunk = a2_chunk + b2 - 2 * (W_chunk_f @ perf_f.T)
                 idx_chunk = np.asarray(sq_dist_chunk.argmin(axis=1), dtype=np.intp)
-                min_sq_dist = sq_dist_chunk[np.arange(end - start), idx_chunk]
+                min_sq_dist = np.asarray(
+                    sq_dist_chunk[np.arange(end - start), idx_chunk], dtype=np.float32
+                )
 
             hamming_chunk = (np.maximum(0.0, min_sq_dist) / n_genes).astype(np.float32)
 

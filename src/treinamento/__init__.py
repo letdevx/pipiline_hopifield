@@ -13,7 +13,7 @@ from .estrategias_clusterizacao import (
     EstrategiaKMeansFixo,
 )
 from .exportador_imputacao import ExportadorImputacao
-from .extrator_padroes import ExtratorPadroesSubcluster
+from .extrator_padroes import ExtratorPadroesSubcluster, calcular_nc_estratificado
 from .gerador_conjunto_treinamento import GeradorConjuntoTreinamento
 from .gerador_relatorio import GeradorRelatorio
 from .hopfield import ModernHopfieldNetwork
@@ -35,6 +35,7 @@ __all__ = [
     "ProjetorSWeP",
     "ProjetorSWeePR",
     "ValidadorImputacao",
+    "calcular_nc_estratificado",
     "carregar_labels",
     "remapear_labels_canonicos",
 ]

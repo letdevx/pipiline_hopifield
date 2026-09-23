@@ -526,7 +526,7 @@ class ModernHopfieldNetwork(nn.Module):
         path_meta: PathType,
         meta: Sequence[Any],
         classes: Sequence[int] | None = None,
-        nc: int | None = None,
+        nc: int | dict[int, int] | None = None,
     ) -> ModernHopfieldNetwork:
         """Salva a rede (.pt) e o arquivo JSON de metadados (.json).
 
@@ -540,8 +540,8 @@ class ModernHopfieldNetwork(nn.Module):
             Lista com identificadores (classe, cluster) de cada padrão.
         classes : Sequence[int] | None, optional
             Rótulos das classes biológicas.
-        nc : int | None, optional
-            Número de centróides por classe.
+        nc : int | dict[int, int] | None, optional
+            Número de centróides por classe (inteiro fixo ou dicionário estratificado).
 
         Returns
         -------
@@ -559,9 +559,13 @@ class ModernHopfieldNetwork(nn.Module):
         cls_list: list[int] = (
             list(classes) if classes is not None else [1, 2, 3, 4, 5, 6, 7]
         )
-        nc_val: int = (
-            nc if nc is not None else (n_patterns // len(cls_list) if cls_list else 30)
-        )
+        nc_val: int | dict[int, int]
+        if isinstance(nc, dict):
+            nc_val = {int(k): int(v) for k, v in nc.items()}
+        elif nc is not None:
+            nc_val = int(nc)
+        else:
+            nc_val = n_patterns // len(cls_list) if cls_list else 30
 
         info: dict[str, Any] = {
             "meta": meta_serializavel,
