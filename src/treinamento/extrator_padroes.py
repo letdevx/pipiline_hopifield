@@ -22,7 +22,7 @@ from .hopfield_utils import closervects
 
 
 class ExtratorPadroesSubcluster:
-    """Extrai perfis binários representativos por subcluster biológico (perf35).
+    """Extrai perfis binários representativos por subcluster biológico (perf180 / protótipos).
 
     Utiliza uma Estratégia de Clusterização injetada (KMeans Dinâmico, HDBSCAN, etc.)
     no espaço SWeeP e seleciona o vetor binário mais próximo de cada centróide

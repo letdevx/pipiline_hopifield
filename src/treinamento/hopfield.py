@@ -216,6 +216,13 @@ class ModernHopfieldNetwork(nn.Module):
         if return_probabilities:
             prob_buffer = np.empty((n_queries, n_features), dtype=np.float32)
 
+        Xi_att: torch.Tensor = (
+            Xi[:, subspace_tensor] if subspace_tensor is not None else Xi
+        )
+        Xi_norm: torch.Tensor | None = None
+        if norm_active:
+            Xi_norm = F.normalize(Xi_att, p=2, dim=-1, eps=1e-8)
+
         for s in range(0, n_queries, batch_size):
             chunk_np: NDArray[np.float32]
             if is_sparse:
@@ -237,18 +244,13 @@ class ModernHopfieldNetwork(nn.Module):
                 x = 2.0 * x - 1.0
 
             for _ in range(self.n_iters):
-                x_att: torch.Tensor
-                Xi_att: torch.Tensor
-                if subspace_tensor is not None:
-                    x_att = x[:, subspace_tensor]
-                    Xi_att = Xi[:, subspace_tensor]
-                else:
-                    x_att = x
-                    Xi_att = Xi
+                x_att: torch.Tensor = (
+                    x[:, subspace_tensor] if subspace_tensor is not None else x
+                )
 
                 if norm_active:
+                    assert Xi_norm is not None
                     x_norm = F.normalize(x_att, p=2, dim=-1, eps=1e-8)
-                    Xi_norm = F.normalize(Xi_att, p=2, dim=-1, eps=1e-8)
                     scores = self.beta * (x_norm @ Xi_norm.T)
                 else:
                     scores = self.beta * (x_att @ Xi_att.T)

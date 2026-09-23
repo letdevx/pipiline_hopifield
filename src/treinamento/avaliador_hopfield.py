@@ -83,7 +83,7 @@ class AvaliadorHopfield:
         nc: int = 10,
         nomes_classes: Sequence[str] | None = None,
         meta: Sequence[tuple[int, int]] | None = None,
-        metrica: str = "euclidiana",
+        metrica: str = "cosseno",
     ) -> None:
         self.padroes: NDArray[np.float32] = np.asarray(padroes, dtype=np.float32)
         self.classes: list[int] = list(classes)
@@ -167,15 +167,13 @@ class AvaliadorHopfield:
                 idx_chunk = np.asarray(sq_dist_chunk.argmin(axis=1), dtype=np.intp)
                 min_sq_dist = sq_dist_chunk[np.arange(end - start), idx_chunk]
 
-            hamming_chunk: NDArray[np.float32] = (
-                np.maximum(0.0, min_sq_dist) / n_genes
-            ).astype(np.float32)
+            hamming_chunk = (np.maximum(0.0, min_sq_dist) / n_genes).astype(np.float32)
 
             idx_proto_list.append(idx_chunk)
             hamming_list.append(hamming_chunk)
 
         idx_proto: NDArray[np.intp] = np.concatenate(idx_proto_list)
-        hamming: NDArray[np.float32] = np.concatenate(hamming_list)
+        hamming: NDArray[np.float32] = np.concatenate(hamming_list).astype(np.float32)
         self.idx_proto = idx_proto
 
         pred: NDArray[np.int_]

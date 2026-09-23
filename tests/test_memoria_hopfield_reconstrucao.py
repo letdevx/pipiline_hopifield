@@ -115,3 +115,27 @@ def test_hopfield_retrieve_com_probabilidades():
     assert res_prob[0, 1] > 0.8
     assert res_prob[0, 2] < 0.2
     assert res_prob[0, 3] < 0.2
+
+
+def test_hopfield_retrieve_normalizacao_esferica():
+    """Valida que normalize=True garante invariância à escala de transcritos (library size)."""
+    prototipos = np.array(
+        [
+            [1.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
+    # Mesma direção biológica, mas com magnitudes distintas (ex.: 1x vs 20x cópias de mRNA)
+    query_pequena = np.array([[1.0, 2.0, 0.0, 0.0]], dtype=np.float32)
+    query_grande = np.array([[20.0, 40.0, 0.0, 0.0]], dtype=np.float32)
+
+    rede = ModernHopfieldNetwork(beta=25.0, n_iters=1, binary=False, normalize=True)
+    rede.store(prototipos)
+
+    res_peq, prob_peq = rede.retrieve(query_pequena, return_probabilities=True)
+    res_grd, prob_grd = rede.retrieve(query_grande, return_probabilities=True)
+
+    # Com normalização esférica ativada, os resultados devem ser idênticos
+    np.testing.assert_allclose(prob_peq, prob_grd, atol=1e-5)
+    np.testing.assert_allclose(res_peq, res_grd, atol=1e-5)

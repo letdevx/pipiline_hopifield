@@ -516,7 +516,7 @@ assert projetor.Wswp is not None
 
 
 # %% [markdown]
-# #### 9. Extração de padrões por subcluster (perf35)
+# #### 9. Extração de padrões por subcluster (perf180)
 # Para cada uma das 7 classes executa KMeans com `nc=30` clusters no espaço SWeeP e seleciona o vetor binário mais próximo de cada centroide como protótipo.
 #
 
@@ -531,34 +531,38 @@ extrator = ExtratorPadroesSubcluster(
 )
 extrator.extrair(projetor.Wswp)
 assert extrator.padroes is not None and extrator.meta is not None
-perf35 = extrator.padroes
+perf180 = extrator.padroes
 meta_eval = extrator.meta
 print(extrator)
 print(
-    f"perf35 shape: {perf35.shape}  (esperado: ({len(CLASSES_CANONICAS) * 30}, {len(analisador.genes_ordenados)}))"
+    f"perf180 shape: {perf180.shape}  (esperado: ({len(CLASSES_CANONICAS) * 30}, {len(analisador.genes_ordenados)}))"
 )
 
 
 # %%
-rede35 = ModernHopfieldNetwork(beta=50.0, n_iters=0, binary=True, threshold=0.0)
+rede180 = ModernHopfieldNetwork(
+    beta=25.0, n_iters=1, binary=True, threshold=0.0, normalize=True
+)
 # A rede agora mapeará e armazenará apenas a versão original W0-Binária
-rede35.store(perf35)
+rede180.store(perf180)
 meta_eval = extrator.meta  # mapeamento padrao -> classe
-print(rede35)
+print(rede180)
 
 # %%
 import os
 
-PATH_PT = os.path.join(OUT_HOPFIELD, "rede35.pt")
-PATH_META = os.path.join(OUT_HOPFIELD, "rede35.json")
+PATH_PT = os.path.join(OUT_HOPFIELD, "rede180.pt")
+PATH_META = os.path.join(OUT_HOPFIELD, "rede180.json")
 
-# 1. Cria e armazena os 210 padrões na rede Hopfield
-rede35 = ModernHopfieldNetwork(beta=50.0, n_iters=1, binary=True, threshold=0.0)
-rede35.store(perf35)
+# 1. Cria e armazena os padrões na rede Hopfield com normalização esférica
+rede180 = ModernHopfieldNetwork(
+    beta=25.0, n_iters=1, binary=True, threshold=0.0, normalize=True
+)
+rede180.store(perf180)
 meta_eval = extrator.meta
 
 # 2. Salva a rede (.pt) e os metadados (.json) no disco
-rede35.salvar_com_metadados(
+rede180.salvar_com_metadados(
     path_pt=PATH_PT,
     path_meta=PATH_META,
     meta=extrator.meta,
@@ -576,7 +580,7 @@ NC = 30
 CLASSES_ARR = np.array(CLASSES_CANONICAS)
 
 assert carregador.W0 is not None
-assert perf35 is not None
+assert perf180 is not None
 
 # Agora a query é o espaço W0 Binário Original!
 W0_arr: NDArray[np.float32] = (
@@ -587,14 +591,21 @@ W0_arr: NDArray[np.float32] = (
 Wk4_res = wsort(W0_arr[clo_ref == 3])
 Wk4: NDArray[np.float32] = np.asarray(Wk4_res, dtype=np.float32)
 n_test: int = min(1000, int(Wk4.shape[0]))
-Wtes: NDArray[np.float32] = rede35.retrieve(Wk4[:n_test], batch_size=4096)
-print(f"hopf_ts(Wswp[:{n_test}], rede35): shape {Wtes.shape}")
+Wtes: NDArray[np.float32] = rede180.retrieve(Wk4[:n_test], batch_size=4096)
+print(f"hopf_ts(Wswp[:{n_test}], rede180): shape {Wtes.shape}")
 
-perf35_f = perf35.astype(np.float64)
+perf180_f = perf180.astype(np.float64)
 Wtes_f = Wtes.astype(np.float64)
-a2 = (Wtes_f**2).sum(axis=1, keepdims=True)
-b2 = (perf35_f**2).sum(axis=1, keepdims=True).T
-idx_proto = (a2 + b2 - 2 * (Wtes_f @ perf35_f.T)).argmin(axis=1)
+if getattr(rede180, "normalize", False):
+    w_norms = np.linalg.norm(Wtes_f, axis=1, keepdims=True)
+    w_norms[w_norms == 0] = 1.0
+    p_norms = np.linalg.norm(perf180_f, axis=1, keepdims=True)
+    p_norms[p_norms == 0] = 1.0
+    idx_proto = ((Wtes_f / w_norms) @ (perf180_f / p_norms).T).argmax(axis=1)
+else:
+    a2 = (Wtes_f**2).sum(axis=1, keepdims=True)
+    b2 = (perf180_f**2).sum(axis=1, keepdims=True).T
+    idx_proto = (a2 + b2 - 2 * (Wtes_f @ perf180_f.T)).argmin(axis=1)
 pred_sub = CLASSES_ARR[idx_proto // NC]
 
 acc_sub = (pred_sub == 3).mean()
@@ -618,7 +629,7 @@ sns.heatmap(
 )
 ax.set_xlabel("Predito")
 ax.set_ylabel("Real")
-ax.set_title("Matriz de Confusão — rede35 (subconjunto clo==3)")
+ax.set_title("Matriz de Confusão — rede180 (subconjunto clo==3)")
 plt.tight_layout()
 plt.show()
 
@@ -636,17 +647,18 @@ plt.show()
 # ==============================================================================
 print("\n=== Auto-imputação: Fujita → Fujita ===")
 assert carregador.W0 is not None
-Wrecuperado_f = rede35.retrieve(carregador.W0, batch_size=2048)
+Wrecuperado_f = rede180.retrieve(carregador.W0, batch_size=2048)
 print(f"Auto-imputação concluída! Shape: {Wrecuperado_f.shape}")
 
 
 # %%
-assert perf35 is not None
+assert perf180 is not None
 avaliador_f = AvaliadorHopfield(
-    padroes=perf35,
+    padroes=perf180,
     classes=CLASSES_CANONICAS,
     nc=30,
     meta=meta_eval,
+    metrica="cosseno",
 )
 
 # 1. Avalia a recuperação contra os rótulos verdadeiros
@@ -654,7 +666,7 @@ avaliador_f.avaliar(Wrecuperado_f, clo_ref)
 print(avaliador_f)
 
 # 2. Plota a Matriz de Confusão
-avaliador_f.plotar(titulo="Confusão — rede35 (PAN → PAN)")
+avaliador_f.plotar(titulo="Confusão — rede180 (PAN → PAN)")
 
 
 # %% [markdown]
@@ -665,27 +677,27 @@ avaliador_f.plotar(titulo="Confusão — rede35 (PAN → PAN)")
 # %%
 print("=== Imputação cross-dataset: Mathys (Sentinela Neutra 0.5) ===")
 
-# Se rede35 ou metadados não estiverem em memória (ex: reinício de kernel), carrega do checkpoint
+# Se rede180 ou metadados não estiverem em memória (ex: reinício de kernel), carrega do checkpoint
 if (
-    "rede35" not in globals()
-    or "perf35" not in globals()
+    "rede180" not in globals()
+    or "perf180" not in globals()
     or "meta_eval" not in globals()
 ):
-    PATH_PT = os.path.join(OUT_HOPFIELD, "rede35.pt")
-    PATH_META = os.path.join(OUT_HOPFIELD, "rede35.json")
+    PATH_PT = os.path.join(OUT_HOPFIELD, "rede180.pt")
+    PATH_META = os.path.join(OUT_HOPFIELD, "rede180.json")
     if os.path.exists(PATH_PT) and os.path.exists(PATH_META):
-        print(f"Carregando checkpoint de rede35 salvo em {PATH_PT}...")
-        rede35, meta_eval, meta_json = ModernHopfieldNetwork.carregar_com_metadados(
+        print(f"Carregando checkpoint de rede180 salvo em {PATH_PT}...")
+        rede180, meta_eval, meta_json = ModernHopfieldNetwork.carregar_com_metadados(
             PATH_PT, PATH_META
         )
-        assert rede35.patterns is not None
-        perf35 = ((rede35.patterns.cpu().numpy() + 1.0) / 2.0).astype(np.float32)
+        assert rede180.patterns is not None
+        perf180 = ((rede180.patterns.cpu().numpy() + 1.0) / 2.0).astype(np.float32)
     else:
         raise RuntimeError(
-            "A variável 'rede35' não está definida e o checkpoint em outputs/hopfield/ não foi encontrado. Execute as células de treino anteriores."
+            "A variável 'rede180' não está definida e o checkpoint em outputs/hopfield/ não foi encontrado. Execute as células de treino anteriores."
         )
 
-assert perf35 is not None
+assert perf180 is not None
 
 # 1. Identificação dos genes ausentes no Mathys
 if "alinhador" in globals() and hasattr(alinhador, "obter_mascara_ausentes"):
@@ -710,7 +722,7 @@ print(
 print(
     "\nRecuperando padrões na Modern Hopfield Network (batch_size=2048, sentinela=0.5, prob=True)..."
 )
-Wrecuperado_m, Wprob_m = rede35.retrieve(
+Wrecuperado_m, Wprob_m = rede180.retrieve(
     queries=W_mathys,
     batch_size=40000,
     mask_sentinela_ausentes=mask_ausentes,
@@ -731,14 +743,14 @@ rel_imp = exportador_imp.exportar(
     adata_alvo_original=alinhador.path_m_alinhado or PATH_ALVO,
     classes_reais=clo_alvo,
     info_modelo={
-        "beta": rede35.beta,
-        "n_iters": rede35.n_iters,
-        "binary": rede35.binary,
-        "threshold": rede35.threshold,
+        "beta": rede180.beta,
+        "n_iters": rede180.n_iters,
+        "binary": rede180.binary,
+        "threshold": rede180.threshold,
         "nc": 30,
-        "n_padroes": perf35.shape[0],
+        "n_padroes": perf180.shape[0],
     },
-    nome_modelo="rede35",
+    nome_modelo="rede180",
     exportar_npy=True,
     substituir_sentinela=True,
     limiar_sentinela=0.5,
@@ -751,7 +763,7 @@ PATH_IMPUTADO_NPY = rel_imp["arquivos_gerados"]["npy"]
 
 # 4. Retrocompatibilidade: Garante o arquivo no caminho legado esperado em outputs/top_genes/
 os.makedirs(OUT_TOP_GENES, exist_ok=True)
-PATH_IMPUTADO = os.path.join(OUT_TOP_GENES, "X_mathys_IMPUTADO_rede35.npy")
+PATH_IMPUTADO = os.path.join(OUT_TOP_GENES, "X_mathys_IMPUTADO_rede180.npy")
 if PATH_IMPUTADO_NPY and os.path.exists(PATH_IMPUTADO_NPY):
     shutil.copyfile(PATH_IMPUTADO_NPY, PATH_IMPUTADO)
 
@@ -814,12 +826,13 @@ projetor_m_r.projetar()
 
 # 5. Avaliação do Tipo Celular Cross-Dataset
 avaliador_m = AvaliadorHopfield(
-    padroes=perf35,
+    padroes=perf180,
     classes=CLASSES_CANONICAS,
     nc=30,
     meta=meta_eval,
+    metrica="cosseno",
 )
 avaliador_m.avaliar(Wrecuperado_m, clo_alvo).plotar(
-    titulo="Confusão — rede35 (PAN→ PAN, Sentinela 0.5)"
+    titulo="Confusão — rede180 (PAN → PAN, Sentinela 0.5)"
 )
 print(avaliador_m)
