@@ -516,34 +516,18 @@ assert projetor.Wswp is not None
 
 
 # %% [markdown]
-# #### 9. Extração de padrões por subcluster estratificado (perf180)
-# Calcula o número de subclusters proporcional à raiz quadrada da abundância de cada linhagem (Etapa 4),
-# evitando a superfragmentação de tipos celulares raros (ex.: Endoteliais) e garantindo cobertura rica
-# para tipos abundantes (ex.: Inibitórios, Excitatórios).
-# Em seguida, extrai os protótipos aplicando consenso majoritário dos k=5 vizinhos mais próximos em torno de cada centróide.
+# #### 9. Extração de padrões por subcluster (perf180)
+# Para cada uma das 7 classes executa KMeans com `nc=30` clusters no espaço SWeeP e seleciona o vetor binário mais próximo de cada centroide como protótipo.
+#
 
 # %%
-from treinamento import calcular_nc_estratificado
-
-# Alocação estratificada de subclusters com meta global de ~180 padrões e consenso k=5
-nc_estratificado = calcular_nc_estratificado(
-    labels=clo_ref,
-    classes=CLASSES_CANONICAS,
-    total_padroes=180,
-    min_nc=12,
-    max_nc=40,
-)
-print("Alocação estratificada de subclusters (nc por classe):")
-for c in CLASSES_CANONICAS:
-    print(f"  Classe {c}: {nc_estratificado[c]} subclusters")
-
 extrator = ExtratorPadroesSubcluster(
     W0=carregador.W0,
     labels=clo_ref,
     classes=CLASSES_CANONICAS,
     seed=SEED,
-    nc=nc_estratificado,
-    k=5,
+    nc=30,
+    k=10,
 )
 extrator.extrair(projetor.Wswp)
 assert extrator.padroes is not None and extrator.meta is not None
@@ -551,7 +535,7 @@ perf180 = extrator.padroes
 meta_eval = extrator.meta
 print(extrator)
 print(
-    f"perf180 shape: {perf180.shape}  (esperado: ({sum(nc_estratificado.values())}, {len(analisador.genes_ordenados)}))"
+    f"perf180 shape: {perf180.shape}  (esperado: ({len(CLASSES_CANONICAS) * 30}, {len(analisador.genes_ordenados)}))"
 )
 
 
@@ -583,7 +567,7 @@ rede180.salvar_com_metadados(
     path_meta=PATH_META,
     meta=extrator.meta,
     classes=CLASSES_CANONICAS,
-    nc=nc_estratificado,
+    nc=30,
 )
 
 print("Rede Hopfield e metadados salvos com sucesso em outputs/hopfield/!")
@@ -616,7 +600,7 @@ print(f"hopf_ts(Wswp[:{n_test}], rede180): shape {Wtes.shape}")
 avaliador_sub = AvaliadorHopfield(
     padroes=perf180,
     classes=CLASSES_CANONICAS,
-    nc=nc_estratificado,
+    nc=30,
     meta=meta_eval,
     metrica="euclidiana",
 )
@@ -674,7 +658,7 @@ assert perf180 is not None
 avaliador_f = AvaliadorHopfield(
     padroes=perf180,
     classes=CLASSES_CANONICAS,
-    nc=nc_estratificado,
+    nc=30,
     meta=meta_eval,
     metrica="euclidiana",
 )
@@ -766,7 +750,7 @@ rel_imp = exportador_imp.exportar(
         "n_iters": rede180.n_iters,
         "binary": rede180.binary,
         "threshold": rede180.threshold,
-        "nc": nc_estratificado,
+        "nc": 30,
         "n_padroes": perf180.shape[0],
     },
     nome_modelo="rede180",
@@ -847,7 +831,7 @@ projetor_m_r.projetar()
 avaliador_m = AvaliadorHopfield(
     padroes=perf180,
     classes=CLASSES_CANONICAS,
-    nc=nc_estratificado,
+    nc=30,
     meta=meta_eval,
     metrica="euclidiana",
 )
