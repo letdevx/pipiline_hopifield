@@ -7,6 +7,11 @@ from .carregador_dados_fujita import (
     carregar_labels,
     remapear_labels_canonicos,
 )
+from .diagnostico_overfitting import (
+    AuditorOverfittingHopfield,
+    InjetorPerturbacaoTranscritica,
+    ResultadoDiagnosticoOverfitting,
+)
 from .estrategias_clusterizacao import (
     EstrategiaHDBSCAN,
     EstrategiaKMeansDinamico,
@@ -21,6 +26,7 @@ from .projetor_sweep import ProjetorSWeePR, ProjetorSWeP
 from .validador_imputacao import ValidadorImputacao
 
 __all__ = [
+    "AuditorOverfittingHopfield",
     "AvaliadorHopfield",
     "CarregadorDados",
     "CarregadorDadosFujita",
@@ -31,10 +37,13 @@ __all__ = [
     "ExtratorPadroesSubcluster",
     "GeradorConjuntoTreinamento",
     "GeradorRelatorio",
+    "InjetorPerturbacaoTranscritica",
     "ModernHopfieldNetwork",
     "ProjetorSWeP",
     "ProjetorSWeePR",
+    "ResultadoDiagnosticoOverfitting",
     "ValidadorImputacao",
     "carregar_labels",
     "remapear_labels_canonicos",
 ]
+
