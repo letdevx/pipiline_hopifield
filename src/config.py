@@ -73,7 +73,7 @@ PATH_REFERENCIA: str = os.environ.get(
 # Entrada Conjunto Alvo
 PATH_ALVO: str = os.environ.get(
     "PATH_ALVO",
-    os.path.join(PATH_BASE, "imputs", "pan_com_sentinela_05.h5ad"),
+    os.path.join(PATH_BASE, "imputs", "matrizFiltradaeNormalizadaF.h5ad"),
 )
 
 # Identificadores automáticos dos conjuntos
@@ -84,7 +84,7 @@ NOME_ALVO: str = os.environ.get("NOME_ALVO") or _extrair_nome_dataset(PATH_ALVO)
 PATH_FEATURES_REFERENCIA: str = os.path.join(
     PATH_BASE, "imputs", "featuresPANcorrigido.tsv"
 )
-PATH_FEATURES_ALVO: str = os.path.join(PATH_BASE, "imputs", "featuresPANcorrigido.tsv")
+PATH_FEATURES_ALVO: str = os.path.join(PATH_BASE, "imputs", "featuresF.tsv")
 
 # Base Ortonormal Congelada e Rótulos
 PATH_ORTHBASE_RDS: str = os.environ.get(
@@ -92,7 +92,7 @@ PATH_ORTHBASE_RDS: str = os.environ.get(
     os.path.join(PATH_BASE, "imputs", "orthbase_mproj_600d.rds"),
 )
 PATH_LABELS_REFERENCIA: str = os.path.join(PATH_BASE, "imputs", "PanNumerico.csv")
-PATH_LABELS_ALVO: str = os.path.join(PATH_BASE, "imputs", "PanNumerico.csv")
+PATH_LABELS_ALVO: str = os.path.join(PATH_BASE, "imputs", "cell_types_binarioF.txt")
 
 # ---------------------------------------------------------------------------
 # Saídas dinâmicas — inicializadas no padrão output_<nome_ref>_<nome_alvo>

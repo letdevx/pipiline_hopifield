@@ -62,7 +62,7 @@ if not os.path.exists(DEST_PATH):
     print("Clonando código para a VM...")
     # !git clone {REPO_URL} {DEST_PATH}
 
-# !cd {DEST_PATH} && git checkout teste_recontrucao_Pan_Pan_ausentes && git pull
+# !cd {DEST_PATH} && git checkout reconstrução_Pan_Fujita && git pull
 
 # Adiciona a raiz do repo e a pasta 'src' da VM ao path do Python
 for _p in (DEST_PATH, os.path.join(DEST_PATH, "src")):
