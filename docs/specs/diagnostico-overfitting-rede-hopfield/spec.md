@@ -1,4 +1,4 @@
----
+cell_types_binarioF.txt---
 tipo: especificacao
 slug: diagnostico-overfitting-rede-hopfield
 generated.by: antigravity/implementar
