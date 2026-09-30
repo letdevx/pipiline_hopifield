@@ -668,7 +668,7 @@ avaliador_f.avaliar_por_atencao(att_f, clo_ref)
 print(avaliador_f)
 
 # 2. Plota a Matriz de Confusão
-avaliador_f.plotar(titulo="Confusão Softmax Pooling — rede180 (PAN → PAN)")
+avaliador_f.plotar(titulo="Confusão Softmax Pooling — rede210 (PAN → PAN)")
 
 
 # %% [markdown]
@@ -836,6 +836,6 @@ avaliador_m = AvaliadorHopfield(
     metrica="euclidiana",
 )
 avaliador_m.avaliar_por_atencao(att_m, clo_alvo).plotar(
-    titulo="Confusão Softmax Pooling — rede180 (Mathys, Sentinela 0.5)"
+    titulo="Confusão Softmax Pooling — rede210 (PAN, PAN_0.5)"
 )
 print(avaliador_m)
