@@ -46,4 +46,3 @@ __all__ = [
     "carregar_labels",
     "remapear_labels_canonicos",
 ]
-
