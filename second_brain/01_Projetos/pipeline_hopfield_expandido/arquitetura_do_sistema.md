@@ -43,6 +43,7 @@ graph TD
         CARR["src/treinamento/carregador_dados_fujita.py"]
         EXTR["src/treinamento/extrator_padroes.py<br/>(K-Means nc=30 ➔ 210 Protótipos em 11k)"]
         HOPF["src/treinamento/hopfield.py<br/>(ModernHopfieldNetwork Softmax Attention)"]
+        GA["src/treinamento/algoritmo_genetico.py<br/>(OtimizadorGeneticoHopfield)"]
         EVAL["src/treinamento/avaliador_hopfield.py & gerador_relatorio.py"]
     end
 
@@ -83,6 +84,7 @@ Além disso, gerencia a estrutura de saídas de forma **100% automática e dinâ
 - **`avaliador_hopfield.py` (`AvaliadorHopfield`)**: Calcula acurácia de classificação por distância L2 aos 210 protótipos, F1-score ponderado, matrizes de confusão e relatórios.
 - **`exportador_imputacao.py` (`ExportadorImputacao`)**: Exporta a matriz imputada cross-dataset em formato AnnData (`.h5ad`) comprimido com gzip (CSR Sparse) e camadas de rastreamento (`layers['original']`, `layers['mascara_imputada']` e `layers['probabilidade_imputada']`), preservando metadados biológicos autênticos de células (`obs`), genes (`var`), proveniência (`uns`) e retrocompatibilidade NumPy (`.npy`). Veja **[[04_Recursos/adrs/adr_017_exportador_anndata_imputacao_cross_dataset|ADR 017]]** e **[[04_Recursos/adrs/adr_020_resolucao_sentinela_e_validacao_multinivel_imputacao|ADR 020]]**.
 - **`validador_imputacao.py` (`ValidadorImputacao`)**: Componente modular de auditoria multinível da imputação cross-dataset. Avalia métricas globais (~299,6M de sentinelas resolvidos), auditoria biológica de marcadores canônicos específicos do cérebro por tipo celular e relatórios formatados em JSON e terminal. Veja **[[04_Recursos/adrs/adr_020_resolucao_sentinela_e_validacao_multinivel_imputacao|ADR 020]]**.
+- **`algoritmo_genetico.py` (`OtimizadorGeneticoHopfield`, `IndividuoHopfield`, `ConfiguracaoAG`)**: Motor evolutivo de otimização multiobjetivo para hiperparâmetros da Modern Hopfield Network (`beta`, `nc`, `threshold`, `normalize`, `n_iters`, `k_vizinhos`, `estrategia`). Conta com cache LRU de protótipos SWeeP e função de aptidão com barreira contra overfitting, saturação e quimeras biológicas. Veja **[[04_Recursos/adrs/adr_022_otimizacao_hiperparametros_algoritmo_genetico|ADR 022]]**.
 - **`gerador_relatorio.py` (`GeradorRelatorio`)**: Compila os resultados dos experimentos em um relatório HTML/Markdown exportável.
 
 ---

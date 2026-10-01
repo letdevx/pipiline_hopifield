@@ -92,7 +92,9 @@ PATH_ORTHBASE_RDS: str = os.environ.get(
     os.path.join(PATH_BASE, "imputs", "orthbase_mproj_600d.rds"),
 )
 PATH_LABELS_REFERENCIA: str = os.path.join(PATH_BASE, "imputs", "PanNumerico.csv")
-PATH_LABELS_ALVO: str = os.path.join(PATH_BASE, "imputs", "tipos_celulares_numericoMs.txt")
+PATH_LABELS_ALVO: str = os.path.join(
+    PATH_BASE, "imputs", "tipos_celulares_numericoMs.txt"
+)
 
 # ---------------------------------------------------------------------------
 # Saídas dinâmicas — inicializadas no padrão output_<nome_ref>_<nome_alvo>

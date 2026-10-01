@@ -1,5 +1,10 @@
 """Módulo de Treinamento, Redes Hopfield Modernas e Avaliação de Imputação."""
 
+from .algoritmo_genetico import (
+    ConfiguracaoAG,
+    IndividuoHopfield,
+    OtimizadorGeneticoHopfield,
+)
 from .avaliador_hopfield import AvaliadorHopfield
 from .carregador_dados_fujita import (
     CarregadorDados,
@@ -30,6 +35,7 @@ __all__ = [
     "AvaliadorHopfield",
     "CarregadorDados",
     "CarregadorDadosFujita",
+    "ConfiguracaoAG",
     "EstrategiaHDBSCAN",
     "EstrategiaKMeansDinamico",
     "EstrategiaKMeansFixo",
@@ -37,8 +43,10 @@ __all__ = [
     "ExtratorPadroesSubcluster",
     "GeradorConjuntoTreinamento",
     "GeradorRelatorio",
+    "IndividuoHopfield",
     "InjetorPerturbacaoTranscritica",
     "ModernHopfieldNetwork",
+    "OtimizadorGeneticoHopfield",
     "ProjetorSWeP",
     "ProjetorSWeePR",
     "ResultadoDiagnosticoOverfitting",
