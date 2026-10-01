@@ -917,6 +917,161 @@ plt.show()
 
 
 # %% [markdown]
+# #### 12.2 Otimização de Hiperparâmetros via Algoritmo Genético (OtimizadorGeneticoHopfield) 🧬
+# Executa a busca evolutiva multidimensional sobre o espaço de hiperparâmetros da Hopfield e dos protótipos SWeeP:
+# - `nc` (5 a 45 protótipos por classe)
+# - `k_vizinhos` (1 a 10 vizinhos locais de consenso)
+# - `beta` (temperatura inversa da atenção Softmax)
+# - `threshold` (limiar de corte de ativação binarizada)
+# - `normalize` (similaridade cosseno esférica vs produto escalar)
+# - `estrategia` (KMeans Fixo vs Dinâmico)
+#
+# A aptidão (fitness) penaliza ativamente overfitting (gap > 15%), saturação termodinâmica (entropia < 0.05) e quimeras biológicas.
+
+# %%
+print("\n" + "=" * 70)
+print("  OTIMIZAÇÃO DE HIPERPARÂMETROS VIA ALGORITMO GENÉTICO (AG)")
+print("=" * 70)
+
+# Flag para habilitar/desabilitar a busca evolutiva (padrão True para calibração)
+EXECUTAR_OTIMIZACAO_AG = True
+
+from treinamento import ConfiguracaoAG, OtimizadorGeneticoHopfield
+
+if EXECUTAR_OTIMIZACAO_AG:
+    assert carregador.W0 is not None
+    assert projetor.Wswp is not None
+
+    cfg_ag = ConfiguracaoAG(
+        tam_populacao=16,
+        n_geracoes=8,
+        elitismo=2,
+        seed=SEED,
+        w_f1=0.50,
+        w_ruido=0.25,
+        w_gap=0.15,
+        w_sat=0.05,
+        w_qui=0.05,
+        w_parc=0.02,
+    )
+
+    otimizador_ag = OtimizadorGeneticoHopfield(
+        w0=carregador.W0,
+        wswp=projetor.Wswp,
+        labels=clo_ref,
+        classes=CLASSES_CANONICAS,
+        x_val=x_val_audit,
+        y_val=y_val_audit,
+        marcadores_exclusivos=marcadores_indices,
+        config=cfg_ag,
+    )
+
+    print(
+        f"Iniciando evolução com {cfg_ag.tam_populacao} indivíduos por {cfg_ag.n_geracoes} gerações..."
+    )
+
+    def _callback_progresso(gen: int, campeao: Any, media_fit: float) -> None:
+        print(
+            f"  [Geração {gen:>2d}/{cfg_ag.n_geracoes}] "
+            f"Melhor Fit: {campeao.fitness:.4f} | Média: {media_fit:.4f} | "
+            f"F1 Val: {campeao.f1_val:.4f} | nc={campeao.nc}, beta={campeao.beta:.1f}"
+        )
+
+    res_ag = otimizador_ag.evoluir(callback_geracao=_callback_progresso)
+    campeao_ag = res_ag["campeao"]
+
+    print("\n" + "-" * 70)
+    print("  CONFIGURAÇÃO CAMPEÃ ENCONTRADA PELO ALGORITMO GENÉTICO:")
+    print("-" * 70)
+    print(f"  • Fitness Global           : {campeao_ag.fitness:.4f}")
+    print(f"  • F1 Validação (Holdout)   : {campeao_ag.f1_val:.4f}")
+    print(f"  • F1 sob Ruído 15%         : {campeao_ag.f1_ruido:.4f}")
+    print(f"  • Gap de Generalização     : {campeao_ag.gap_generalizacao * 100:.2f}%")
+    print(f"  • Entropia Média Atenção   : {campeao_ag.entropia_atencao:.4f}")
+    print(f"  • Quimeras Detectadas      : {campeao_ag.quimeras}")
+    print(
+        f"  • nc (Protótipos/classe)   : {campeao_ag.nc} ({campeao_ag.nc * len(CLASSES_CANONICAS)} padrões)"
+    )
+    print(f"  • k_vizinhos               : {campeao_ag.k_vizinhos}")
+    print(f"  • beta (Temperatura)      : {campeao_ag.beta:.2f}")
+    print(f"  • threshold                : {campeao_ag.threshold:.3f}")
+    print(f"  • normalize (Cosseno L2)   : {campeao_ag.normalize}")
+    print(f"  • estrategia               : {campeao_ag.estrategia}")
+    print(
+        f"  • Cache SWeeP Hits/Misses  : {res_ag['estatisticas_cache']['hits']} hits / {res_ag['estatisticas_cache']['misses']} misses"
+    )
+
+    # Persistência estruturada do campeão
+    path_ag_json = os.path.join(OUT_HOPFIELD, "configuracao_otima_ag.json")
+    otimizador_ag.exportar_historico_json(path_ag_json)
+    print(f"\n[Persistência] Histórico e campeão salvos em: {path_ag_json}")
+
+    # Painel Visual de Convergência Evolutiva
+    historico = res_ag["historico_geracoes"]
+    gens = [reg["geracao"] for reg in historico]
+    melhores_fits = [reg["melhor_fitness"] for reg in historico]
+    medias_fits = [reg["media_fitness"] for reg in historico]
+    f1_vals = [reg["melhor_f1_val"] for reg in historico]
+    f1_ruidos = [reg["melhor_f1_ruido"] for reg in historico]
+
+    fig, axs = plt.subplots(1, 2, figsize=(14, 4.5))
+
+    # Curva de Aptidão (Melhor vs Média)
+    axs[0].plot(
+        gens,
+        melhores_fits,
+        marker="o",
+        color="#2ca02c",
+        linewidth=2.2,
+        label="Melhor Fitness (Elitismo)",
+    )
+    axs[0].plot(
+        gens,
+        medias_fits,
+        marker="s",
+        linestyle="--",
+        color="#1f77b4",
+        alpha=0.7,
+        label="Média Populacional",
+    )
+    axs[0].set_xlabel("Geração")
+    axs[0].set_ylabel("Fitness Multiobjetivo")
+    axs[0].set_title("Convergência do Fitness Evolutivo")
+    axs[0].grid(True, linestyle=":", alpha=0.6)
+    axs[0].legend()
+
+    # Métricas de Validação e Estresse
+    axs[1].plot(
+        gens,
+        f1_vals,
+        marker="^",
+        color="#ff7f0e",
+        linewidth=2.0,
+        label="F1 Validação Holdout",
+    )
+    axs[1].plot(
+        gens,
+        f1_ruidos,
+        marker="v",
+        color="#d62728",
+        linewidth=2.0,
+        label="F1 Estresse Ruído 15%",
+    )
+    axs[1].set_xlabel("Geração")
+    axs[1].set_ylabel("F1-Score")
+    axs[1].set_title("Evolução da Generalização e Robustez")
+    axs[1].grid(True, linestyle=":", alpha=0.6)
+    axs[1].legend()
+
+    plt.tight_layout()
+    plt.show()
+else:
+    print(
+        "[AG] Otimização ignorada (EXECUTAR_OTIMIZACAO_AG = False). Mantendo configuração padrão."
+    )
+
+
+# %% [markdown]
 # #### 13. Imputação cross-dataset — Mathys com Sentinela Neutra 0.5
 # Injeta o valor sentinela 0.5 em todos os genes ausentes no Mathys durante a recuperação na rede Hopfield.
 # A rede realiza a atenção contínua (onde 0.5 se torna 0.0 no espaço bipolar) e reconstrói o perfil completo.
