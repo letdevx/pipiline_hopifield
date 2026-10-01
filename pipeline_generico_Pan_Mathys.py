@@ -183,6 +183,7 @@ from alinhamento import (
 )
 from preprocessing import Binarizador
 from treinamento import (
+    AuditorOverfittingHopfield,
     AvaliadorHopfield,
     CarregadorDadosFujita,
     ExportadorImputacao,
@@ -669,6 +670,250 @@ print(avaliador_f)
 
 # 2. Plota a Matriz de Confusão
 avaliador_f.plotar(titulo="Confusão Softmax Pooling — rede210 (PAN → PAN)")
+
+
+# %% [markdown]
+# #### 12.1 Diagnóstico Formal de Overfitting e Robustez (AuditorOverfittingHopfield) 🛡️
+# Executa a auditoria diagnóstica de generalização e estabilidade da rede Hopfield:
+# 1. **Gap de Generalização:** Avaliação no holdout interno estratificado (20% das células Fujita não vistas)
+# 2. **Estresse de Bacias de Atração:** Teste de sensibilidade sob ruído sintético (dropout e bit-flip a 5%, 15% e 30%)
+# 3. **Entropia da Atenção Softmax:** Detecção de saturação de Beta (colapso 1-NN puro vs atratores contínuos)
+# 4. **Detecção de Estados Espúrios / Quimeras:** Coativação de marcadores celulares antagônicos
+
+# %%
+print("\n" + "=" * 70)
+print("  DIAGNÓSTICO FORMAL DE OVERFITTING E ROBUSTEZ — REDE HOPFIELD")
+print("=" * 70)
+
+import datetime
+import json
+
+from sklearn.model_selection import train_test_split
+
+from treinamento.validador_imputacao import MARCADORES_CANONICOS_CEREBRO
+
+# 1. Mapeamento dos marcadores canônicos para índices gênicos canônicos
+assert analisador.genes_ordenados is not None
+gene_to_idx = {gene: idx for idx, gene in enumerate(analisador.genes_ordenados)}
+marcadores_indices: dict[int, list[int]] = {}
+for classe_id, marcadores in MARCADORES_CANONICOS_CEREBRO.items():
+    idx_genes = [gene_to_idx[g] for g in marcadores if g in gene_to_idx]
+    if idx_genes:
+        # Usa os marcadores principais para detecção estrita de quimera
+        marcadores_indices[classe_id] = idx_genes[:2]
+
+print(
+    f"[Diagnóstico] Classes com marcadores exclusivos mapeados: {len(marcadores_indices)}"
+)
+
+# 2. Particionamento Estratificado de Validação Holdout (80% Treino / 20% Validação)
+mask_canonicas = clo_ref > 0
+idx_canonicos = np.where(mask_canonicas)[0]
+rotulos_canonicos = clo_ref[idx_canonicos]
+
+idx_treino_full, idx_val_full = train_test_split(
+    idx_canonicos,
+    test_size=0.20,
+    stratify=rotulos_canonicos,
+    random_state=SEED,
+)
+
+# Amostragem OOM-Safe para avaliação fluida (máximo de 2.500 células por conjunto)
+N_AMOSTRA_AUDIT = 2500
+if len(idx_treino_full) > N_AMOSTRA_AUDIT:
+    _, idx_treino_audit = train_test_split(
+        idx_treino_full,
+        test_size=N_AMOSTRA_AUDIT,
+        stratify=clo_ref[idx_treino_full],
+        random_state=SEED,
+    )
+else:
+    idx_treino_audit = idx_treino_full
+
+if len(idx_val_full) > N_AMOSTRA_AUDIT:
+    _, idx_val_audit = train_test_split(
+        idx_val_full,
+        test_size=N_AMOSTRA_AUDIT,
+        stratify=clo_ref[idx_val_full],
+        random_state=SEED,
+    )
+else:
+    idx_val_audit = idx_val_full
+
+x_treino_audit = W0_arr[idx_treino_audit]
+y_treino_audit = clo_ref[idx_treino_audit]
+x_val_audit = W0_arr[idx_val_audit]
+y_val_audit = clo_ref[idx_val_audit]
+
+print(f"[Diagnóstico] Amostra de Treino     : {x_treino_audit.shape[0]} células")
+print(
+    f"[Diagnóstico] Amostra Holdout Val   : {x_val_audit.shape[0]} células (não vistas)"
+)
+
+# 3. Instanciação e Execução do Auditor
+rotulos_meta = [
+    item[0] if isinstance(item, (tuple, list)) else int(item) for item in meta_eval
+]
+
+auditor_hopfield = AuditorOverfittingHopfield(
+    modelo=rede180,
+    padroes_referencia=perf180,
+    rotulos_padroes=rotulos_meta,
+    gap_maximo_tolerado=0.15,
+    limiar_entropia_minima=0.05,
+    marcadores_exclusivos=marcadores_indices,
+    seed=SEED,
+)
+
+resultado_diag = auditor_hopfield.executar_auditoria(
+    x_treino=x_treino_audit,
+    y_treino=y_treino_audit,
+    x_val=x_val_audit,
+    y_val=y_val_audit,
+    niveis_ruido=(0.05, 0.15, 0.30),
+)
+
+# 4. Exibição do Parecer Consolidado
+print("\n" + "-" * 70)
+print(f"  PARECER CONSOLIDADO DE ROBUSTEZ: [{resultado_diag.status}]")
+print("-" * 70)
+print(f"  • F1 Treino               : {resultado_diag.f1_treino:.4f}")
+print(f"  • F1 Validação (Holdout)  : {resultado_diag.f1_validacao:.4f}")
+print(
+    f"  • Gap de Generalização    : {resultado_diag.gap_generalizacao * 100:.2f}% (Tolerância: <= 15.0%)"
+)
+print(
+    f"  • Entropia Média Atenção  : {resultado_diag.entropia_media_atencao:.4f} (Normalizada)"
+)
+print(
+    f"  • Atenção Saturada (1-NN) : {resultado_diag.proporcao_atencao_saturada * 100:.2f}% das células"
+)
+print(f"  • Quimeras Transcricionais: {resultado_diag.quimeras_detectadas} detectadas")
+print("\n  Fidelidade sob Degradação por Ruído Sintético:")
+for taxa_r, fid_r in resultado_diag.fidelidade_sob_ruido.items():
+    print(f"    - Ruído {taxa_r * 100:>4.1f}% : F1 = {fid_r:.4f}")
+
+if resultado_diag.alertas:
+    print("\n  ⚠️ ALERTAS IDENTIFICADOS:")
+    for al in resultado_diag.alertas:
+        print(f"    - {al}")
+
+if resultado_diag.recomendacoes:
+    print("\n  💡 RECOMENDAÇÕES TÉCNICAS:")
+    for rec in resultado_diag.recomendacoes:
+        print(f"    - {rec}")
+
+# 5. Persistência do Relatório JSON
+path_diag_json = os.path.join(OUT_HOPFIELD, "diagnostico_overfitting.json")
+dados_export_diag = {
+    "data_execucao": datetime.datetime.now().isoformat(),
+    "modelo": "rede180",
+    "status": resultado_diag.status,
+    "gap_generalizacao": resultado_diag.gap_generalizacao,
+    "f1_treino": resultado_diag.f1_treino,
+    "f1_validacao": resultado_diag.f1_validacao,
+    "fidelidade_sob_ruido": {
+        str(k): v for k, v in resultado_diag.fidelidade_sob_ruido.items()
+    },
+    "ponto_ruptura_ruido": resultado_diag.ponto_ruptura_ruido,
+    "entropia_media_atencao": resultado_diag.entropia_media_atencao,
+    "proporcao_atencao_saturada": resultado_diag.proporcao_atencao_saturada,
+    "quimeras_detectadas": resultado_diag.quimeras_detectadas,
+    "alertas": resultado_diag.alertas,
+    "recomendacoes": resultado_diag.recomendacoes,
+}
+
+with open(path_diag_json, "w", encoding="utf-8") as f_diag:
+    json.dump(dados_export_diag, f_diag, indent=2, ensure_ascii=False)
+
+print(f"\n[Persistência] Relatório estruturado salvo com sucesso em: {path_diag_json}")
+
+# 6. Painel Visual de Robustez e Estabilidade
+fig, axs = plt.subplots(1, 3, figsize=(18, 5))
+
+# Painel 1: Curva de Degradação sob Ruído
+taxas_plot = [0.0, *resultado_diag.fidelidade_sob_ruido.keys()]
+fids_plot = [resultado_diag.f1_validacao, *resultado_diag.fidelidade_sob_ruido.values()]
+taxas_pct = [t * 100 for t in taxas_plot]
+
+axs[0].plot(
+    taxas_pct, fids_plot, marker="o", color="#1f77b4", linewidth=2.5, markersize=8
+)
+axs[0].axhline(
+    resultado_diag.f1_validacao * 0.75,
+    color="red",
+    linestyle="--",
+    alpha=0.7,
+    label="Limite Ruptura (-25%)",
+)
+axs[0].set_xlabel("Nível de Perturbação Sintética (% Dropout/Ruído)")
+axs[0].set_ylabel("F1-Score Ponderado")
+axs[0].set_title("Estresse de Bacias de Atração sob Ruído")
+axs[0].set_ylim(0.0, 1.05)
+axs[0].grid(True, linestyle=":", alpha=0.6)
+axs[0].legend(loc="lower left")
+
+# Painel 2: Comparativo Treino vs Validação Holdout
+metricas_nomes = ["Treino (W0)", "Holdout Validação", "Ruído 15%"]
+metricas_valores = [
+    resultado_diag.f1_treino,
+    resultado_diag.f1_validacao,
+    resultado_diag.fidelidade_sob_ruido.get(0.15, 0.0),
+]
+cores_barras = [
+    "#2ca02c",
+    "#1f77b4" if resultado_diag.gap_generalizacao <= 0.15 else "#d62728",
+    "#ff7f0e",
+]
+
+barras = axs[1].bar(
+    metricas_nomes,
+    metricas_valores,
+    color=cores_barras,
+    width=0.55,
+    edgecolor="black",
+    alpha=0.85,
+)
+axs[1].set_ylabel("F1-Score Ponderado")
+axs[1].set_title(f"Gap de Generalização: {resultado_diag.gap_generalizacao * 100:.1f}%")
+axs[1].set_ylim(0.0, 1.05)
+for barra in barras:
+    yval = barra.get_height()
+    axs[1].text(
+        barra.get_x() + barra.get_width() / 2.0,
+        yval + 0.02,
+        f"{yval:.3f}",
+        ha="center",
+        va="bottom",
+        fontweight="bold",
+    )
+axs[1].grid(axis="y", linestyle=":", alpha=0.6)
+
+# Painel 3: Termodinâmica Softmax / Saturação de Beta
+labels_atencao = ["Entropia Normalizada", "Atenção Saturada"]
+valores_atencao = [
+    resultado_diag.entropia_media_atencao,
+    resultado_diag.proporcao_atencao_saturada,
+]
+axs[2].bar(
+    labels_atencao,
+    valores_atencao,
+    color=["#9467bd", "#e377c2"],
+    width=0.5,
+    edgecolor="black",
+    alpha=0.85,
+)
+axs[2].axhline(0.05, color="red", linestyle=":", label="Limiar Saturação (0.05)")
+axs[2].set_ylabel("Escala Normalizada (0 a 1)")
+axs[2].set_title(f"Atenção Softmax (Beta={rede180.beta})")
+axs[2].set_ylim(0.0, 1.05)
+for i, v in enumerate(valores_atencao):
+    axs[2].text(i, v + 0.02, f"{v:.3f}", ha="center", va="bottom", fontweight="bold")
+axs[2].grid(axis="y", linestyle=":", alpha=0.6)
+axs[2].legend(loc="upper right")
+
+plt.tight_layout()
+plt.show()
 
 
 # %% [markdown]
