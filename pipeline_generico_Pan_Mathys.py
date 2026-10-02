@@ -1072,6 +1072,154 @@ else:
 
 
 # %% [markdown]
+# #### 12.3 Treinamento da Rede Hopfield com Configuração Ótima do AG (rede{n_padroes}) 🏆
+# Aplica os hiperparâmetros campeões descobertos pelo Algoritmo Genético:
+# 1. Extração dos protótipos de subclusters com a configuração ótima de `nc`, `k_vizinhos` e `estrategia`.
+# 2. Instanciação e treinamento da rede nomeada dinamicamente como `rede{n_padroes}` (e alias `rede{nc}`).
+# 3. Persistência dos pesos (`.pt`) e metadados (`.json`) em `outputs/hopfield/`.
+# 4. Avaliação comparativa de auto-imputação (Fujita → Fujita) e matriz de confusão.
+
+# %%
+print("\n" + "=" * 70)
+print("  TREINAMENTO DA REDE HOPFIELD COM CONFIGURAÇÕES ÓTIMAS DO AG")
+print("=" * 70)
+
+# Resolução dos parâmetros ótimos do campeão ou do arquivo salvo
+if "campeao_ag" in globals() and campeao_ag is not None:
+    nc_otimo = int(campeao_ag.nc)
+    k_otimo = int(campeao_ag.k_vizinhos)
+    beta_otimo = float(campeao_ag.beta)
+    threshold_otimo = float(campeao_ag.threshold)
+    n_iters_otimo = int(campeao_ag.n_iters)
+    normalize_otimo = bool(campeao_ag.normalize)
+    estrategia_otima = str(campeao_ag.estrategia)
+else:
+    path_ag_json = os.path.join(OUT_HOPFIELD, "configuracao_otima_ag.json")
+    if os.path.exists(path_ag_json):
+        print(f"Carregando parâmetros ótimos do checkpoint {path_ag_json}...")
+        with open(path_ag_json, encoding="utf-8") as f_json:
+            dados_ag = json.load(f_json)
+        ult_gen = dados_ag["historico_geracoes"][-1]
+        params_ag = ult_gen["melhores_parametros"]
+        nc_otimo = int(params_ag["nc"])
+        k_otimo = int(params_ag["k_vizinhos"])
+        beta_otimo = float(params_ag["beta"])
+        threshold_otimo = float(params_ag["threshold"])
+        n_iters_otimo = int(params_ag["n_iters"])
+        normalize_otimo = bool(params_ag["normalize"])
+        estrategia_otima = str(params_ag["estrategia"])
+    else:
+        print(
+            "Configuração ótima do AG não encontrada. Aplicando baseline empírico calibrado."
+        )
+        nc_otimo = 30
+        k_otimo = 5
+        beta_otimo = 15.0
+        threshold_otimo = 0.0
+        n_iters_otimo = 1
+        normalize_otimo = False
+        estrategia_otima = "kmeans_fixo"
+
+n_padroes_total = nc_otimo * len(CLASSES_CANONICAS)
+NOME_REDE_OTIMA = f"rede{n_padroes_total}"
+NOME_REDE_NC = f"rede{nc_otimo}"
+
+print("\n[Configuração Ótima]")
+print(f"  • Nome da Rede                : {NOME_REDE_OTIMA} (alias: {NOME_REDE_NC})")
+print(f"  • Subclusters por classe (nc) : {nc_otimo} centróides")
+print(f"  • Total de Padrões Armazenados: {n_padroes_total} memórias")
+print(f"  • Vizinhos Locais (k)         : {k_otimo}")
+print(f"  • Temperatura Inversa (Beta)  : {beta_otimo:.2f}")
+print(f"  • Limiar de Corte (Threshold) : {threshold_otimo:.3f}")
+print(f"  • Normalização Cosseno L2     : {normalize_otimo}")
+print(f"  • Estratégia de Clusterização : {estrategia_otima}")
+
+# 1. Extração dos novos protótipos ótimos (utiliza cache do otimizador se disponível)
+assert carregador.W0 is not None
+assert projetor.Wswp is not None
+
+if "otimizador_ag" in globals() and otimizador_ag is not None:
+    perf_otimo, meta_otimo = otimizador_ag.obter_padroes(
+        nc=nc_otimo, k_vizinhos=k_otimo, estrategia=estrategia_otima
+    )
+else:
+    estrat_inst = (
+        EstrategiaKMeansFixo(n_clusters=nc_otimo, seed=SEED)
+        if estrategia_otima == "kmeans_fixo"
+        else EstrategiaKMeansDinamico(k_range=[nc_otimo], seed=SEED)
+    )
+    extrator_otimo = ExtratorPadroesSubcluster(
+        W0=carregador.W0,
+        labels=clo_ref,
+        classes=CLASSES_CANONICAS,
+        estrategia=estrat_inst,
+        seed=SEED,
+        k=k_otimo,
+        nc=nc_otimo,
+    )
+    extrator_otimo.extrair(projetor.Wswp)
+    assert extrator_otimo.padroes is not None and extrator_otimo.meta is not None
+    perf_otimo = extrator_otimo.padroes.astype(np.float32)
+    meta_otimo = list(extrator_otimo.meta)
+
+# 2. Instanciação e armazenamento de padrões na nova Modern Hopfield Network
+rede_otima = ModernHopfieldNetwork(
+    beta=beta_otimo,
+    n_iters=n_iters_otimo,
+    binary=True,
+    threshold=threshold_otimo,
+    normalize=normalize_otimo,
+)
+rede_otima.store(perf_otimo)
+
+# Registra nas variáveis globais solicitadas pela pesquisadora
+globals()[NOME_REDE_OTIMA] = rede_otima
+globals()[NOME_REDE_NC] = rede_otima
+globals()[f"perf{n_padroes_total}"] = perf_otimo
+
+# Define como a rede e padrões ativos para as etapas seguintes
+rede_ativa = rede_otima
+perf_ativo = perf_otimo
+meta_ativo = meta_otimo
+nc_ativo = nc_otimo
+nome_modelo_ativo = NOME_REDE_OTIMA
+
+# 3. Persistência dos pesos e metadados no disco
+PATH_PT_OTIMO = os.path.join(OUT_HOPFIELD, f"{NOME_REDE_OTIMA}.pt")
+PATH_META_OTIMO = os.path.join(OUT_HOPFIELD, f"{NOME_REDE_OTIMA}.json")
+rede_otima.salvar_com_metadados(
+    path_pt=PATH_PT_OTIMO,
+    path_meta=PATH_META_OTIMO,
+    meta=meta_otimo,
+    classes=CLASSES_CANONICAS,
+    nc=nc_otimo,
+)
+print(
+    f"\n[Persistência] Rede e metadados salvos com sucesso em outputs/hopfield/{NOME_REDE_OTIMA}.pt!"
+)
+
+# 4. Avaliação e Auto-imputação na Referência (Fujita → Fujita)
+print(f"\n=== Auto-imputação na Referência com {NOME_REDE_OTIMA} ===")
+Wrec_fujita_otimo, att_fujita_otimo = rede_otima.retrieve(
+    carregador.W0, batch_size=2048, return_attention_weights=True
+)
+
+avaliador_otimo = AvaliadorHopfield(
+    padroes=perf_otimo,
+    classes=CLASSES_CANONICAS,
+    nc=nc_otimo,
+    meta=meta_otimo,
+    metrica="euclidiana",
+)
+avaliador_otimo.avaliar_por_atencao(att_fujita_otimo, clo_ref)
+print(avaliador_otimo)
+
+avaliador_otimo.plotar(
+    titulo=f"Matriz de Confusão Softmax Pooling — {NOME_REDE_OTIMA} (Ótimo AG)"
+)
+
+
+# %% [markdown]
 # #### 13. Imputação cross-dataset — Mathys com Sentinela Neutra 0.5
 # Injeta o valor sentinela 0.5 em todos os genes ausentes no Mathys durante a recuperação na rede Hopfield.
 # A rede realiza a atenção contínua (onde 0.5 se torna 0.0 no espaço bipolar) e reconstrói o perfil completo.
@@ -1079,29 +1227,49 @@ else:
 # %%
 print("=== Imputação cross-dataset: Mathys (Sentinela Neutra 0.5) ===")
 
-# Se rede180 ou metadados não estiverem em memória (ex: reinício de kernel), carrega do checkpoint
-if (
-    "rede180" not in globals()
-    or "perf180" not in globals()
-    or "meta_eval" not in globals()
-):
+# 1. Seleção do modelo ativo (prioriza a rede ótima do AG gerada na Seção 12.3, com fallback para rede180)
+if "rede_ativa" in globals() and rede_ativa is not None:
+    modelo_imputacao = rede_ativa
+    perf_imputacao = perf_ativo
+    meta_imputacao = meta_ativo
+    nc_imputacao = nc_ativo
+    nome_modelo_imp = nome_modelo_ativo
+    print(
+        f"Utilizando a rede ótima do AG: {nome_modelo_imp} (nc={nc_imputacao}, {perf_imputacao.shape[0]} padrões)"
+    )
+elif "rede180" in globals() and "perf180" in globals() and "meta_eval" in globals():
+    modelo_imputacao = rede180
+    perf_imputacao = perf180
+    meta_imputacao = meta_eval
+    nc_imputacao = 30
+    nome_modelo_imp = "rede180"
+    print(f"Utilizando baseline: rede180 (nc=30, {perf180.shape[0]} padrões)")
+else:
     PATH_PT = os.path.join(OUT_HOPFIELD, "rede180.pt")
     PATH_META = os.path.join(OUT_HOPFIELD, "rede180.json")
     if os.path.exists(PATH_PT) and os.path.exists(PATH_META):
         print(f"Carregando checkpoint de rede180 salvo em {PATH_PT}...")
-        rede180, meta_eval, meta_json = ModernHopfieldNetwork.carregar_com_metadados(
-            PATH_PT, PATH_META
-        )
-        assert rede180.patterns is not None
-        perf180 = ((rede180.patterns.cpu().numpy() + 1.0) / 2.0).astype(np.float32)
+        (
+            modelo_hopfield_chk,
+            meta_chk,
+            meta_json,
+        ) = ModernHopfieldNetwork.carregar_com_metadados(PATH_PT, PATH_META)
+        assert modelo_hopfield_chk.patterns is not None
+        perf_imputacao = (
+            (modelo_hopfield_chk.patterns.cpu().numpy() + 1.0) / 2.0
+        ).astype(np.float32)
+        modelo_imputacao = modelo_hopfield_chk
+        meta_imputacao = meta_chk
+        nc_imputacao = meta_json.get("nc", 30)
+        nome_modelo_imp = "rede180"
     else:
         raise RuntimeError(
-            "A variável 'rede180' não está definida e o checkpoint em outputs/hopfield/ não foi encontrado. Execute as células de treino anteriores."
+            "Nenhuma rede Hopfield treinada foi encontrada em memória ou disco."
         )
 
-assert perf180 is not None
+assert perf_imputacao is not None
 
-# 1. Identificação dos genes ausentes no Mathys
+# 2. Identificação dos genes ausentes no Mathys
 if "alinhador" in globals() and hasattr(alinhador, "obter_mascara_ausentes"):
     mask_ausentes = alinhador.obter_mascara_ausentes()
 elif adata_m is not None and "presente_no_dataset" in adata_m.var:
@@ -1120,11 +1288,11 @@ print(
     f"Total de genes ausentes no Mathys (Sentinela 0.5): {n_genes_ausentes:,} de {len(mask_ausentes):,} genes canônicos."
 )
 
-# 2. Recuperação na rede Hopfield com injeção de 0.5 nos genes ausentes (Lotes OOM-Safe)
+# 3. Recuperação na rede Hopfield com injeção de 0.5 nos genes ausentes (Lotes OOM-Safe)
 print(
-    "\nRecuperando padrões na Modern Hopfield Network (batch_size=2048, sentinela=0.5, prob=True)..."
+    f"\nRecuperando padrões na Modern Hopfield Network ({nome_modelo_imp}, batch_size=40000, sentinela=0.5, prob=True)..."
 )
-Wrecuperado_m, Wprob_m, att_m = rede180.retrieve(
+Wrecuperado_m, Wprob_m, att_m = modelo_imputacao.retrieve(
     queries=W_mathys,
     batch_size=40000,
     mask_sentinela_ausentes=mask_ausentes,
@@ -1134,7 +1302,7 @@ Wrecuperado_m, Wprob_m, att_m = rede180.retrieve(
 )
 print(f"Recuperação concluída! Matriz reconstruída: {Wrecuperado_m.shape}")
 
-# 3. Exportação Estruturada OOM-Safe em AnnData (.h5ad Gzip), .npy e JSON (ADR 017/ADR 020)
+# 4. Exportação Estruturada OOM-Safe em AnnData (.h5ad Gzip), .npy e JSON (ADR 017/ADR 020)
 assert analisador.genes_ordenados is not None
 
 exportador_imp = ExportadorImputacao(out_dir=OUT_IMPUTACAO)
@@ -1146,14 +1314,14 @@ rel_imp = exportador_imp.exportar(
     adata_alvo_original=alinhador.path_m_alinhado or PATH_ALVO,
     classes_reais=clo_alvo,
     info_modelo={
-        "beta": rede180.beta,
-        "n_iters": rede180.n_iters,
-        "binary": rede180.binary,
-        "threshold": rede180.threshold,
-        "nc": 30,
-        "n_padroes": perf180.shape[0],
+        "beta": modelo_imputacao.beta,
+        "n_iters": modelo_imputacao.n_iters,
+        "binary": modelo_imputacao.binary,
+        "threshold": modelo_imputacao.threshold,
+        "nc": nc_imputacao,
+        "n_padroes": perf_imputacao.shape[0],
     },
-    nome_modelo="rede180",
+    nome_modelo=nome_modelo_imp,
     exportar_npy=True,
     substituir_sentinela=True,
     limiar_sentinela=0.5,
@@ -1164,11 +1332,15 @@ rel_imp = exportador_imp.exportar(
 PATH_IMPUTADO_H5AD = rel_imp["arquivos_gerados"]["h5ad"]
 PATH_IMPUTADO_NPY = rel_imp["arquivos_gerados"]["npy"]
 
-# 4. Retrocompatibilidade: Garante o arquivo no caminho legado esperado em outputs/top_genes/
+# Retrocompatibilidade com caminho legado
 os.makedirs(OUT_TOP_GENES, exist_ok=True)
-PATH_IMPUTADO = os.path.join(OUT_TOP_GENES, "X_mathys_IMPUTADO_rede180.npy")
+PATH_IMPUTADO_MODELO = os.path.join(
+    OUT_TOP_GENES, f"X_mathys_IMPUTADO_{nome_modelo_imp}.npy"
+)
+PATH_IMPUTADO_LEGADO = os.path.join(OUT_TOP_GENES, "X_mathys_IMPUTADO_rede180.npy")
 if PATH_IMPUTADO_NPY and os.path.exists(PATH_IMPUTADO_NPY):
-    shutil.copyfile(PATH_IMPUTADO_NPY, PATH_IMPUTADO)
+    shutil.copyfile(PATH_IMPUTADO_NPY, PATH_IMPUTADO_MODELO)
+    shutil.copyfile(PATH_IMPUTADO_NPY, PATH_IMPUTADO_LEGADO)
 
 # 5. Validação Biológica e Estatística da Imputação (ADR 020)
 from treinamento import ValidadorImputacao
@@ -1227,28 +1399,15 @@ projetor_m_r = ProjetorSWeePR(
 )
 projetor_m_r.projetar()
 
-# 5. Avaliação do Tipo Celular Cross-Dataset via Softmax Class Pooling
+# 8. Avaliação do Tipo Celular Cross-Dataset via Softmax Class Pooling
 avaliador_m = AvaliadorHopfield(
-    padroes=perf180,
+    padroes=perf_imputacao,
     classes=CLASSES_CANONICAS,
-    nc=30,
-    meta=meta_eval,
+    nc=nc_imputacao,
+    meta=meta_imputacao,
     metrica="euclidiana",
 )
 avaliador_m.avaliar_por_atencao(att_m, clo_alvo).plotar(
-    titulo="Confusão Softmax Pooling — rede210 (PAN, PAN_0.5)"
-)
-print(avaliador_m)
-
-# %%
-avaliador_m = AvaliadorHopfield(
-    padroes=perf180,
-    classes=CLASSES_CANONICAS,
-    nc=30,
-    meta=meta_eval,
-    metrica="euclidiana",
-)
-avaliador_m.avaliar_por_atencao(att_m, clo_alvo).plotar(
-    titulo="Confusão Softmax Pooling — rede210 (PAN, Fujita_25k ausentes)"
+    titulo=f"Confusão Softmax Pooling — {nome_modelo_imp} (Alvo Mathys Imputado)"
 )
 print(avaliador_m)
