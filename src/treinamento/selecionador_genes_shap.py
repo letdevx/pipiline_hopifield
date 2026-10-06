@@ -652,3 +652,153 @@ class SelecionadorGenesSHAPHopfield:
                 plt.show()
         finally:
             plt.close(fig)
+
+    def plotar_heatmap_marcadores(
+        self,
+        top_n_por_classe: int = 10,
+        out_png: PathType | None = None,
+        normalizar_linhas: bool = True,
+        cmap: str = "YlGnBu",
+        figsize: tuple[float, float] | None = None,
+    ) -> None:
+        """Gera um mapa de calor (heatmap) dos genes com maior impacto SHAP por tipo celular.
+
+        Parameters
+        ----------
+        top_n_por_classe : int, default=10
+            Quantidade de genes mais informativos por linhagem a incluir no mapa.
+        out_png : str | Path | None, optional
+            Caminho para gravação da figura PNG em alta resolução. Se None, exibe na tela.
+        normalizar_linhas : bool, default=True
+            Se True, normaliza a intensidade de cada gene entre [0, 1] destacando a especificidade.
+        cmap : str, default="YlGnBu"
+            Paleta de cores para o heatmap (ex: "YlGnBu", "magma", "viridis").
+        figsize : tuple[float, float] | None, optional
+            Dimensões personalizadas da figura em polegadas (largura, altura).
+        """
+        if self.valores_shap is None or self.amostras_explicadas is None:
+            raise RuntimeError(
+                "[SelecionadorGenesSHAP] Execute .explicar() antes de plotar o heatmap."
+            )
+
+        # 1. Obtém os top genes de cada classe
+        df_rank = self.obter_ranking_por_classe(top_n=top_n_por_classe)
+
+        # Preserva a ordem agrupada por linhagem eliminando duplicatas
+        genes_ordenados: list[str] = []
+        for c_val in self.classes:
+            genes_c = (
+                df_rank.filter(pl.col("classe") == c_val)
+                .sort("shap_medio_positivo", descending=True)["gene"]
+                .to_list()
+            )
+            for g in genes_c:
+                if g not in genes_ordenados:
+                    genes_ordenados.append(g)
+
+        if not genes_ordenados:
+            return
+
+        n_genes_sel: int = len(genes_ordenados)
+        n_classes: int = len(self.classes)
+        n_genes_total: int = int(self.amostras_explicadas.shape[1])
+
+        nomes_referencia: list[str] = (
+            self.nomes_genes
+            if self.nomes_genes is not None and len(self.nomes_genes) == n_genes_total
+            else [f"Gene_{j}" for j in range(n_genes_total)]
+        )
+        idx_map: dict[str, int] = {
+            g: nomes_referencia.index(g)
+            for g in genes_ordenados
+            if g in nomes_referencia
+        }
+
+        # 2. Constrói a matriz M (n_genes_sel × n_classes)
+        matriz_m: NDArray[np.float32] = np.zeros(
+            (n_genes_sel, n_classes), dtype=np.float32
+        )
+
+        for c_idx, c_val in enumerate(self.classes):
+            shap_c: NDArray[np.float32] = self.valores_shap[c_idx]
+            if self.labels_explicados is not None:
+                mask_c = self.labels_explicados == c_val
+                shap_alvo = shap_c[mask_c] if mask_c.sum() > 0 else shap_c
+            else:
+                shap_alvo = shap_c
+
+            shap_pos = np.maximum(0.0, shap_alvo)
+            mean_pos: NDArray[np.float32] = np.asarray(
+                shap_pos.mean(axis=0), dtype=np.float32
+            )
+
+            for g_row, g_nome in enumerate(genes_ordenados):
+                if g_nome in idx_map:
+                    g_col = idx_map[g_nome]
+                    matriz_m[g_row, c_idx] = float(mean_pos[g_col])
+
+        # 3. Normalização Min-Max por linha com proteção contra divisão por zero
+        matriz_plot: NDArray[np.float32]
+        label_cbar: str
+        if normalizar_linhas:
+            min_l = matriz_m.min(axis=1, keepdims=True)
+            max_l = matriz_m.max(axis=1, keepdims=True)
+            den = max_l - min_l
+            den[den == 0.0] = 1.0
+            matriz_plot = (matriz_m - min_l) / den
+            label_cbar = "Impacto Relativo (Normalizado [0, 1])"
+        else:
+            matriz_plot = matriz_m
+            label_cbar = "Impacto SHAP Positivo Médio"
+
+        # 4. Renderização do Heatmap
+        dim_fig: tuple[float, float] = (
+            figsize
+            if figsize is not None
+            else (max(7.5, 1.2 * n_classes), max(6.0, 0.35 * n_genes_sel))
+        )
+        fig, ax = plt.subplots(figsize=dim_fig, constrained_layout=True)
+
+        try:
+            im = ax.imshow(
+                matriz_plot, cmap=cmap, aspect="auto", interpolation="nearest"
+            )
+            cbar = fig.colorbar(im, ax=ax, shrink=0.7)
+            cbar.set_label(label_cbar, fontsize=10)
+
+            # Rótulos dos eixos
+            ax.set_xticks(np.arange(n_classes))
+            ax.set_xticklabels(
+                self.nomes_classes,
+                rotation=30,
+                ha="right",
+                fontsize=10,
+                fontweight="bold",
+            )
+
+            ax.set_yticks(np.arange(n_genes_sel))
+            ax.set_yticklabels(genes_ordenados, fontsize=8)
+
+            ax.set_title(
+                f"Mapa de Calor de Biomarcadores Celulares (Top {top_n_por_classe} por Linhagem)",
+                fontsize=12,
+                fontweight="bold",
+                pad=12,
+            )
+            ax.set_xlabel(
+                "Tipos Celulares Canônicos",
+                fontsize=11,
+                fontweight="bold",
+                labelpad=8,
+            )
+            ax.set_ylabel("Genes Marcadores", fontsize=11, fontweight="bold")
+
+            if out_png is not None:
+                caminho_fig = Path(out_png)
+                caminho_fig.parent.mkdir(parents=True, exist_ok=True)
+                fig.savefig(str(caminho_fig), dpi=200, bbox_inches="tight")
+                print(f"[SelecionadorGenesSHAP] Heatmap salvo em: {caminho_fig}")
+            else:
+                plt.show()
+        finally:
+            plt.close(fig)

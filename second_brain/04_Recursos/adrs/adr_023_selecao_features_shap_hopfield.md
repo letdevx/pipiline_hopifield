@@ -34,6 +34,7 @@ Implementar o módulo dedicado `SelecionadorGenesSHAPHopfield` e o wrapper `Hopf
 4. **Ranking Duplo Estratificado:**
    - **Por linhagem:** Computa o impacto positivo médio `mean(max(0, SHAP))` nas células de cada uma das 7 classes canônicas, capturando os Top marcadores específicos mesmo para tipos celulares minoritários.
    - **Consolidado:** Gera a união de marcadores não-redundantes, fornecendo a máscara de features informáticas para a projeção rSWeeP e imputação associativa.
+5. **Visualização Sinótica em Heatmap:** O método `plotar_heatmap_marcadores` sintetiza a matriz de especificidade (Genes marcadores agrupados por linhagem × Classes celulares) com normalização Min-Max por linha, permitindo auditar visualmente a exclusividade dos biomarcadores e padrões de coexpressão intercelular.
 
 ```mermaid
 flowchart TD
@@ -54,6 +55,7 @@ flowchart TD
     subgraph Selecao["4. Saídas Científicas"]
         RL["Ranking por Linhagem (Top N por classe)"]
         RC["Ranking Consolidado Global"]
+        HM["Heatmap de Especificidade Gênica<br/>(Top Genes × Tipos Celulares)"]
         MAT_FILT["Matriz Filtrada OOM-Safe (.npy/.csv)"]
     end
 
@@ -63,6 +65,7 @@ flowchart TD
     BG --> GE
     GE --> RL
     GE --> RC
+    RL --> HM
     RC --> MAT_FILT
 ```
 

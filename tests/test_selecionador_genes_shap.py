@@ -257,3 +257,69 @@ def test_selecionador_genes_shap_validacoes_e_erros(
 
     with pytest.raises(RuntimeError, match=r"Execute \.explicar"):
         selecionador.obter_genes_consolidados()
+
+
+def test_selecionador_genes_shap_plotar_heatmap(
+    ambiente_sintetico_hopfield: tuple[
+        ModernHopfieldNetwork,
+        np.ndarray,
+        np.ndarray,
+        list[str],
+        list[int],
+        list[tuple[int, int]],
+        list[str],
+    ],
+    tmp_path: Path,
+) -> None:
+    """Valida a geração de mapa de calor (heatmap) dos genes informativos por linhagem."""
+    (
+        hopfield,
+        X,
+        y,
+        nomes_genes,
+        classes,
+        meta_padroes,
+        nomes_classes,
+    ) = ambiente_sintetico_hopfield
+
+    selecionador = SelecionadorGenesSHAPHopfield(
+        hopfield_net=hopfield,
+        classes=classes,
+        meta_padroes=meta_padroes,
+        nomes_classes=nomes_classes,
+        nomes_genes=nomes_genes,
+        batch_size=8,
+    )
+
+    # Chamar plotar_heatmap antes de explicar deve falhar
+    with pytest.raises(RuntimeError, match=r"Execute \.explicar"):
+        selecionador.plotar_heatmap_marcadores()
+
+    selecionador.explicar(
+        matriz_expressao=X,
+        labels=y,
+        n_background=15,
+        n_amostras_explicar=24,
+        seed=42,
+    )
+
+    out_heatmap_norm = tmp_path / "heatmap_norm.png"
+    out_heatmap_raw = tmp_path / "heatmap_raw.png"
+
+    # Testa com normalização por linha
+    selecionador.plotar_heatmap_marcadores(
+        top_n_por_classe=3,
+        out_png=out_heatmap_norm,
+        normalizar_linhas=True,
+    )
+    assert os.path.exists(out_heatmap_norm)
+    assert os.path.getsize(out_heatmap_norm) > 1000
+
+    # Testa sem normalização por linha
+    selecionador.plotar_heatmap_marcadores(
+        top_n_por_classe=3,
+        out_png=out_heatmap_raw,
+        normalizar_linhas=False,
+    )
+    assert os.path.exists(out_heatmap_raw)
+    assert os.path.getsize(out_heatmap_raw) > 1000
