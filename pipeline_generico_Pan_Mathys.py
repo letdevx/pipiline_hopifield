@@ -1349,6 +1349,7 @@ PATH_IMPUTADO_MODELO = os.path.join(
     OUT_TOP_GENES, f"X_mathys_IMPUTADO_{nome_modelo_imp}.npy"
 )
 PATH_IMPUTADO_LEGADO = os.path.join(OUT_TOP_GENES, "X_mathys_IMPUTADO_rede180.npy")
+PATH_IMPUTADO = PATH_IMPUTADO_LEGADO
 if PATH_IMPUTADO_NPY and os.path.exists(PATH_IMPUTADO_NPY):
     shutil.copyfile(PATH_IMPUTADO_NPY, PATH_IMPUTADO_MODELO)
     shutil.copyfile(PATH_IMPUTADO_NPY, PATH_IMPUTADO_LEGADO)
@@ -1379,6 +1380,7 @@ gc.collect()
 
 print(f"\n[Exportação] Matriz AnnData (.h5ad Gzip) : {PATH_IMPUTADO_H5AD}")
 print(f"[Exportação] Matriz NumPy (.npy)        : {PATH_IMPUTADO_NPY}")
+print(f"[Exportação] Modelo Ativo (.npy)        : {PATH_IMPUTADO_MODELO}")
 print(f"[Exportação] Retrocompatibilidade (.npy) : {PATH_IMPUTADO}")
 
 # 6. Exportação e Validação MTX do Alvo Imputado pós-Hopfield
