@@ -107,6 +107,7 @@ OUT_TREINAMENTO: str = os.path.join(OUTPUTS, "treinamento")
 OUT_HOPFIELD: str = os.path.join(OUTPUTS, "hopfield")
 OUT_IMPUTACAO: str = os.path.join(OUTPUTS, "imputacao")
 OUT_RELATORIO: str = os.path.join(OUTPUTS, "relatorio")
+OUT_SHAP: str = os.path.join(OUTPUTS, "shap")
 OUT_SWEEP_ALVO_POS_IMPUTACAO: str = os.path.join(OUTPUTS, "sweep_alvo_pos_imputacao")
 OUT_SWEEP_POS_IMPUTACAO: str = OUT_SWEEP_ALVO_POS_IMPUTACAO
 
@@ -177,7 +178,7 @@ def configurar_diretorios(
     """
     global PATH_BASE, PATH_REFERENCIA, PATH_ALVO, NOME_REF, NOME_ALVO
     global OUTPUTS, OUT_BINARIZACAO, OUT_ALINHAMENTO, OUT_TOP_GENES
-    global OUT_TREINAMENTO, OUT_HOPFIELD, OUT_IMPUTACAO, OUT_RELATORIO
+    global OUT_TREINAMENTO, OUT_HOPFIELD, OUT_IMPUTACAO, OUT_RELATORIO, OUT_SHAP
     global OUT_SWEEP_ALVO_POS_IMPUTACAO, OUT_SWEEP_POS_IMPUTACAO
     global OUT_MTX_REFERENCIA, OUT_MTX_ALVO_SENTINELA, OUT_MTX_ALVO_IMPUTADO
     global PATH_SWEEP_REFERENCIA, PATH_SWEEP_ALVO, PATH_SWEEP_ALVO_SENTINELA
@@ -213,6 +214,7 @@ def configurar_diretorios(
     OUT_HOPFIELD = os.path.join(OUTPUTS, "hopfield")
     OUT_IMPUTACAO = os.path.join(OUTPUTS, "imputacao")
     OUT_RELATORIO = os.path.join(OUTPUTS, "relatorio")
+    OUT_SHAP = os.path.join(OUTPUTS, "shap")
     OUT_SWEEP_ALVO_POS_IMPUTACAO = os.path.join(OUTPUTS, "sweep_alvo_pos_imputacao")
     OUT_SWEEP_POS_IMPUTACAO = OUT_SWEEP_ALVO_POS_IMPUTACAO
 
@@ -240,6 +242,7 @@ def configurar_diretorios(
             OUT_HOPFIELD,
             OUT_IMPUTACAO,
             OUT_RELATORIO,
+            OUT_SHAP,
             OUT_SWEEP_ALVO_POS_IMPUTACAO,
             OUT_MTX_REFERENCIA,
             OUT_MTX_ALVO_SENTINELA,

@@ -126,6 +126,7 @@ from config import (
     OUT_MTX_ALVO_IMPUTADO,
     OUT_MTX_ALVO_SENTINELA,
     OUT_MTX_REFERENCIA,
+    OUT_SHAP,
     OUT_SWEEP_ALVO_POS_IMPUTACAO,
     OUT_SWEEP_POS_IMPUTACAO,
     OUT_TOP_GENES,
@@ -188,9 +189,11 @@ from treinamento import (
     CarregadorDadosFujita,
     ExportadorImputacao,
     ExtratorPadroesSubcluster,
+    HopfieldClassifierWrapper,
     ModernHopfieldNetwork,
     ProjetorSWeePR,
     ProjetorSWeP,
+    SelecionadorGenesSHAPHopfield,
 )
 from treinamento.hopfield_utils import wsort
 
@@ -1411,3 +1414,98 @@ avaliador_m.avaliar_por_atencao(att_m, clo_alvo).plotar(
     titulo=f"Confusão Softmax Pooling — {nome_modelo_imp} (Alvo Mathys Imputado)"
 )
 print(avaliador_m)
+
+
+# %% [markdown]
+# #### 14. Seleção de Features Gênicas e Heatmap de Biomarcadores via SHAP (ADR 023)
+# Executa explicabilidade SHAP (Expected Gradients) sobre a Modern Hopfield Network com Softmax Class Pooling.
+# Identifica os principais marcadores específicos para cada uma das 7 linhagens cerebrais a partir
+# dos 36.591 genes e plota o Heatmap de Contribuição Celular com normalização Min-Max por linha.
+
+# %%
+print("\n" + "=" * 60)
+print("=== 14. Seleção de Genes e Heatmap de Biomarcadores via SHAP ===")
+print("=" * 60)
+
+os.makedirs(OUT_SHAP, exist_ok=True)
+
+# 1. Seleção do modelo ativo e protótipos de memória
+if "modelo_imputacao" in globals() and modelo_imputacao is not None:
+    modelo_shap = modelo_imputacao
+    padroes_shap = perf_imputacao
+    meta_shap = meta_imputacao
+    nome_shap = nome_modelo_imp
+elif "rede_ativa" in globals() and rede_ativa is not None:
+    modelo_shap = rede_ativa
+    padroes_shap = perf_ativo
+    meta_shap = meta_ativo
+    nome_shap = nome_modelo_ativo
+else:
+    modelo_shap = rede180
+    padroes_shap = perf180
+    meta_shap = meta_eval
+    nome_shap = "rede180"
+
+print(f"Modelo Hopfield avaliado pelo SHAP: {nome_shap}")
+print(
+    f"Protótipos de memória: {padroes_shap.shape[0]} padrões em {padroes_shap.shape[1]} genes"
+)
+
+# 2. Instanciação do Selecionador SHAP
+assert analisador.genes_ordenados is not None
+selecionador_shap = SelecionadorGenesSHAPHopfield(
+    modelo_hopfield=modelo_shap,
+    padroes_memoria=padroes_shap,
+    classes_padroes=meta_shap,
+    nomes_classes=CLASSES_CANONICAS,
+    nomes_genes=analisador.genes_ordenados,
+    n_background_por_classe=10,
+    batch_size=32,
+    seed=SEED,
+)
+
+# 3. Subamostragem estratificada representativa do W0_arr para cálculo OOM-safe (40 células por classe)
+idx_amostras_shap = []
+for c in range(len(CLASSES_CANONICAS)):
+    idx_c = np.where(clo_ref == c)[0]
+    n_c = min(len(idx_c), 40)
+    if n_c > 0:
+        idx_amostras_shap.extend(np.random.choice(idx_c, size=n_c, replace=False))
+idx_amostras_shap = np.array(idx_amostras_shap)
+
+print(
+    f"Calculando gradientes SHAP para {len(idx_amostras_shap)} células representativas "
+    f"sobre o espaço genômico completo ({W0_arr.shape[1]} genes)..."
+)
+w0_shap_sub = W0_arr[idx_amostras_shap]
+clo_shap_sub = clo_ref[idx_amostras_shap]
+
+selecionador_shap.ajustar(X=w0_shap_sub, y=clo_shap_sub)
+
+# 4. Obtenção e exportação dos rankings de biomarcadores
+df_marcadores_classe, df_genes_globais = selecionador_shap.obter_rankings(
+    top_n_por_classe=15,
+    out_dir_csv=OUT_SHAP,
+)
+
+print("\n--- Top 3 Genes Marcadores por Tipo Celular (SHAP) ---")
+for classe_nome, grupo in df_marcadores_classe.groupby("classe_nome"):
+    top3_genes = grupo.head(3)["gene"].tolist()
+    print(f"  • {classe_nome:10s}: {', '.join(top3_genes)}")
+
+# 5. Geração e Plotagem do Heatmap de Biomarcadores Específicos
+path_heatmap_shap = os.path.join(OUT_SHAP, "heatmap_biomarcadores_shap.png")
+print(f"\nGerando Heatmap Sinótico de Biomarcadores: {path_heatmap_shap}...")
+selecionador_shap.plotar_heatmap_marcadores(
+    top_n_por_classe=8,
+    out_png=path_heatmap_shap,
+    normalizar_linhas=True,
+    cmap="YlGnBu",
+)
+
+# 6. Geração do Gráfico de Barras de Impacto Médio Consolidado
+path_resumo_shap = os.path.join(OUT_SHAP, "resumo_impacto_shap.png")
+print(f"Gerando Sumário de Importância Global: {path_resumo_shap}...")
+selecionador_shap.plotar_sumario(top_n=10, out_png=path_resumo_shap)
+
+print(f"\n[Concluído] Seleção e visualização SHAP salvas com sucesso em: {OUT_SHAP}")
