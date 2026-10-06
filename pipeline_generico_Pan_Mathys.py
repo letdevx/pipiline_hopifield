@@ -1231,6 +1231,348 @@ avaliador_otimo.plotar(
 
 
 # %% [markdown]
+# #### 12.4 Diagnóstico Formal de Overfitting e Robustez da Rede Ótima (ADR 020 / ADR 022)
+# Submete a **rede ótima gerada pelo Algoritmo Genético** à bateria rigorosa de auditoria fora da amostra:
+# 1. **Gap de Generalização:** F1 Treino vs F1 Validação Holdout (amostra de 20% nunca vista durante a extração dos protótipos).
+# 2. **Estresse sob Ruído Sintético:** Dropout estocástico artificial a 5%, 15% e 30% para avaliar a profundidade das bacias de atração.
+# 3. **Termodinâmica da Atenção Softmax:** Auditoria de saturação de Beta (efeito 1-NN puro vs interpolação e consenso).
+# 4. **Detecção de Estados Espúrios / Quimeras:** Identificação de coativações celulares antagônicas.
+# 5. **Comparativo Científico Pareado:** Confronto direto entre a baseline (rede180) e a rede ótima (AG).
+
+# %%
+print("\n" + "=" * 70)
+print(f"  DIAGNÓSTICO DE OVERFITTING E ROBUSTEZ — {NOME_REDE_OTIMA} (Ótimo AG)")
+print("=" * 70)
+
+from treinamento.diagnostico_overfitting import AuditorOverfittingHopfield
+from treinamento.validador_imputacao import MARCADORES_CANONICOS_CEREBRO
+
+# 1. Garantia defensiva dos conjuntos particionados de validação holdout
+if (
+    "x_treino_audit" not in globals()
+    or "x_val_audit" not in globals()
+    or "marcadores_indices" not in globals()
+):
+    assert analisador.genes_ordenados is not None
+    gene_to_idx_ot = {g: idx for idx, g in enumerate(analisador.genes_ordenados)}
+    marcadores_indices = {}
+    for cl_id, m_genes in MARCADORES_CANONICOS_CEREBRO.items():
+        idx_g = [gene_to_idx_ot[g] for g in m_genes if g in gene_to_idx_ot]
+        if idx_g:
+            marcadores_indices[cl_id] = idx_g[:2]
+
+    mask_canonicas_ot = clo_ref > 0
+    idx_canonicos_ot = np.where(mask_canonicas_ot)[0]
+    rotulos_canonicos_ot = clo_ref[idx_canonicos_ot]
+
+    idx_treino_full_ot, idx_val_full_ot = train_test_split(
+        idx_canonicos_ot,
+        test_size=0.20,
+        stratify=rotulos_canonicos_ot,
+        random_state=SEED,
+    )
+
+    N_AMOSTRA_AUDIT = 2500
+    if len(idx_treino_full_ot) > N_AMOSTRA_AUDIT:
+        _, idx_treino_audit = train_test_split(
+            idx_treino_full_ot,
+            test_size=N_AMOSTRA_AUDIT,
+            stratify=clo_ref[idx_treino_full_ot],
+            random_state=SEED,
+        )
+    else:
+        idx_treino_audit = idx_treino_full_ot
+
+    if len(idx_val_full_ot) > N_AMOSTRA_AUDIT:
+        _, idx_val_audit = train_test_split(
+            idx_val_full_ot,
+            test_size=N_AMOSTRA_AUDIT,
+            stratify=clo_ref[idx_val_full_ot],
+            random_state=SEED,
+        )
+    else:
+        idx_val_audit = idx_val_full_ot
+
+    x_treino_audit = carregador.W0[idx_treino_audit]
+    y_treino_audit = clo_ref[idx_treino_audit]
+    x_val_audit = carregador.W0[idx_val_audit]
+    y_val_audit = clo_ref[idx_val_audit]
+
+# 2. Extração dos rótulos canônicos dos protótipos ótimos
+rotulos_meta_otimo = [
+    item[0] if isinstance(item, (tuple, list)) else int(item) for item in meta_otimo
+]
+
+# 3. Execução da auditoria formal da rede ótima
+auditor_otimo = AuditorOverfittingHopfield(
+    modelo=rede_otima,
+    padroes_referencia=perf_otimo,
+    rotulos_padroes=rotulos_meta_otimo,
+    gap_maximo_tolerado=0.15,
+    limiar_entropia_minima=0.05,
+    marcadores_exclusivos=marcadores_indices,
+    seed=SEED,
+)
+
+resultado_diag_otimo = auditor_otimo.executar_auditoria(
+    x_treino=x_treino_audit,
+    y_treino=y_treino_audit,
+    x_val=x_val_audit,
+    y_val=y_val_audit,
+    niveis_ruido=(0.05, 0.15, 0.30),
+)
+
+# 4. Exibição do Parecer Consolidado da Rede Ótima
+print("\n" + "-" * 70)
+print(
+    f"  PARECER DE ROBUSTEZ DA REDE ÓTIMA [{NOME_REDE_OTIMA}]: [{resultado_diag_otimo.status}]"
+)
+print("-" * 70)
+print(f"  • F1 Treino               : {resultado_diag_otimo.f1_treino:.4f}")
+print(f"  • F1 Validação (Holdout)  : {resultado_diag_otimo.f1_validacao:.4f}")
+print(
+    f"  • Gap de Generalização    : {resultado_diag_otimo.gap_generalizacao * 100:.2f}% (Tolerância: <= 15.0%)"
+)
+print(
+    f"  • Entropia Média Atenção  : {resultado_diag_otimo.entropia_media_atencao:.4f} (Normalizada)"
+)
+print(
+    f"  • Atenção Saturada (1-NN) : {resultado_diag_otimo.proporcao_atencao_saturada * 100:.2f}% das células"
+)
+print(
+    f"  • Quimeras Transcricionais: {resultado_diag_otimo.quimeras_detectadas} detectadas"
+)
+print("\n  Fidelidade sob Degradação por Ruído Sintético:")
+for taxa_r, fid_r in resultado_diag_otimo.fidelidade_sob_ruido.items():
+    print(f"    - Ruído {taxa_r * 100:>4.1f}% : F1 = {fid_r:.4f}")
+
+if resultado_diag_otimo.alertas:
+    print("\n  ⚠️ ALERTAS IDENTIFICADOS:")
+    for al in resultado_diag_otimo.alertas:
+        print(f"    - {al}")
+
+if resultado_diag_otimo.recomendacoes:
+    print("\n  💡 RECOMENDAÇÕES TÉCNICAS:")
+    for rec in resultado_diag_otimo.recomendacoes:
+        print(f"    - {rec}")
+
+# 5. Comparativo Pareado: Baseline (rede180) vs Rede Ótima (AG)
+print("\n" + "=" * 70)
+print("  TABELA COMPARATIVA DE ROBUSTEZ: BASELINE (rede180) vs ÓTIMO AG")
+print("=" * 70)
+print(
+    f"{'Métrica':<32} | {'rede180 (Baseline)':<20} | {NOME_REDE_OTIMA + ' (Ótimo AG)':<20}"
+)
+print("-" * 78)
+print(f"{'Subclusters por classe (nc)':<32} | {30:<20} | {nc_otimo:<20}")
+print(
+    f"{'Temperatura Inversa (Beta)':<32} | {getattr(rede180, 'beta', 15.0):<20.2f} | {beta_otimo:<20.2f}"
+)
+if "resultado_diag" in globals() and resultado_diag is not None:
+    print(
+        f"{'F1 Treino':<32} | {resultado_diag.f1_treino:<20.4f} | {resultado_diag_otimo.f1_treino:<20.4f}"
+    )
+    print(
+        f"{'F1 Validação Holdout':<32} | {resultado_diag.f1_validacao:<20.4f} | {resultado_diag_otimo.f1_validacao:<20.4f}"
+    )
+    print(
+        f"{'Gap de Generalização':<32} | {f'{resultado_diag.gap_generalizacao * 100:.2f}%':<20} | {f'{resultado_diag_otimo.gap_generalizacao * 100:.2f}%':<20}"
+    )
+    print(
+        f"{'F1 sob Ruído 15%':<32} | {resultado_diag.fidelidade_sob_ruido.get(0.15, 0.0):<20.4f} | {resultado_diag_otimo.fidelidade_sob_ruido.get(0.15, 0.0):<20.4f}"
+    )
+    print(
+        f"{'Atenção Saturada (1-NN)':<32} | {f'{resultado_diag.proporcao_atencao_saturada * 100:.2f}%':<20} | {f'{resultado_diag_otimo.proporcao_atencao_saturada * 100:.2f}%':<20}"
+    )
+    print(
+        f"{'Quimeras Detectadas':<32} | {resultado_diag.quimeras_detectadas:<20} | {resultado_diag_otimo.quimeras_detectadas:<20}"
+    )
+    print(
+        f"{'Status Consolidado':<32} | {resultado_diag.status:<20} | {resultado_diag_otimo.status:<20}"
+    )
+else:
+    print(f"{'F1 Treino':<32} | {'-':<20} | {resultado_diag_otimo.f1_treino:<20.4f}")
+    print(
+        f"{'F1 Validação Holdout':<32} | {'-':<20} | {resultado_diag_otimo.f1_validacao:<20.4f}"
+    )
+    print(
+        f"{'Gap de Generalização':<32} | {'-':<20} | {f'{resultado_diag_otimo.gap_generalizacao * 100:.2f}%':<20}"
+    )
+    print(
+        f"{'F1 sob Ruído 15%':<32} | {'-':<20} | {resultado_diag_otimo.fidelidade_sob_ruido.get(0.15, 0.0):<20.4f}"
+    )
+    print(
+        f"{'Atenção Saturada (1-NN)':<32} | {'-':<20} | {f'{resultado_diag_otimo.proporcao_atencao_saturada * 100:.2f}%':<20}"
+    )
+    print(
+        f"{'Quimeras Detectadas':<32} | {'-':<20} | {resultado_diag_otimo.quimeras_detectadas:<20}"
+    )
+    print(f"{'Status Consolidado':<32} | {'-':<20} | {resultado_diag_otimo.status:<20}")
+
+# 6. Persistência do Relatório JSON da Rede Ótima
+path_diag_otimo_json = os.path.join(
+    OUT_HOPFIELD, f"diagnostico_overfitting_{NOME_REDE_OTIMA}.json"
+)
+dados_export_diag_otimo = {
+    "data_execucao": datetime.datetime.now().isoformat(),
+    "modelo": NOME_REDE_OTIMA,
+    "status": resultado_diag_otimo.status,
+    "gap_generalizacao": resultado_diag_otimo.gap_generalizacao,
+    "f1_treino": resultado_diag_otimo.f1_treino,
+    "f1_validacao": resultado_diag_otimo.f1_validacao,
+    "fidelidade_sob_ruido": {
+        str(k): v for k, v in resultado_diag_otimo.fidelidade_sob_ruido.items()
+    },
+    "ponto_ruptura_ruido": resultado_diag_otimo.ponto_ruptura_ruido,
+    "entropia_media_atencao": resultado_diag_otimo.entropia_media_atencao,
+    "proporcao_atencao_saturada": resultado_diag_otimo.proporcao_atencao_saturada,
+    "quimeras_detectadas": resultado_diag_otimo.quimeras_detectadas,
+    "alertas": resultado_diag_otimo.alertas,
+    "recomendacoes": resultado_diag_otimo.recomendacoes,
+}
+if "resultado_diag" in globals() and resultado_diag is not None:
+    dados_export_diag_otimo["comparativo_baseline"] = {
+        "f1_val_baseline": resultado_diag.f1_validacao,
+        "f1_val_otimo": resultado_diag_otimo.f1_validacao,
+        "delta_f1_val": resultado_diag_otimo.f1_validacao - resultado_diag.f1_validacao,
+        "gap_baseline": resultado_diag.gap_generalizacao,
+        "gap_otimo": resultado_diag_otimo.gap_generalizacao,
+    }
+
+with open(path_diag_otimo_json, "w", encoding="utf-8") as f_diag_ot:
+    json.dump(dados_export_diag_otimo, f_diag_ot, indent=2, ensure_ascii=False)
+
+print(
+    f"\n[Persistência] Relatório estruturado salvo com sucesso em: {path_diag_otimo_json}"
+)
+
+# 7. Painel Visual Comparativo: rede180 vs rede_otima
+fig, axs = plt.subplots(1, 3, figsize=(18, 5))
+
+# Painel 1: Comparativo das Curvas de Degradação sob Ruído
+taxas_plot = [0.0, 0.05, 0.15, 0.30]
+taxas_pct = [t * 100 for t in taxas_plot]
+fids_otimo = [resultado_diag_otimo.f1_validacao] + [
+    resultado_diag_otimo.fidelidade_sob_ruido.get(t, 0.0) for t in [0.05, 0.15, 0.30]
+]
+
+if "resultado_diag" in globals() and resultado_diag is not None:
+    fids_base = [resultado_diag.f1_validacao] + [
+        resultado_diag.fidelidade_sob_ruido.get(t, 0.0) for t in [0.05, 0.15, 0.30]
+    ]
+    axs[0].plot(
+        taxas_pct,
+        fids_base,
+        marker="o",
+        linestyle="--",
+        color="#1f77b4",
+        label="rede180 (Baseline)",
+        linewidth=2,
+    )
+
+axs[0].plot(
+    taxas_pct,
+    fids_otimo,
+    marker="s",
+    color="#2ca02c",
+    label=f"{NOME_REDE_OTIMA} (Ótimo AG)",
+    linewidth=2.5,
+)
+axs[0].set_xlabel("Nível de Perturbação Sintética (% Dropout/Ruído)")
+axs[0].set_ylabel("F1-Score Ponderado")
+axs[0].set_title("Resiliência a Ruído: Baseline vs Ótimo AG")
+axs[0].set_ylim(0.0, 1.05)
+axs[0].grid(True, linestyle=":", alpha=0.6)
+axs[0].legend(loc="lower left")
+
+# Painel 2: Comparativo Treino vs Validação Holdout
+largura = 0.35
+x_pos = np.arange(2)
+if "resultado_diag" in globals() and resultado_diag is not None:
+    f1_treinos = [resultado_diag.f1_treino, resultado_diag_otimo.f1_treino]
+    f1_vals = [resultado_diag.f1_validacao, resultado_diag_otimo.f1_validacao]
+    title_gap = (
+        f"Gaps: rede180 ({resultado_diag.gap_generalizacao * 100:.1f}%) "
+        f"vs {NOME_REDE_OTIMA} ({resultado_diag_otimo.gap_generalizacao * 100:.1f}%)"
+    )
+else:
+    f1_treinos = [0.0, resultado_diag_otimo.f1_treino]
+    f1_vals = [0.0, resultado_diag_otimo.f1_validacao]
+    title_gap = (
+        f"Gap {NOME_REDE_OTIMA}: {resultado_diag_otimo.gap_generalizacao * 100:.1f}%"
+    )
+
+axs[1].bar(
+    x_pos - largura / 2,
+    f1_treinos,
+    largura,
+    label="Treino",
+    color="#aec7e8",
+    edgecolor="black",
+)
+axs[1].bar(
+    x_pos + largura / 2,
+    f1_vals,
+    largura,
+    label="Validação Holdout",
+    color="#1f77b4",
+    edgecolor="black",
+)
+axs[1].set_xticks(x_pos)
+axs[1].set_xticklabels(["rede180", NOME_REDE_OTIMA])
+axs[1].set_ylabel("F1-Score Ponderado")
+axs[1].set_title(title_gap)
+axs[1].set_ylim(0.0, 1.05)
+axs[1].legend(loc="lower right")
+axs[1].grid(axis="y", linestyle=":", alpha=0.6)
+
+# Painel 3: Entropia de Atenção e Saturação (Beta)
+x_mod = np.arange(2)
+beta_base_val = getattr(rede180, "beta", 15.0) if "rede180" in globals() else 15.0
+if "resultado_diag" in globals() and resultado_diag is not None:
+    entropias = [
+        resultado_diag.entropia_media_atencao,
+        resultado_diag_otimo.entropia_media_atencao,
+    ]
+    saturacoes = [
+        resultado_diag.proporcao_atencao_saturada,
+        resultado_diag_otimo.proporcao_atencao_saturada,
+    ]
+else:
+    entropias = [0.0, resultado_diag_otimo.entropia_media_atencao]
+    saturacoes = [0.0, resultado_diag_otimo.proporcao_atencao_saturada]
+
+axs[2].bar(
+    x_mod - largura / 2,
+    entropias,
+    largura,
+    label="Entropia Média (Shannon)",
+    color="#9467bd",
+    edgecolor="black",
+)
+axs[2].bar(
+    x_mod + largura / 2,
+    saturacoes,
+    largura,
+    label="Atenção Saturada (1-NN)",
+    color="#e377c2",
+    edgecolor="black",
+)
+axs[2].set_xticks(x_mod)
+axs[2].set_xticklabels(
+    [f"rede180 (β={beta_base_val:.1f})", f"{NOME_REDE_OTIMA} (β={beta_otimo:.1f})"]
+)
+axs[2].set_ylabel("Escala Normalizada (0 a 1)")
+axs[2].set_title("Termodinâmica Softmax / Efeito 1-NN")
+axs[2].set_ylim(0.0, 1.05)
+axs[2].legend(loc="upper right")
+axs[2].grid(axis="y", linestyle=":", alpha=0.6)
+
+plt.tight_layout()
+plt.show()
+
+
+# %% [markdown]
 # #### 13. Imputação cross-dataset — Mathys com Sentinela Neutra 0.5
 # Injeta o valor sentinela 0.5 em todos os genes ausentes no Mathys durante a recuperação na rede Hopfield.
 # A rede realiza a atenção contínua (onde 0.5 se torna 0.0 no espaço bipolar) e reconstrói o perfil completo.
@@ -1463,11 +1805,17 @@ print(
 
 # 2. Instanciação do Selecionador SHAP
 assert analisador.genes_ordenados is not None
+from treinamento.validador_imputacao import NOMES_CLASSES_CEREBRO
+
+nomes_canonicos = [
+    NOMES_CLASSES_CEREBRO.get(c, f"Classe_{c}") for c in CLASSES_CANONICAS
+]
+
 selecionador_shap = SelecionadorGenesSHAPHopfield(
-    modelo_hopfield=modelo_shap,
-    padroes_memoria=padroes_shap,
-    classes_padroes=meta_shap,
-    nomes_classes=CLASSES_CANONICAS,
+    hopfield_net=modelo_shap,
+    classes=CLASSES_CANONICAS,
+    meta_padroes=meta_shap,
+    nomes_classes=nomes_canonicos,
     nomes_genes=analisador.genes_ordenados,
     n_background_por_classe=10,
     batch_size=32,
@@ -1476,7 +1824,7 @@ selecionador_shap = SelecionadorGenesSHAPHopfield(
 
 # 3. Subamostragem estratificada representativa do W0_arr para cálculo OOM-safe (40 células por classe)
 idx_amostras_shap = []
-for c in range(len(CLASSES_CANONICAS)):
+for c in CLASSES_CANONICAS:
     idx_c = np.where(clo_ref == c)[0]
     n_c = min(len(idx_c), 40)
     if n_c > 0:
@@ -1499,9 +1847,12 @@ df_marcadores_classe, df_genes_globais = selecionador_shap.obter_rankings(
 )
 
 print("\n--- Top 3 Genes Marcadores por Tipo Celular (SHAP) ---")
-for classe_nome, grupo in df_marcadores_classe.groupby("classe_nome"):
-    top3_genes = grupo.head(3)["gene"].tolist()
-    print(f"  • {classe_nome:10s}: {', '.join(top3_genes)}")
+for c_val in CLASSES_CANONICAS:
+    sub = df_marcadores_classe.filter(pl.col("classe") == c_val)
+    if len(sub) > 0:
+        c_nome = sub["nome_classe"][0]
+        top3_genes = sub.head(3)["gene"].to_list()
+        print(f"  • {c_nome:22s}: {', '.join(top3_genes)}")
 
 # 5. Geração e Plotagem do Heatmap de Biomarcadores Específicos
 path_heatmap_shap = os.path.join(OUT_SHAP, "heatmap_biomarcadores_shap.png")

@@ -163,27 +163,54 @@ class SelecionadorGenesSHAPHopfield:
 
     def __init__(
         self,
-        hopfield_net: ModernHopfieldNetwork,
-        classes: Sequence[int],
+        hopfield_net: ModernHopfieldNetwork | None = None,
+        classes: Sequence[int] | None = None,
         meta_padroes: Sequence[tuple[int, int]] | None = None,
         nomes_classes: Sequence[str] | None = None,
         nomes_genes: Sequence[str] | None = None,
         batch_size: int = 32,
+        *,
+        modelo_hopfield: ModernHopfieldNetwork | None = None,
+        padroes_memoria: NDArray[Any] | None = None,
+        classes_padroes: Sequence[tuple[int, int]] | None = None,
+        n_background_por_classe: int | None = None,
+        seed: int = 42,
     ) -> None:
-        self.hopfield: ModernHopfieldNetwork = hopfield_net
-        self.classes: list[int] = [int(c) for c in classes]
+        net = hopfield_net if hopfield_net is not None else modelo_hopfield
+        if net is None:
+            raise ValueError(
+                "[SelecionadorGenesSHAP] hopfield_net (ou modelo_hopfield) deve ser fornecido."
+            )
+        self.hopfield: ModernHopfieldNetwork = net
+
+        if padroes_memoria is not None and (
+            self.hopfield.patterns is None or self.hopfield.patterns.numel() == 0
+        ):
+            self.hopfield.store(padroes_memoria)
+
+        meta = meta_padroes if meta_padroes is not None else classes_padroes
         self.meta_padroes: list[tuple[int, int]] | None = (
-            list(meta_padroes) if meta_padroes is not None else None
+            list(meta) if meta is not None else None
         )
-        self.nomes_classes: list[str] = (
-            list(nomes_classes)
-            if nomes_classes is not None
-            else [f"Classe_{c}" for c in self.classes]
-        )
+
+        if classes is not None:
+            self.classes: list[int] = [int(c) for c in classes]
+        elif self.meta_padroes is not None:
+            self.classes = sorted(list({int(m[0]) for m in self.meta_padroes}))
+        else:
+            self.classes = list(range(1, 8))
+
+        if nomes_classes is not None:
+            self.nomes_classes: list[str] = list(nomes_classes)
+        else:
+            self.nomes_classes = [f"Classe_{c}" for c in self.classes]
+
         self.nomes_genes: list[str] | None = (
             list(nomes_genes) if nomes_genes is not None else None
         )
         self.batch_size: int = int(batch_size)
+        self.seed: int = int(seed)
+        self.n_background_por_classe: int | None = n_background_por_classe
 
         self.wrapper: HopfieldClassifierWrapper = HopfieldClassifierWrapper(
             hopfield=self.hopfield,
@@ -400,6 +427,45 @@ class SelecionadorGenesSHAPHopfield:
         )
         return self
 
+    def ajustar(
+        self,
+        X: NDArray[Any] | sp.spmatrix,
+        y: Sequence[int] | NDArray[Any] | None = None,
+        n_background: int | None = None,
+    ) -> SelecionadorGenesSHAPHopfield:
+        """Executa a calibração de background e o cálculo de explicabilidade SHAP.
+
+        Parameters
+        ----------
+        X : NDArray | sp.spmatrix
+            Matriz de expressão celular.
+        y : Sequence[int] | NDArray | None, optional
+            Rótulos celulares.
+        n_background : int | None, optional
+            Tamanho da população de referência baseline.
+
+        Returns
+        -------
+        SelecionadorGenesSHAPHopfield
+            A própria instância calculada.
+        """
+        bg_samples = (
+            n_background
+            if n_background is not None
+            else (
+                self.n_background_por_classe * len(self.classes)
+                if self.n_background_por_classe is not None
+                else 70
+            )
+        )
+        return self.explicar(
+            matriz_expressao=X,
+            labels=y,
+            n_background=bg_samples,
+            n_amostras_explicar=None,
+            seed=self.seed,
+        )
+
     def obter_ranking_por_classe(self, top_n: int = 50) -> pl.DataFrame:
         """Gera a tabela estruturada com os genes marcadores com maior impacto SHAP por classe.
 
@@ -497,6 +563,33 @@ class SelecionadorGenesSHAPHopfield:
             .with_columns(pl.int_range(1, pl.len() + 1).alias("ranking_consolidado"))
         )
         return df_agrupado
+
+    def obter_rankings(
+        self,
+        top_n_por_classe: int = 15,
+        out_dir_csv: PathType | None = None,
+    ) -> tuple[pl.DataFrame, pl.DataFrame]:
+        """Gera e retorna simultaneamente os rankings por linhagem e consolidado global.
+
+        Parameters
+        ----------
+        top_n_por_classe : int, default=15
+            Quantidade de marcadores de topo por linhagem celular.
+        out_dir_csv : str | Path | None, optional
+            Diretório opcional para exportação automática dos relatórios CSV.
+
+        Returns
+        -------
+        tuple[pl.DataFrame, pl.DataFrame]
+            Tupla contendo (df_marcadores_classe, df_genes_globais).
+        """
+        df_classes = self.obter_ranking_por_classe(top_n=top_n_por_classe)
+        df_global = self.obter_genes_consolidados(top_n_por_classe=top_n_por_classe)
+        if out_dir_csv is not None:
+            self.salvar_relatorio(
+                out_dir=out_dir_csv, top_n_por_classe=top_n_por_classe
+            )
+        return df_classes, df_global
 
     def filtrar_matriz(
         self,
