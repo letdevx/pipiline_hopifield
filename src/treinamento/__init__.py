@@ -28,6 +28,10 @@ from .gerador_conjunto_treinamento import GeradorConjuntoTreinamento
 from .gerador_relatorio import GeradorRelatorio
 from .hopfield import ModernHopfieldNetwork
 from .projetor_sweep import ProjetorSWeePR, ProjetorSWeP
+from .selecionador_genes_shap import (
+    HopfieldClassifierWrapper,
+    SelecionadorGenesSHAPHopfield,
+)
 from .validador_imputacao import ValidadorImputacao
 
 __all__ = [
@@ -43,6 +47,7 @@ __all__ = [
     "ExtratorPadroesSubcluster",
     "GeradorConjuntoTreinamento",
     "GeradorRelatorio",
+    "HopfieldClassifierWrapper",
     "IndividuoHopfield",
     "InjetorPerturbacaoTranscritica",
     "ModernHopfieldNetwork",
@@ -50,6 +55,7 @@ __all__ = [
     "ProjetorSWeP",
     "ProjetorSWeePR",
     "ResultadoDiagnosticoOverfitting",
+    "SelecionadorGenesSHAPHopfield",
     "ValidadorImputacao",
     "carregar_labels",
     "remapear_labels_canonicos",

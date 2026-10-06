@@ -36,6 +36,7 @@ Esta pasta armazena o repositório de decisões formais de arquitetura para gara
 * 📜 **[[04_Recursos/adrs/adr_020_resolucao_sentinela_e_validacao_multinivel_imputacao|ADR 020: Resolução da Máscara Sentinela, Camada de Confiança Contínua e Validação Multinível da Imputação]]**
 * 📜 **[[04_Recursos/adrs/adr_021_centralizacao_orthbase_config_e_reuso_canonico|ADR 021: Centralização da OrthBase via config.py, Resolução Dinâmica de Ambiente e Reuso Canônico Padrão no Projetor SWeeP]]**
 * 📜 **[[04_Recursos/adrs/adr_022_otimizacao_hiperparametros_algoritmo_genetico|ADR 022: Otimização de Hiperparâmetros da Modern Hopfield Network via Algoritmo Genético]]**
+* 📜 **[[04_Recursos/adrs/adr_023_selecao_features_shap_hopfield|ADR 023: Seleção e Interpretabilidade de Features Gênicas via SHAP sobre Modern Hopfield Network]]**
 
 ---
 
