@@ -24,17 +24,25 @@ except ImportError:
     # Mantém o pandas travado na versão esperada pelo Colab (2.2.3)
     # !pip install -q "pandas==2.2.3" anndata scanpy
 
-# %%
-"""Notebook executável do Pipeline Genérico Hopfield para scRNA-seq.
+# %% [markdown]
+# # Pipeline Genérico Hopfield para scRNA-seq
+#
+# Executa o fluxo científico fim a fim:
+# - **1.** Configuração de Ambiente e Repositório
+# - **2.** Binarização de matrizes scRNA-seq
+# - **3.** Alinhamento de espaços gênicos com sentinela neutra (0.5)
+# - **4.** Adição de genes faltantes ao conjunto alvo
+# - **5.** Projeção dimensional compacta (rSWeeP via R / UFPR)
+# - **5.1** Projeção SWeeP do Alvo Pré-Hopfield (com Sentinela 0.5)
+# - **9.** Extração de padrões de subclusters por classe biológica (`perf180`)
+# - **12.** Auto-imputação — Ref -> Ref
+# - **12.1** Diagnóstico Formal de Overfitting e Robustez (`AuditorOverfittingHopfield`)
+# - **12.2** Otimização de Hiperparâmetros via Algoritmo Genético (`OtimizadorGeneticoHopfield`)
+# - **12.3** Treinamento da Rede Hopfield com Configuração Ótima do AG (`rede{n_padroes}`)
+# - **13.** Imputação cross-dataset — Mathys com Sentinela Neutra 0.5
+# - **14.** Seleção de Features Gênicas e Heatmap de Biomarcadores via SHAP (`ADR 023`)
 
-Executa o fluxo fim a fim:
-1. Binarização de matrizes scRNA-seq
-2. Alinhamento de espaços gênicos com sentinela neutra (0.5)
-3. Projeção dimensional compacta (SWeeP / rSWeeP)
-4. Extração de padrões de subclusters por classe biológica
-5. Treinamento e avaliação da Rede de Hopfield Moderna
-6. Imputação e classificação cross-dataset
-"""
+# %%
 
 import gc
 import importlib
