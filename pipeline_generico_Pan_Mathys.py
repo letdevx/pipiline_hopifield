@@ -1817,42 +1817,42 @@ selecionador_shap = SelecionadorGenesSHAPHopfield(
     meta_padroes=meta_shap,
     nomes_classes=nomes_canonicos,
     nomes_genes=analisador.genes_ordenados,
-    n_background_por_classe=10,
-    batch_size=32,
-    seed=SEED,
+    batch_size=64,
 )
 
-# 3. Subamostragem estratificada representativa do W0_arr para cálculo OOM-safe (40 células por classe)
-idx_amostras_shap = []
-for c in CLASSES_CANONICAS:
-    idx_c = np.where(clo_ref == c)[0]
-    n_c = min(len(idx_c), 40)
-    if n_c > 0:
-        idx_amostras_shap.extend(np.random.choice(idx_c, size=n_c, replace=False))
-idx_amostras_shap = np.array(idx_amostras_shap)
-
+# 3. Execução Streaming OOM-Safe com Baseline de Centróides das 7 Classes Canônicas
 print(
-    f"Calculando gradientes SHAP para {len(idx_amostras_shap)} células representativas "
-    f"sobre o espaço genômico completo ({W0_arr.shape[1]} genes)..."
+    f"Iniciando cálculo SHAP streaming para {W0_arr.shape[0]} células "
+    f"sobre o espaço genômico completo ({W0_arr.shape[1]} genes) com centróides de baseline..."
 )
-w0_shap_sub = W0_arr[idx_amostras_shap]
-clo_shap_sub = clo_ref[idx_amostras_shap]
 
-selecionador_shap.ajustar(X=w0_shap_sub, y=clo_shap_sub)
+selecionador_shap.ajustar(
+    X=W0_arr,
+    y=clo_ref,
+    streaming=True,
+    metodo_background="centroides",
+    batch_size=64,
+)
 
-# 4. Obtenção e exportação dos rankings de biomarcadores
-df_marcadores_classe, df_genes_globais = selecionador_shap.obter_rankings(
-    top_n_por_classe=15,
+# 4. Seleção de 2.000 a 5.000 Features Biomarcadoras Balanceadas por Linhagem Celular
+N_FEATURES_SELECIONAR = 3000
+print(
+    f"\nSelecionando {N_FEATURES_SELECIONAR} genes com maior contraste e especificidade celular..."
+)
+df_features_selecionadas = selecionador_shap.selecionar_features_2k_5k(
+    n_features_total=N_FEATURES_SELECIONAR,
+    peso_contraste=0.5,
+    frac_cota_classe=0.7,
     out_dir_csv=OUT_SHAP,
 )
 
-print("\n--- Top 3 Genes Marcadores por Tipo Celular (SHAP) ---")
+print(f"\n--- Resumo da Seleção de {len(df_features_selecionadas)} Features SHAP ---")
 for c_val in CLASSES_CANONICAS:
-    sub = df_marcadores_classe.filter(pl.col("classe") == c_val)
-    if len(sub) > 0:
-        c_nome = sub["nome_classe"][0]
-        top3_genes = sub.head(3)["gene"].to_list()
-        print(f"  • {c_nome:22s}: {', '.join(top3_genes)}")
+    c_nome = NOMES_CLASSES_CEREBRO.get(c_val, f"Classe_{c_val}")
+    sub = df_features_selecionadas.filter(pl.col("classe_primaria") == c_val)
+    print(
+        f"  • {c_nome:22s}: {len(sub):4d} genes alocados (Top: {', '.join(sub.head(3)['gene'].to_list())})"
+    )
 
 # 5. Geração e Plotagem do Heatmap de Biomarcadores Específicos
 path_heatmap_shap = os.path.join(OUT_SHAP, "heatmap_biomarcadores_shap.png")

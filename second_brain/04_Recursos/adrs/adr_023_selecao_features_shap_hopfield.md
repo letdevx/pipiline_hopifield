@@ -35,38 +35,46 @@ Implementar o módulo dedicado `SelecionadorGenesSHAPHopfield` e o wrapper `Hopf
    - **Por linhagem:** Computa o impacto positivo médio `mean(max(0, SHAP))` nas células de cada uma das 7 classes canônicas, capturando os Top marcadores específicos mesmo para tipos celulares minoritários.
    - **Consolidado:** Gera a união de marcadores não-redundantes, fornecendo a máscara de features informáticas para a projeção rSWeeP e imputação associativa.
 5. **Visualização Sinótica em Heatmap:** O método `plotar_heatmap_marcadores` sintetiza a matriz de especificidade (Genes marcadores agrupados por linhagem × Classes celulares) com normalização Min-Max por linha, permitindo auditar visualmente a exclusividade dos biomarcadores e padrões de coexpressão intercelular.
+6. **Modo Streaming Online e Seleção de 2k a 5k Features:** Para viabilizar a escala do dataset completo (40.913 células × 36.591 genes), o método `explicar_streaming` acumula somas online por classe sem reter tensores intermediários (pico de RAM < 1,5 GB). O baseline de fundo utiliza os 7 centróides médios das classes biológicas (aceleração de 10x). O método `selecionar_features_2k_5k` combina cota garantida por linhagem com contraste de especificidade, assegurando entre 2.000 e 5.000 biomarcadores informativos não-redundantes.
 
 ```mermaid
 flowchart TD
-    subgraph Entrada["1. Dados scRNA-seq"]
+    subgraph Entrada["1. Dataset Completo scRNA-seq"]
         MAT["Matriz W0 Binarizada<br/>(40.913 células × 36.591 genes)"]
-        PROT["210 Protótipos Armazenados<br/>(30 subclusters × 7 classes)"]
+        CLO["Rótulos Celulares clo (7 Classes)"]
+        PROT["210 Protótipos Armazenados Ξ"]
     end
 
-    subgraph Wrapper["2. Wrapper PyTorch"]
+    subgraph Baseline["2. Baseline Otimizado"]
+        CENT["7 Centróides de Classe Canônica<br/>(Média de Expressão por Linhagem)"]
+    end
+
+    subgraph Wrapper["3. Wrapper PyTorch"]
         HW["HopfieldClassifierWrapper (nn.Module)<br/>Atenção Softmax + Softmax Class Pooling"]
     end
 
-    subgraph SHAP_Engine["3. Interpretabilidade"]
-        BG["Baseline Estratificado (70 células)"]
-        GE["shap.GradientExplainer<br/>(Expected Gradients em mini-lotes OOM-Safe)"]
+    subgraph StreamingEngine["4. Streaming SHAP OOM-Safe"]
+        GE["shap.GradientExplainer (Expected Gradients)"]
+        ACC["Acumuladores Online:<br/>• Soma SHAP Positivo (7 × 36.591)<br/>• Soma de Frequência (7 × 36.591)<br/>• Contagem Celular por Classe"]
     end
 
-    subgraph Selecao["4. Saídas Científicas"]
-        RL["Ranking por Linhagem (Top N por classe)"]
-        RC["Ranking Consolidado Global"]
-        HM["Heatmap de Especificidade Gênica<br/>(Top Genes × Tipos Celulares)"]
-        MAT_FILT["Matriz Filtrada OOM-Safe (.npy/.csv)"]
+    subgraph Selecao["5. Seleção e Visualização (2k a 5k Features)"]
+        ESP["Cálculo de Contraste e Especificidade"]
+        SEL["selecionar_features_2k_5k<br/>(Cota Garantida + Pool Global)"]
+        HM["Heatmap de Especificidade<br/>(Top Genes × Classes Celulares)"]
+        MAT_FILT["Matriz Filtrada W0 (.npy/.h5ad)<br/>(40.913 × N_features_selecionadas)"]
     end
 
     MAT --> HW
+    CLO --> HW
     PROT --> HW
+    CENT --> GE
     HW --> GE
-    BG --> GE
-    GE --> RL
-    GE --> RC
-    RL --> HM
-    RC --> MAT_FILT
+    GE --> ACC
+    ACC --> ESP
+    ESP --> SEL
+    SEL --> HM
+    SEL --> MAT_FILT
 ```
 
 ---

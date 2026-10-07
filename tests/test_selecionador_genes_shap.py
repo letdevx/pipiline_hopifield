@@ -9,6 +9,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
 import numpy as np
 import polars as pl
 import pytest
@@ -188,6 +191,7 @@ def test_selecionador_genes_shap_ciclo_completo_rankings(
         "nome_classe",
         "shap_medio_positivo",
         "frequencia_expressao",
+        "contraste_especificidade",
     ]
 
     # Verifica se os Top genes de cada classe correspondem aos marcadores sintéticos reais
@@ -323,3 +327,136 @@ def test_selecionador_genes_shap_plotar_heatmap(
     )
     assert os.path.exists(out_heatmap_raw)
     assert os.path.getsize(out_heatmap_raw) > 1000
+
+
+def test_selecionador_genes_shap_streaming_centroides(
+    ambiente_sintetico_hopfield: tuple[
+        ModernHopfieldNetwork,
+        np.ndarray,
+        np.ndarray,
+        list[str],
+        list[int],
+        list[tuple[int, int]],
+        list[str],
+    ],
+    tmp_path: Path,
+) -> None:
+    """Verifica a execução streaming online OOM-Safe com baseline por centróides médios."""
+    (
+        hopfield,
+        X,
+        y,
+        nomes_genes,
+        classes,
+        meta_padroes,
+        nomes_classes,
+    ) = ambiente_sintetico_hopfield
+
+    selecionador = SelecionadorGenesSHAPHopfield(
+        hopfield_net=hopfield,
+        classes=classes,
+        meta_padroes=meta_padroes,
+        nomes_classes=nomes_classes,
+        nomes_genes=nomes_genes,
+        batch_size=8,
+    )
+
+    # 1. Testa cálculo de centróides de background
+    bg_centroides = selecionador.preparar_background_centroides(X, y)
+    assert bg_centroides.shape == (3, 30)
+    assert torch.is_tensor(bg_centroides)
+
+    # 2. Executa explicar_streaming
+    selecionador.explicar_streaming(
+        matriz_expressao=X,
+        labels=y,
+        metodo_background="centroides",
+        batch_size=8,
+        dispositivo="cpu",
+    )
+
+    assert selecionador.modo_streaming is True
+    assert selecionador.matriz_impacto_positivo is not None
+    assert selecionador.matriz_impacto_positivo.shape == (3, 30)
+    assert selecionador.matriz_contraste is not None
+    assert selecionador.matriz_contraste.shape == (3, 30)
+
+    # 3. Verifica ranking extraído a partir de streaming
+    df_rank = selecionador.obter_ranking_por_classe(top_n=5)
+    assert isinstance(df_rank, pl.DataFrame)
+    assert "contraste_especificidade" in df_rank.columns
+    assert len(df_rank) == 15  # 3 classes * 5 top genes
+
+    # Marcadores da Classe 0 (Astro) devem ser GENE_00 a GENE_04
+    top_c0 = df_rank.filter(pl.col("classe") == 0)["gene"].to_list()
+    assert any(
+        g in ["GENE_00", "GENE_01", "GENE_02", "GENE_03", "GENE_04"] for g in top_c0
+    )
+
+    # 4. Testa heatmap a partir do modelo streaming
+    out_heatmap = tmp_path / "heatmap_streaming.png"
+    selecionador.plotar_heatmap_marcadores(top_n_por_classe=3, out_png=out_heatmap)
+    assert os.path.exists(out_heatmap)
+    assert os.path.getsize(out_heatmap) > 1000
+
+
+def test_selecionador_genes_shap_selecao_features_2k_5k(
+    ambiente_sintetico_hopfield: tuple[
+        ModernHopfieldNetwork,
+        np.ndarray,
+        np.ndarray,
+        list[str],
+        list[int],
+        list[tuple[int, int]],
+        list[str],
+    ],
+    tmp_path: Path,
+) -> None:
+    """Verifica o algoritmo de seleção de features balanceado por tipo celular."""
+    (
+        hopfield,
+        X,
+        y,
+        nomes_genes,
+        classes,
+        meta_padroes,
+        nomes_classes,
+    ) = ambiente_sintetico_hopfield
+
+    selecionador = SelecionadorGenesSHAPHopfield(
+        hopfield_net=hopfield,
+        classes=classes,
+        meta_padroes=meta_padroes,
+        nomes_classes=nomes_classes,
+        nomes_genes=nomes_genes,
+        batch_size=8,
+    )
+
+    selecionador.ajustar(
+        X=X, y=y, streaming=True, metodo_background="centroides", batch_size=8
+    )
+
+    # Seleciona exatamente 12 features no ambiente sintético de 30 genes
+    out_dir_csv = tmp_path / "csv_selecao"
+    df_sel = selecionador.selecionar_features_2k_5k(
+        n_features_total=12,
+        peso_contraste=0.5,
+        frac_cota_classe=0.7,
+        out_dir_csv=out_dir_csv,
+    )
+
+    assert isinstance(df_sel, pl.DataFrame)
+    assert len(df_sel) == 12
+    assert "ranking_selecao" in df_sel.columns
+    assert "contraste_especificidade" in df_sel.columns
+    assert "classe_primaria" in df_sel.columns
+
+    # Todas as 3 classes devem estar contempladas
+    classes_representadas = df_sel["classe_primaria"].unique().to_list()
+    assert len(classes_representadas) == 3
+
+    # Verifica persistência do arquivo CSV
+    csv_esperado = out_dir_csv / "genes_selecionados_shap_2k_5k.csv"
+    assert os.path.exists(csv_esperado)
+    df_carregado = pl.read_csv(csv_esperado)
+    assert len(df_carregado) == 12
