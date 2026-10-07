@@ -70,6 +70,7 @@ from typing import Any, Literal
 import numpy as np
 from numpy.typing import NDArray
 
+
 @dataclass(frozen=True)
 class ResultadoDiagnosticoOverfitting:
     """Contrato imutável de resultado da auditoria de overfitting."""
