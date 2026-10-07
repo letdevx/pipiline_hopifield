@@ -41,6 +41,9 @@ class ModernHopfieldNetwork(nn.Module):
         Limiar de corte para binarizar a saída quando `binary=True`.
     normalize : bool, default=False
         Se True, aplica normalização L2 (similaridade cosseno esférica) nas queries e padrões.
+    scale_by_dim : bool, default=False
+        Se True e `normalize=False`, divide os produtos escalares por sqrt(D),
+        estabilizando a variância dos logits para O(1) e evitando saturação de atenção.
 
     Attributes
     ----------
@@ -54,6 +57,8 @@ class ModernHopfieldNetwork(nn.Module):
         Limiar de ativação.
     normalize : bool
         Indicador de normalização esférica.
+    scale_by_dim : bool
+        Indicador de escalonamento dimensional por raiz quadrada de D.
     patterns : torch.Tensor
         Tensor com os padrões biológicos armazenados em memória.
     """
@@ -67,6 +72,7 @@ class ModernHopfieldNetwork(nn.Module):
         binary: bool = True,
         threshold: float = 0.0,
         normalize: bool = False,
+        scale_by_dim: bool = False,
     ) -> None:
         super().__init__()
         self.beta: float = float(beta)
@@ -74,6 +80,7 @@ class ModernHopfieldNetwork(nn.Module):
         self.binary: bool = bool(binary)
         self.threshold: float = float(threshold)
         self.normalize: bool = bool(normalize)
+        self.scale_by_dim: bool = bool(scale_by_dim)
         self.register_buffer("patterns", torch.empty(0, dtype=torch.float32))
 
     def store(
@@ -295,7 +302,12 @@ class ModernHopfieldNetwork(nn.Module):
                     x_norm = F.normalize(x_att, p=2, dim=-1, eps=1e-8)
                     scores = self.beta * (x_norm @ Xi_norm.T)
                 else:
-                    scores = self.beta * (x_att @ Xi_att.T)
+                    escala = (
+                        (1.0 / np.sqrt(float(x_att.shape[-1])))
+                        if getattr(self, "scale_by_dim", False)
+                        else 1.0
+                    )
+                    scores = (self.beta * escala) * (x_att @ Xi_att.T)
                 weights = torch.softmax(scores, dim=-1)
                 x = weights @ Xi
 
@@ -444,7 +456,12 @@ class ModernHopfieldNetwork(nn.Module):
                     x_norm = F.normalize(x_att, p=2, dim=-1, eps=1e-8)
                     scores = self.beta * (x_norm @ Xi_norm.T)
                 else:
-                    scores = self.beta * (x_att @ Xi_att.T)
+                    escala = (
+                        (1.0 / np.sqrt(float(x_att.shape[-1])))
+                        if getattr(self, "scale_by_dim", False)
+                        else 1.0
+                    )
+                    scores = (self.beta * escala) * (x_att @ Xi_att.T)
                 weights = torch.softmax(scores, dim=-1)
                 if self.n_iters > 1:
                     x = weights @ Xi
@@ -480,6 +497,7 @@ class ModernHopfieldNetwork(nn.Module):
                 "binary": self.binary,
                 "threshold": self.threshold,
                 "normalize": getattr(self, "normalize", False),
+                "scale_by_dim": getattr(self, "scale_by_dim", False),
                 "patterns": self.patterns.cpu(),
             },
             path_str,
@@ -512,6 +530,7 @@ class ModernHopfieldNetwork(nn.Module):
             binary=data["binary"],
             threshold=data["threshold"],
             normalize=data.get("normalize", False),
+            scale_by_dim=data.get("scale_by_dim", False),
         )
         rede.patterns = data["patterns"]
         print(
@@ -641,6 +660,7 @@ class ModernHopfieldNetwork(nn.Module):
             f"  binary     = {self.binary}\n"
             f"  threshold  = {self.threshold}\n"
             f"  normalize  = {getattr(self, 'normalize', False)}\n"
+            f"  scale_by_d = {getattr(self, 'scale_by_dim', False)}\n"
             f"  patterns   = {n_pad} × {dim}\n"
             f")"
         )

@@ -932,12 +932,13 @@ plt.show()
 # Executa a busca evolutiva multidimensional sobre o espaço de hiperparâmetros da Hopfield e dos protótipos SWeeP:
 # - `nc` (5 a 45 protótipos por classe)
 # - `k_vizinhos` (1 a 10 vizinhos locais de consenso)
-# - `beta` (temperatura inversa da atenção Softmax)
+# - `beta` (temperatura inversa da atenção Softmax em [0.1, 5.0] com escala por √D)
 # - `threshold` (limiar de corte de ativação binarizada)
 # - `normalize` (similaridade cosseno esférica vs produto escalar)
 # - `estrategia` (KMeans Fixo vs Dinâmico)
 #
-# A aptidão (fitness) penaliza ativamente overfitting (gap > 15%), saturação termodinâmica (entropia < 0.05) e quimeras biológicas.
+# A aptidão (fitness) utiliza F1 Macro para proteger classes minoritárias (como classe 2)
+# e penaliza ativamente overfitting (gap > 15%), saturação termodinâmica (entropia < 0.05) e quimeras.
 
 # %%
 print("\n" + "=" * 70)
@@ -958,6 +959,10 @@ if EXECUTAR_OTIMIZACAO_AG:
         n_geracoes=8,
         elitismo=2,
         seed=SEED,
+        beta_min=0.1,
+        beta_max=5.0,
+        metrica_f1="macro",
+        escalar_por_raiz_d=True,
         w_f1=0.50,
         w_ruido=0.25,
         w_gap=0.15,
@@ -985,7 +990,7 @@ if EXECUTAR_OTIMIZACAO_AG:
         print(
             f"  [Geração {gen:>2d}/{cfg_ag.n_geracoes}] "
             f"Melhor Fit: {campeao.fitness:.4f} | Média: {media_fit:.4f} | "
-            f"F1 Val: {campeao.f1_val:.4f} | nc={campeao.nc}, beta={campeao.beta:.1f}"
+            f"F1 Macro Val: {campeao.f1_val:.4f} | nc={campeao.nc}, beta={campeao.beta:.2f}"
         )
 
     res_ag = otimizador_ag.evoluir(callback_geracao=_callback_progresso)
@@ -995,8 +1000,8 @@ if EXECUTAR_OTIMIZACAO_AG:
     print("  CONFIGURAÇÃO CAMPEÃ ENCONTRADA PELO ALGORITMO GENÉTICO:")
     print("-" * 70)
     print(f"  • Fitness Global           : {campeao_ag.fitness:.4f}")
-    print(f"  • F1 Validação (Holdout)   : {campeao_ag.f1_val:.4f}")
-    print(f"  • F1 sob Ruído 15%         : {campeao_ag.f1_ruido:.4f}")
+    print(f"  • F1 Macro Val (Holdout)   : {campeao_ag.f1_val:.4f}")
+    print(f"  • F1 Macro sob Ruído 15%   : {campeao_ag.f1_ruido:.4f}")
     print(f"  • Gap de Generalização     : {campeao_ag.gap_generalizacao * 100:.2f}%")
     print(f"  • Entropia Média Atenção   : {campeao_ag.entropia_atencao:.4f}")
     print(f"  • Quimeras Detectadas      : {campeao_ag.quimeras}")

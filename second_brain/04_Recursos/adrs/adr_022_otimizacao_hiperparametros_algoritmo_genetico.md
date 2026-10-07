@@ -33,17 +33,20 @@ Tentativas anteriores baseadas em varreduras manuais e Grid Search (ADR 005 e AD
 Implementar o módulo dedicado `OtimizadorGeneticoHopfield` em `src/treinamento/algoritmo_genetico.py`, fundamentado em:
 
 1. **Genótipo Misto Heterogêneo (`IndividuoHopfield`):** Codifica `(nc, k_vizinhos, beta, threshold, n_iters, normalize, estrategia)` com restrições biológicas e de estabilidade.
-2. **Função de Aptidão Multiobjetivo com Barreira:**
-   `Fitness = (w_f1 · F1_val) + (w_ruido · F1_ruido_15) - (w_gap · Penalidade_Gap) - (w_sat · Penalidade_Saturacao) - (w_qui · Penalidade_Quimeras) - (w_parc · Penalidade_Parcimonia)`
+2. **Função de Aptidão Multiobjetivo com Barreira e F1 Macro:**
+   `Fitness = (w_f1 · F1_val_macro) + (w_ruido · F1_ruido_macro) - (w_gap · Penalidade_Gap) - (w_sat · Penalidade_Saturacao) - (w_qui · Penalidade_Quimeras) - (w_parc · Penalidade_Parcimonia)`
    onde:
-   - `F1_val`: F1-Score ponderado em amostra estratificada não-vista (holdout de 20%).
-   - `F1_ruido_15`: F1 sob estresse com 15% de dropout sintético.
+   - `F1_val_macro`: F1-Score Macro em amostra estratificada não-vista (holdout de 20%), garantindo peso equitativo a linhagens celulares minoritárias (como a Classe 2).
+   - `F1_ruido_macro`: F1-Score Macro sob estresse com 15% de dropout sintético, penalizando severamente o colapso de atratores de subpopulações raras.
    - `Penalidade_Gap`: penalização ReLU para gaps de generalização superiores a 15%.
    - `Penalidade_Saturacao`: penalização quando a entropia da atenção é inferior a 0.05 (evita colapso em 1-NN puro).
    - `Penalidade_Quimeras`: contagem de células espúrias coativando marcadores canônicos antagônicos.
    - `Penalidade_Parcimonia`: penalização suave pelo aumento desnecessário de `nc`.
-3. **Mecanismo de Cache LRU de Protótipos:** A extração de subclusters sobre a projeção SWeeP fixa `Wswp` é armazenada em cache indexado por `(nc, k_vizinhos, estrategia)`, evitando reexecuções redundantes de K-Means e acelerando as avaliações em mais de 60%.
-4. **Elitismo e Crossover Uniforme:** Preservação estrita dos 2 melhores indivíduos por geração e operadores de recombinação com mutação adaptativa Gaussiana/discreta.
+3. **Calibração da Escala de β e Escalonamento Dimensional por √D:**
+   - Intervalo de busca refinado para ordens de grandeza inferiores: `β ∈ [0.1, 5.0]`, com sementes canônicas em `0.5`, `1.0`, `2.5` e `4.0`.
+   - Normalização dimensional do produto interno não-esférico por `√D ≈ √61541 ≈ 248.07` (`scale_by_dim=True` em `ModernHopfieldNetwork`), mantendo os logits com variância controlada em `O(1)` e prevenindo saturação abrupta em 1-NN.
+4. **Mecanismo de Cache LRU de Protótipos:** A extração de subclusters sobre a projeção SWeeP fixa `Wswp` é armazenada em cache indexado por `(nc, k_vizinhos, estrategia)`, evitando reexecuções redundantes de K-Means e acelerando as avaliações em mais de 60%.
+5. **Elitismo e Crossover Uniforme:** Preservação estrita dos 2 melhores indivíduos por geração e operadores de recombinação com mutação adaptativa Gaussiana (`N(0.0, 0.3)`) e discreta.
 
 ```mermaid
 flowchart TD

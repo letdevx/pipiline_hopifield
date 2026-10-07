@@ -12,7 +12,7 @@ import os
 from collections import OrderedDict
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import numpy as np
 import scipy.sparse as sp
@@ -49,7 +49,7 @@ class IndividuoHopfield:
     fitness : float, default=0.0
         Pontuação consolidada de aptidão do indivíduo.
     f1_val : float, default=0.0
-        F1-Score ponderado obtido na amostra de validação holdout.
+        F1-Score (Macro por padrão) obtido na amostra de validação holdout.
     gap_generalizacao : float, default=0.0
         Diferença absoluta de F1 entre treino e validação.
     f1_ruido : float, default=0.0
@@ -121,6 +121,14 @@ class ConfiguracaoAG:
         Semente pseudoaleatória para reprodutibilidade.
     max_cache_padroes : int, default=25
         Capacidade máxima do cache LRU para matrizes de protótipos SWeeP.
+    beta_min : float, default=0.1
+        Limite inferior do espaço de busca da temperatura inversa beta.
+    beta_max : float, default=5.0
+        Limite superior do espaço de busca da temperatura inversa beta.
+    metrica_f1 : {"macro", "weighted"}, default="macro"
+        Estratégia de cálculo do F1-score (macro pondera uniformemente todas as classes).
+    escalar_por_raiz_d : bool, default=True
+        Se True, normaliza o produto interno por sqrt(D) em ModernHopfieldNetwork quando normalize=False.
     w_f1 : float, default=0.50
         Peso do F1 de validação holdout.
     w_ruido : float, default=0.25
@@ -145,6 +153,10 @@ class ConfiguracaoAG:
     torneio_k: int = 3
     seed: int = 42
     max_cache_padroes: int = 25
+    beta_min: float = 0.1
+    beta_max: float = 5.0
+    metrica_f1: Literal["macro", "weighted"] = "macro"
+    escalar_por_raiz_d: bool = True
     w_f1: float = 0.50
     w_ruido: float = 0.25
     w_gap: float = 0.15
@@ -165,6 +177,14 @@ class ConfiguracaoAG:
             raise ValueError("p_mutacao deve estar no intervalo [0.0, 1.0]")
         if self.elitismo >= self.tam_populacao:
             raise ValueError("elitismo deve ser menor que o tamanho da população")
+        if self.beta_min <= 0.0:
+            raise ValueError("beta_min deve ser estritamente positivo (> 0.0)")
+        if self.beta_min > self.beta_max:
+            raise ValueError("beta_min não pode ser maior que beta_max")
+        if self.metrica_f1 not in ("macro", "weighted"):
+            raise ValueError(
+                f"metrica_f1 deve ser 'macro' ou 'weighted', recebido '{self.metrica_f1}'"
+            )
 
 
 class OtimizadorGeneticoHopfield:
@@ -313,12 +333,12 @@ class OtimizadorGeneticoHopfield:
         """
         populacao: list[IndividuoHopfield] = []
 
-        # 1. Sementes canônicas (ADR 005, ADR 008 e variantes empíricas conhecidas)
+        # 1. Sementes canônicas calibradas na escala estável de beta
         sementes = [
             IndividuoHopfield(
                 nc=30,
                 k_vizinhos=1,
-                beta=50.0,
+                beta=1.0,
                 threshold=0.0,
                 n_iters=1,
                 normalize=False,
@@ -327,7 +347,7 @@ class OtimizadorGeneticoHopfield:
             IndividuoHopfield(
                 nc=30,
                 k_vizinhos=5,
-                beta=15.0,
+                beta=0.5,
                 threshold=0.0,
                 n_iters=1,
                 normalize=False,
@@ -336,7 +356,7 @@ class OtimizadorGeneticoHopfield:
             IndividuoHopfield(
                 nc=20,
                 k_vizinhos=3,
-                beta=25.0,
+                beta=2.5,
                 threshold=0.0,
                 n_iters=1,
                 normalize=True,
@@ -345,20 +365,32 @@ class OtimizadorGeneticoHopfield:
             IndividuoHopfield(
                 nc=15,
                 k_vizinhos=1,
-                beta=10.0,
+                beta=4.0,
                 threshold=-0.1,
                 n_iters=1,
                 normalize=False,
                 estrategia="kmeans_fixo",
             ),
         ]
-        populacao.extend(sementes[: self.config.tam_populacao])
+        sementes_ajustadas = [
+            IndividuoHopfield(
+                nc=s.nc,
+                k_vizinhos=s.k_vizinhos,
+                beta=float(np.clip(s.beta, self.config.beta_min, self.config.beta_max)),
+                threshold=s.threshold,
+                n_iters=s.n_iters,
+                normalize=s.normalize,
+                estrategia=s.estrategia,
+            )
+            for s in sementes
+        ]
+        populacao.extend(sementes_ajustadas[: self.config.tam_populacao])
 
         # 2. Amostragem complementar dentro dos limites do espaço de busca
         while len(populacao) < self.config.tam_populacao:
             nc = int(self.rng.integers(5, 46))
             k_viz = int(self.rng.integers(1, 11))
-            beta = float(self.rng.uniform(2.0, 70.0))
+            beta = float(self.rng.uniform(self.config.beta_min, self.config.beta_max))
             threshold = float(self.rng.uniform(-0.2, 0.4))
             n_iters = int(self.rng.integers(1, 4))
             normalize = bool(self.rng.choice([True, False]))
@@ -404,6 +436,7 @@ class OtimizadorGeneticoHopfield:
             binary=True,
             threshold=ind.threshold,
             normalize=ind.normalize,
+            scale_by_dim=self.config.escalar_por_raiz_d,
         )
         rede.store(padroes)
 
@@ -417,7 +450,12 @@ class OtimizadorGeneticoHopfield:
         classes_padroes = np.array([m[0] for m in meta])
         y_pred_val = self._predizer_por_pooling(att_val, classes_padroes)
         f1_val = float(
-            f1_score(self.y_val, y_pred_val, average="weighted", zero_division="warn")
+            f1_score(
+                self.y_val,
+                y_pred_val,
+                average=self.config.metrica_f1,
+                zero_division=cast(Any, 0),
+            )
         )
 
         # 2. Avaliação de treino aproximada para detecção de gap
@@ -433,8 +471,8 @@ class OtimizadorGeneticoHopfield:
             f1_score(
                 self.labels[:n_amostra_treino],
                 y_pred_tr,
-                average="weighted",
-                zero_division="warn",
+                average=self.config.metrica_f1,
+                zero_division=cast(Any, 0),
             )
         )
         gap = float(abs(f1_treino - f1_val))
@@ -445,7 +483,12 @@ class OtimizadorGeneticoHopfield:
         )
         y_pred_ruido = self._predizer_por_pooling(att_ruido, classes_padroes)
         f1_ruido = float(
-            f1_score(self.y_val, y_pred_ruido, average="weighted", zero_division="warn")
+            f1_score(
+                self.y_val,
+                y_pred_ruido,
+                average=self.config.metrica_f1,
+                zero_division=cast(Any, 0),
+            )
         )
 
         # 4. Entropia Normalizada da Atenção Softmax
@@ -590,7 +633,13 @@ class OtimizadorGeneticoHopfield:
             k_viz = int(np.clip(k_viz + self.rng.choice([-1, 1]), 1, 10))
 
         if self.rng.random() < p_mut:
-            beta = float(np.clip(beta + self.rng.normal(0.0, 5.0), 1.0, 80.0))
+            beta = float(
+                np.clip(
+                    beta + self.rng.normal(0.0, 0.3),
+                    self.config.beta_min,
+                    self.config.beta_max,
+                )
+            )
 
         if self.rng.random() < p_mut:
             threshold = float(
@@ -700,6 +749,10 @@ class OtimizadorGeneticoHopfield:
                 "p_mutacao": self.config.p_mutacao,
                 "elitismo": self.config.elitismo,
                 "seed": self.config.seed,
+                "beta_min": self.config.beta_min,
+                "beta_max": self.config.beta_max,
+                "metrica_f1": self.config.metrica_f1,
+                "escalar_por_raiz_d": self.config.escalar_por_raiz_d,
             },
         }
         os.makedirs(os.path.dirname(os.path.abspath(path_json)), exist_ok=True)

@@ -58,10 +58,26 @@ def test_configuracao_ag_validacoes() -> None:
     assert cfg.n_geracoes == 3
     assert cfg.p_crossover == 0.85
     assert cfg.elitismo == 2
+    assert cfg.beta_min == 0.1
+    assert cfg.beta_max == 5.0
+    assert cfg.metrica_f1 == "macro"
+    assert cfg.escalar_por_raiz_d is True
 
     # Erro para população muito pequena
     with pytest.raises(ValueError, match="tam_populacao deve ser pelo menos 4"):
         ConfiguracaoAG(tam_populacao=2)
+
+    # Erro para beta_min <= 0
+    with pytest.raises(ValueError, match="beta_min deve ser estritamente positivo"):
+        ConfiguracaoAG(beta_min=-0.5)
+
+    # Erro para beta_min > beta_max
+    with pytest.raises(ValueError, match="beta_min não pode ser maior que beta_max"):
+        ConfiguracaoAG(beta_min=10.0, beta_max=2.0)
+
+    # Erro para metrica_f1 inválida
+    with pytest.raises(ValueError, match="metrica_f1 deve ser 'macro' ou 'weighted'"):
+        ConfiguracaoAG(metrica_f1="accuracy")  # type: ignore[arg-type]
 
 
 def test_operadores_crossover_e_mutacao() -> None:
@@ -77,7 +93,7 @@ def test_operadores_crossover_e_mutacao() -> None:
     pai1 = IndividuoHopfield(
         nc=10,
         k_vizinhos=1,
-        beta=10.0,
+        beta=1.0,
         threshold=-0.1,
         n_iters=1,
         normalize=False,
@@ -86,7 +102,7 @@ def test_operadores_crossover_e_mutacao() -> None:
     pai2 = IndividuoHopfield(
         nc=30,
         k_vizinhos=5,
-        beta=40.0,
+        beta=4.0,
         threshold=0.2,
         n_iters=2,
         normalize=True,
@@ -96,12 +112,13 @@ def test_operadores_crossover_e_mutacao() -> None:
     filho = otimizador.cruzar(pai1, pai2)
     assert filho.nc in (10, 30) or (10 <= filho.nc <= 30)
     assert filho.n_iters in (1, 2)
+    assert 1.0 <= filho.beta <= 4.0
 
     mutado = otimizador.mutar(filho)
     # Garante que os limites físicos do genótipo são respeitados pós-mutação
     assert 5 <= mutado.nc <= 45
     assert 1 <= mutado.k_vizinhos <= 10
-    assert 1.0 <= mutado.beta <= 80.0
+    assert cfg.beta_min <= mutado.beta <= cfg.beta_max
     assert -0.3 <= mutado.threshold <= 0.5
     assert 1 <= mutado.n_iters <= 3
     assert isinstance(mutado.normalize, bool)
@@ -189,3 +206,56 @@ def test_otimizador_genetico_ciclo_evolucao_micro() -> None:
     fit_g1 = resultado["historico_geracoes"][0]["melhor_fitness"]
     fit_g2 = resultado["historico_geracoes"][1]["melhor_fitness"]
     assert fit_g2 >= fit_g1 - 1e-6
+
+
+def test_f1_macro_penaliza_colapso_classe_minoritaria() -> None:
+    """Verifica se F1 macro penaliza a perda da classe minoritária mais que F1 ponderado."""
+    from sklearn.metrics import f1_score
+
+    # Cenário scRNA-seq desbalanceado: 90 células classe 1, 10 células classe 2
+    y_true = np.array([1] * 90 + [2] * 10)
+
+    # Predição com colapso total da classe 2 (todas preditas como 1)
+    y_pred_colapso = np.array([1] * 100)
+
+    f1_macro = float(f1_score(y_true, y_pred_colapso, average="macro", zero_division=0))
+    f1_weighted = float(
+        f1_score(y_true, y_pred_colapso, average="weighted", zero_division=0)
+    )
+
+    # F1 ponderado mascara o erro (classe 1 domina, score > 0.85)
+    # F1 macro reflete a perda severa da linhagem minoritária (score < 0.50)
+    assert f1_weighted > 0.85
+    assert f1_macro < 0.50
+    assert f1_macro < f1_weighted - 0.35
+
+
+def test_escalonamento_raiz_d_hopfield() -> None:
+    """Valida se scale_by_dim normaliza adequadamente os logits pelo fator sqrt(D)."""
+    from treinamento.hopfield import ModernHopfieldNetwork
+
+    d_dim = 10000
+
+    # 1 padrão bipolar
+    padrao = np.ones((1, d_dim), dtype=np.float32)
+    query = np.ones((1, d_dim), dtype=np.float32)
+
+    rede_pura = ModernHopfieldNetwork(
+        beta=1.0, binary=False, normalize=False, scale_by_dim=False
+    )
+    rede_pura.store(padrao)
+
+    rede_escalonada = ModernHopfieldNetwork(
+        beta=1.0, binary=False, normalize=False, scale_by_dim=True
+    )
+    rede_escalonada.store(padrao)
+
+    # Produto interno puro: 10000
+    # Com scale_by_dim: 10000 / sqrt(10000) = 100
+    att_pura = rede_pura.compute_attention_weights(query)
+    att_esc = rede_escalonada.compute_attention_weights(query)
+
+    assert att_pura.shape == (1, 1)
+    assert att_esc.shape == (1, 1)
+    np.testing.assert_allclose(att_pura, att_esc, atol=1e-5)
+    assert rede_escalonada.scale_by_dim is True
