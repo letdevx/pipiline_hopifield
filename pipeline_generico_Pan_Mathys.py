@@ -1754,17 +1754,113 @@ projetor_m_r = ProjetorSWeePR(
 )
 projetor_m_r.projetar()
 
-# 8. Avaliação do Tipo Celular Cross-Dataset via Softmax Class Pooling
+# 8. Avaliação do Tipo Celular Cross-Dataset via Softmax Class Pooling (Precision, Recall, F1-Score e Support)
+from sklearn.metrics import classification_report
+
+from treinamento.validador_imputacao import NOMES_CLASSES_CEREBRO
+
+nomes_canonicos_m: list[str] = [
+    NOMES_CLASSES_CEREBRO.get(c, f"Classe_{c}") for c in CLASSES_CANONICAS
+]
+
 avaliador_m = AvaliadorHopfield(
     padroes=perf_imputacao,
     classes=CLASSES_CANONICAS,
     nc=nc_imputacao,
+    nomes_classes=nomes_canonicos_m,
     meta=meta_imputacao,
     metrica="euclidiana",
 )
-avaliador_m.avaliar_por_atencao(att_m, clo_alvo).plotar(
-    titulo=f"Confusão Softmax Pooling — {nome_modelo_imp} (Alvo Mathys Imputado)"
+avaliador_m.avaliar_por_atencao(att_m, clo_alvo)
+
+# 8.1 Exibição do Relatório de Classificação Sklearn
+print("\n" + "=" * 65)
+print(
+    f"=== Relatório de Classificação por Tipo Celular ({nome_modelo_imp} - Mathys) ==="
 )
+print("=" * 65)
+print(
+    classification_report(
+        avaliador_m.y_true,
+        avaliador_m.y_pred,
+        labels=CLASSES_CANONICAS,
+        target_names=nomes_canonicos_m,
+        digits=4,
+        zero_division=0,
+    )
+)
+
+# 8.2 Tabela Estruturada com Médias Globais (Macro e Weighted)
+df_metricas_completas = avaliador_m.relatorio_classificacao_completo()
+print("\n[Tabela Estruturada de Métricas por Tipo Celular]:")
+print(df_metricas_completas.to_string(index=False))
+
+# 8.3 Persistência em CSV e JSON
+path_csv_metricas = os.path.join(OUT_IMPUTACAO, "metricas_tipo_celular_mathys.csv")
+path_json_metricas = os.path.join(OUT_IMPUTACAO, "metricas_tipo_celular_mathys.json")
+df_metricas_completas.to_csv(path_csv_metricas, index=False)
+df_metricas_completas.to_json(path_json_metricas, orient="records", indent=2)
+print(f"\n[Persistência] Salvo CSV : {path_csv_metricas}")
+print(f"[Persistência] Salvo JSON: {path_json_metricas}")
+
+# 8.4 Painel Gráfico 1 & 2: Matriz de Confusão e Barras Agrupadas
+df_apenas_classes = df_metricas_completas[
+    df_metricas_completas["classe_id"] != "—"
+].copy()
+
+fig, (ax_conf, ax_bar) = plt.subplots(1, 2, figsize=(18, 7))
+
+# Matriz de Confusão com Rótulos Canônicos
+avaliador_m.plotar(
+    titulo=f"Matriz de Confusão — {nome_modelo_imp}\n(Mathys Imputado via Hopfield)",
+    ax=ax_conf,
+)
+
+# Gráfico de Barras Agrupadas: Precision, Recall e F1-Score
+x_pos = np.arange(len(nomes_canonicos_m))
+bar_w = 0.25
+
+p_vals = df_apenas_classes["precision"].to_numpy(dtype=float)
+r_vals = df_apenas_classes["recall"].to_numpy(dtype=float)
+f_vals = df_apenas_classes["f1_score"].to_numpy(dtype=float)
+s_vals = df_apenas_classes["support"].to_numpy(dtype=int)
+
+ax_bar.bar(x_pos - bar_w, p_vals, bar_w, label="Precision", color="#2b5c8f")
+ax_bar.bar(x_pos, r_vals, bar_w, label="Recall", color="#2a9d8f")
+ax_bar.bar(x_pos + bar_w, f_vals, bar_w, label="F1-Score", color="#e76f51")
+
+ax_bar.set_ylabel("Pontuação (0.0 a 1.0)", fontsize=11)
+ax_bar.set_title(
+    f"Precision, Recall e F1-Score por Tipo Celular\n({nome_modelo_imp} - Mathys Imputado)",
+    fontsize=12,
+    fontweight="bold",
+)
+ax_bar.set_xticks(x_pos)
+ax_bar.set_xticklabels(nomes_canonicos_m, rotation=35, ha="right", fontsize=9)
+ax_bar.set_ylim(0, 1.15)
+ax_bar.grid(axis="y", linestyle="--", alpha=0.5)
+ax_bar.legend(loc="upper right", frameon=True)
+
+# Anotação de Support acima de cada linhagem
+for idx_b, sup in enumerate(s_vals):
+    h_max = max(p_vals[idx_b], r_vals[idx_b], f_vals[idx_b])
+    ax_bar.annotate(
+        f"n={sup:,}",
+        xy=(x_pos[idx_b], h_max + 0.03),
+        ha="center",
+        va="bottom",
+        fontsize=8,
+        fontweight="bold",
+        color="#333333",
+    )
+
+plt.tight_layout()
+path_fig_metricas = os.path.join(
+    OUT_IMPUTACAO, "painel_metricas_tipo_celular_mathys.png"
+)
+plt.savefig(path_fig_metricas, dpi=300, bbox_inches="tight")
+plt.show()
+print(f"[Visualização] Gráfico salvo em: {path_fig_metricas}")
 print(avaliador_m)
 
 
@@ -1773,6 +1869,16 @@ print(avaliador_m)
 # Executa explicabilidade SHAP (Expected Gradients) sobre a Modern Hopfield Network com Softmax Class Pooling.
 # Identifica os principais marcadores específicos para cada uma das 7 linhagens cerebrais a partir
 # dos 36.591 genes e plota o Heatmap de Contribuição Celular com normalização Min-Max por linha.
+
+# %%
+import importlib
+
+import treinamento.selecionador_genes_shap
+
+importlib.reload(treinamento.selecionador_genes_shap)
+import polars as pl
+
+from treinamento.selecionador_genes_shap import SelecionadorGenesSHAPHopfield
 
 # %%
 print("\n" + "=" * 60)

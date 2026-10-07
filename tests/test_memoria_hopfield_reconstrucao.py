@@ -188,3 +188,87 @@ def test_hopfield_softmax_class_pooling():
     # A probabilidade somada da Classe 1 deve ser superior à da Classe 2
     assert avaliador.prob_classes[0, 0] > avaliador.prob_classes[0, 1]
     assert avaliador.prob_classes[0, 0] > 0.8
+
+
+def test_avaliador_hopfield_metricas_por_classe_e_relatorio_completo():
+    """Valida o cálculo de precision, recall, f1-score, support e médias globais no AvaliadorHopfield."""
+    from src.treinamento.avaliador_hopfield import AvaliadorHopfield
+
+    # 4 protótipos em 2 classes
+    prototipos = np.array(
+        [
+            [1.0, 1.0, 0.0, 0.0],
+            [1.0, 0.8, 0.2, 0.0],
+            [0.0, 0.0, 1.0, 1.0],
+            [0.0, 0.1, 0.9, 1.0],
+        ],
+        dtype=np.float32,
+    )
+    meta = [(1, 0), (1, 1), (2, 0), (2, 1)]
+    nomes = ["Astrocyte", "Microglia"]
+
+    avaliador = AvaliadorHopfield(
+        padroes=prototipos,
+        classes=[1, 2],
+        nc=2,
+        nomes_classes=nomes,
+        meta=meta,
+    )
+
+    # 4 células de teste: 2 da classe 1 e 2 da classe 2
+    # Atenção: células 0 e 1 atendem mais à classe 1; células 2 e 3 atendem mais à classe 2
+    # Simulamos 1 erro proposital: célula 3 (verdadeira 2) com atenção maior na classe 1
+    att = np.array(
+        [
+            [0.6, 0.3, 0.05, 0.05],  # Célula 0: pred=1, true=1 (TP classe 1)
+            [0.4, 0.5, 0.05, 0.05],  # Célula 1: pred=1, true=1 (TP classe 1)
+            [0.05, 0.05, 0.5, 0.4],  # Célula 2: pred=2, true=2 (TP classe 2)
+            [
+                0.5,
+                0.2,
+                0.15,
+                0.15,
+            ],  # Célula 3: pred=1, true=2 (FP classe 1, FN classe 2)
+        ],
+        dtype=np.float32,
+    )
+    labels = [1, 1, 2, 2]
+
+    avaliador.avaliar_por_atencao(att, labels=labels)
+
+    # 1. Valida DataFrame por classe
+    df_classes = avaliador.metricas_por_classe()
+    assert "precision" in df_classes.columns
+    assert "recall" in df_classes.columns
+    assert "f1_score" in df_classes.columns
+    assert "support" in df_classes.columns
+    assert "tipo_celular" in df_classes.columns
+    assert "classe_id" in df_classes.columns
+    # Retrocompatibilidade
+    assert "classe" in df_classes.columns
+    assert "n_celulas" in df_classes.columns
+
+    assert list(df_classes["tipo_celular"]) == nomes
+    assert list(df_classes["support"]) == [2, 2]
+
+    # Classe 1: TP=2, FP=1 -> Precision = 2/3 = 0.6667, Recall = 2/2 = 1.0
+    p1 = float(df_classes.loc[df_classes["classe_id"] == 1, "precision"].iloc[0])
+    r1 = float(df_classes.loc[df_classes["classe_id"] == 1, "recall"].iloc[0])
+    assert np.isclose(p1, 2 / 3, atol=1e-3)
+    assert np.isclose(r1, 1.0, atol=1e-3)
+
+    # Classe 2: TP=1, FP=0, FN=1 -> Precision = 1.0, Recall = 1/2 = 0.5
+    p2 = float(df_classes.loc[df_classes["classe_id"] == 2, "precision"].iloc[0])
+    r2 = float(df_classes.loc[df_classes["classe_id"] == 2, "recall"].iloc[0])
+    assert np.isclose(p2, 1.0, atol=1e-3)
+    assert np.isclose(r2, 0.5, atol=1e-3)
+
+    # 2. Valida Relatório Completo com Macro e Weighted Avg
+    df_completo = avaliador.relatorio_classificacao_completo()
+    assert len(df_completo) == 4  # 2 classes + Macro Avg + Weighted Avg
+    assert "Macro Avg" in list(df_completo["tipo_celular"])
+    assert "Weighted Avg" in list(df_completo["tipo_celular"])
+
+    row_macro = df_completo[df_completo["tipo_celular"] == "Macro Avg"].iloc[0]
+    expected_macro_p = (p1 + p2) / 2
+    assert np.isclose(float(row_macro["precision"]), expected_macro_p, atol=1e-3)

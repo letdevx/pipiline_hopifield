@@ -5,6 +5,7 @@
 - **Auditoria Formal de Overfitting e Robustez Termodinâmica:** Implementa o `AuditorOverfittingHopfield` e o `InjetorPerturbacaoTranscritica` em `src/treinamento/diagnostico_overfitting.py` para avaliar generalização fora da amostra (*holdout*), estabilidade de bacias de atração via perturbações sintéticas escalonadas (5%, 15%, 30%) e saturação termodinâmica via Entropia de Shannon dos pesos de atenção contínua.
 - **Otimização de Hiperparâmetros via Algoritmo Genético (ADR 022):** Implementa em `src/treinamento/algoritmo_genetico.py` busca evolutiva de hiperparâmetros (beta inverso de temperatura, limiares de convergência e topologia de padrões) com elitismo e operadores genéticos customizados.
 - **Reconstrução e Expansão do Pipeline Pan-Mathys:** Consolida o notebook pareado via Jupytext (`pipeline_generico_Pan_Mathys.py` e `.ipynb`) cobrindo 14 capítulos estruturados, desde o pré-processamento de scRNA-seq, projeção rSWeeP da UFPR, treinamento da Hopfield ótima, auditoria de robustez até a explicabilidade biológica e heatmap SHAP.
+- **Avaliação por Tipo Celular no Capítulo 13 (Precision, Recall, F1-Score, Support):** Enriquecimento do `AvaliadorHopfield` (`src/treinamento/avaliador_hopfield.py`) com cálculo estruturado de métricas por classe canônica (mantendo retrocompatibilidade total), método `relatorio_classificacao_completo()` com agregações Macro Avg e Weighted Avg, e painel visual comparativo de barras agrupadas e matriz de confusão persistidos em CSV/JSON no Capítulo 13.
 
 #### 💡 Por que foi feito desta forma? (Decisão de Design / ADR)
 - **ADR 023 — Explicabilidade SHAP em Redes Hopfield e Streaming OOM-Safe:** Armazenar tensores tridimensionais brutos de SHAP (40.913 × 36.591 × 7) exigiria 41,9 GB de RAM, inviabilizando a execução em computadores de bancada. O processamento por *mini-batches* com acumulação online cumulativa dos valores absolutos reduz a pegada de memória do acumulador para ~2 MB (redução de 99,99%).
@@ -21,10 +22,10 @@
    ```powershell
    uv run pytest
    ```
-   *(Validação esperada: 80 passed, 1 skipped)*
+   *(Validação esperada: 81 passed, 1 skipped)*
 2. **Executar testes específicos dos novos módulos:**
    ```powershell
-   uv run pytest tests/test_selecionador_genes_shap.py tests/test_diagnostico_overfitting.py tests/test_algoritmo_genetico.py
+   uv run pytest tests/test_memoria_hopfield_reconstrucao.py tests/test_selecionador_genes_shap.py tests/test_diagnostico_overfitting.py tests/test_algoritmo_genetico.py
    ```
 3. **Validar conformidade estrita de tipagem e estilo:**
    ```powershell

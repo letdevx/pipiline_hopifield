@@ -295,12 +295,15 @@ class AvaliadorHopfield:
         print(
             f"[AvaliadorHopfield] Semelhança média ao protótipo: {self.semelhanca_media:.4f}"
         )
+        rotulos_rep: list[str] = (
+            self.nomes_classes if self.nomes_classes else [str(c) for c in self.classes]
+        )
         print(
             classification_report(
                 self.y_true,
                 self.y_pred,
                 labels=self.classes,
-                target_names=[str(c) for c in self.classes],
+                target_names=rotulos_rep,
                 zero_division=0,
             )
         )
@@ -431,13 +434,81 @@ class AvaliadorHopfield:
         s_arr: NDArray[np.int_] = np.asarray(s, dtype=int)
         return pd.DataFrame(
             {
+                "classe_id": self.classes,
+                "tipo_celular": rotulos,
+                "precision": np.round(p_arr, 4),
+                "recall": np.round(r_arr, 4),
+                "f1_score": np.round(f_arr, 4),
+                "support": s_arr,
+                # Retrocompatibilidade
                 "classe": rotulos,
                 "n_celulas": s_arr,
                 "precisao": np.round(p_arr, 4),
-                "recall": np.round(r_arr, 4),
                 "f1": np.round(f_arr, 4),
             }
         )
+
+    def relatorio_classificacao_completo(self) -> pd.DataFrame:
+        """Gera DataFrame estruturado com precision, recall, f1-score, support e médias globais.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame estruturado incluindo as linhas de classes e médias 'Macro Avg' e 'Weighted Avg'.
+        """
+        df_base: pd.DataFrame = self.metricas_por_classe()
+        cols: list[str] = [
+            "classe_id",
+            "tipo_celular",
+            "precision",
+            "recall",
+            "f1_score",
+            "support",
+        ]
+        df_res: pd.DataFrame = df_base[cols].copy()
+        tot_support: int = int(df_res["support"].sum())
+        macro_p: float = round(float(df_res["precision"].mean()), 4)
+        macro_r: float = round(float(df_res["recall"].mean()), 4)
+        macro_f: float = round(float(df_res["f1_score"].mean()), 4)
+
+        w_p: float
+        w_r: float
+        w_f: float
+        if tot_support > 0:
+            w_p = round(
+                float(np.average(df_res["precision"], weights=df_res["support"])),
+                4,
+            )
+            w_r = round(
+                float(np.average(df_res["recall"], weights=df_res["support"])),
+                4,
+            )
+            w_f = round(
+                float(np.average(df_res["f1_score"], weights=df_res["support"])),
+                4,
+            )
+        else:
+            w_p, w_r, w_f = 0.0, 0.0, 0.0
+
+        linhas_resumo: list[dict[str, Any]] = [
+            {
+                "classe_id": "—",
+                "tipo_celular": "Macro Avg",
+                "precision": macro_p,
+                "recall": macro_r,
+                "f1_score": macro_f,
+                "support": tot_support,
+            },
+            {
+                "classe_id": "—",
+                "tipo_celular": "Weighted Avg",
+                "precision": w_p,
+                "recall": w_r,
+                "f1_score": w_f,
+                "support": tot_support,
+            },
+        ]
+        return pd.concat([df_res, pd.DataFrame(linhas_resumo)], ignore_index=True)
 
     def __repr__(self) -> str:
         """Representação textual do avaliador Hopfield."""
