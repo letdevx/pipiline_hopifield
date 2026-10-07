@@ -252,3 +252,86 @@ def test_exportador_com_mask_ausentes_e_probabilidade(tmp_path: Path) -> None:
     # Probabilidade deve conter o valor 0.95
     prob_dense = adata.layers["probabilidade_imputada"].toarray()
     assert np.all(prob_dense[:, 2] == 0.95)
+
+
+def test_verificar_imputacao_completa_quando_arquivos_existem(tmp_path: Path) -> None:
+    """Verifica se verificar_imputacao_completa retorna True quando todos os arquivos existem e não são vazios."""
+    out_imp = tmp_path / "imputacao"
+    out_imp.mkdir()
+    out_mtx = out_imp / "mtx"
+    out_mtx.mkdir()
+    out_sweep = out_imp / "sweep"
+    out_sweep.mkdir()
+    out_top = tmp_path / "top_genes"
+    out_top.mkdir()
+
+    nome_modelo = "rede_teste"
+    n_genes = 100
+    base_nome = f"mathys_imputado_fujita_{nome_modelo}_{n_genes}genes"
+
+    # Cria arquivos simulados não-vazios
+    (out_imp / f"{base_nome}.h5ad").write_text("dummy h5ad")
+    (out_imp / f"{base_nome}.npy").write_text("dummy npy")
+    (out_imp / f"relatorio_{base_nome}.json").write_text("{}")
+    (out_imp / "metricas_tipo_celular_mathys.csv").write_text("classe,f1\n1,0.9")
+    (out_imp / "metricas_tipo_celular_mathys.json").write_text("[]")
+    (out_imp / "painel_metricas_tipo_celular_mathys.png").write_text("dummy png")
+    (out_mtx / "matrix.mtx").write_text("%%MatrixMarket")
+    (out_mtx / "barcodes.tsv").write_text("cell1\n")
+    (out_mtx / "features.tsv").write_text("gene1\n")
+    (out_sweep / "sweep_alvo_pos_imputacao.txt").write_text("0.1 0.2")
+    (out_top / f"X_mathys_IMPUTADO_{nome_modelo}.npy").write_text("dummy")
+    (out_top / "X_mathys_IMPUTADO_rede180.npy").write_text("dummy")
+
+    todos_ok, caminhos = ExportadorImputacao.verificar_imputacao_completa(
+        out_imputacao=out_imp,
+        nome_modelo=nome_modelo,
+        n_genes=n_genes,
+        out_mtx=out_mtx,
+        out_sweep=out_sweep,
+        out_top_genes=out_top,
+    )
+
+    assert todos_ok is True
+    assert "h5ad" in caminhos
+    assert "npy" in caminhos
+    assert "mtx" in caminhos
+    assert "sweep" in caminhos
+    assert "metricas_csv" in caminhos
+    assert "painel_png" in caminhos
+
+
+def test_verificar_imputacao_completa_quando_arquivo_ausente_ou_vazio(
+    tmp_path: Path,
+) -> None:
+    """Verifica se verificar_imputacao_completa retorna False se faltar arquivo ou arquivo for 0 bytes."""
+    out_imp = tmp_path / "imputacao"
+    out_imp.mkdir()
+
+    nome_modelo = "rede_teste"
+    n_genes = 50
+    base_nome = f"mathys_imputado_fujita_{nome_modelo}_{n_genes}genes"
+
+    # Sem criar arquivos
+    todos_ok, _ = ExportadorImputacao.verificar_imputacao_completa(
+        out_imputacao=out_imp,
+        nome_modelo=nome_modelo,
+        n_genes=n_genes,
+    )
+    assert todos_ok is False
+
+    # Cria alguns arquivos mas deixa o h5ad vazio (0 bytes)
+    (out_imp / f"{base_nome}.h5ad").touch()  # 0 bytes
+    (out_imp / f"{base_nome}.npy").write_text("conteudo")
+    (out_imp / f"relatorio_{base_nome}.json").write_text("{}")
+    (out_imp / "metricas_tipo_celular_mathys.csv").write_text("col1,col2\n")
+    (out_imp / "metricas_tipo_celular_mathys.json").write_text("[]")
+    (out_imp / "painel_metricas_tipo_celular_mathys.png").write_text("img")
+
+    todos_ok_vazio, _ = ExportadorImputacao.verificar_imputacao_completa(
+        out_imputacao=out_imp,
+        nome_modelo=nome_modelo,
+        n_genes=n_genes,
+    )
+    # Falha porque h5ad tem 0 bytes
+    assert todos_ok_vazio is False

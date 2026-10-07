@@ -1646,227 +1646,296 @@ print(
     f"Total de genes ausentes no Mathys (Sentinela 0.5): {n_genes_ausentes:,} de {len(mask_ausentes):,} genes canônicos."
 )
 
-# 3. Recuperação na rede Hopfield com injeção de 0.5 nos genes ausentes (Lotes OOM-Safe)
-print(
-    f"\nRecuperando padrões na Modern Hopfield Network ({nome_modelo_imp}, batch_size=40000, sentinela=0.5, prob=True)..."
-)
-Wrecuperado_m, Wprob_m, att_m = modelo_imputacao.retrieve(
-    queries=W_mathys,
-    batch_size=40000,
-    mask_sentinela_ausentes=mask_ausentes,
-    fill_value=0.5,
-    return_probabilities=True,
-    return_attention_weights=True,
-)
-print(f"Recuperação concluída! Matriz reconstruída: {Wrecuperado_m.shape}")
+# -------------------------------------------------------------------------
+# Validação de Idempotência e Cache de Saída do Capítulo 13
+# -------------------------------------------------------------------------
+# Flag de controle: permite forçar o recálculo manual se necessário
+FORCAR_RECALCULO_CAPITULO_13 = False
 
-# 4. Exportação Estruturada OOM-Safe em AnnData (.h5ad Gzip), .npy e JSON (ADR 017/ADR 020)
-assert analisador.genes_ordenados is not None
-
-exportador_imp = ExportadorImputacao(out_dir=OUT_IMPUTACAO)
-rel_imp = exportador_imp.exportar(
-    w_original=W_mathys,
-    w_recuperado=Wrecuperado_m,
-    genes_canonica=analisador.genes_ordenados,
-    map_features=leitor.map_m,
-    adata_alvo_original=alinhador.path_m_alinhado or PATH_ALVO,
-    classes_reais=clo_alvo,
-    info_modelo={
-        "beta": modelo_imputacao.beta,
-        "n_iters": modelo_imputacao.n_iters,
-        "binary": modelo_imputacao.binary,
-        "threshold": modelo_imputacao.threshold,
-        "nc": nc_imputacao,
-        "n_padroes": perf_imputacao.shape[0],
-    },
+n_genes_alvo = int(W_mathys.shape[1])
+todos_existem_cap13, caminhos_cap13 = ExportadorImputacao.verificar_imputacao_completa(
+    out_imputacao=OUT_IMPUTACAO,
     nome_modelo=nome_modelo_imp,
-    exportar_npy=True,
-    substituir_sentinela=True,
-    limiar_sentinela=0.5,
-    mask_ausentes=mask_ausentes,
-    w_probabilidade=Wprob_m,
+    n_genes=n_genes_alvo,
+    out_mtx=OUT_MTX_ALVO_IMPUTADO,
+    out_sweep=OUT_SWEEP_POS_IMPUTACAO,
+    out_top_genes=OUT_TOP_GENES,
 )
 
-PATH_IMPUTADO_H5AD = rel_imp["arquivos_gerados"]["h5ad"]
-PATH_IMPUTADO_NPY = rel_imp["arquivos_gerados"]["npy"]
-
-# Retrocompatibilidade com caminho legado
-os.makedirs(OUT_TOP_GENES, exist_ok=True)
-PATH_IMPUTADO_MODELO = os.path.join(
-    OUT_TOP_GENES, f"X_mathys_IMPUTADO_{nome_modelo_imp}.npy"
-)
-PATH_IMPUTADO_LEGADO = os.path.join(OUT_TOP_GENES, "X_mathys_IMPUTADO_rede180.npy")
-PATH_IMPUTADO = PATH_IMPUTADO_LEGADO
-if PATH_IMPUTADO_NPY and os.path.exists(PATH_IMPUTADO_NPY):
-    shutil.copyfile(PATH_IMPUTADO_NPY, PATH_IMPUTADO_MODELO)
-    shutil.copyfile(PATH_IMPUTADO_NPY, PATH_IMPUTADO_LEGADO)
-
-# 5. Validação Biológica e Estatística da Imputação (ADR 020)
-from treinamento import ValidadorImputacao
-
-adata_imp_audit = ad.read_h5ad(PATH_IMPUTADO_H5AD, backed="r")
-validador_imp = ValidadorImputacao()
-metricas_globais = validador_imp.auditar_imputacao_global(
-    adata=adata_imp_audit, mask_ausentes=mask_ausentes
-)
-df_marcadores = validador_imp.auditar_marcadores_biologicos(
-    adata=adata_imp_audit,
-    classes_reais=clo_alvo,
-    map_features=leitor.map_m,
-)
-validador_imp.imprimir_relatorio(metricas_globais, df_marcadores)
-validador_imp.exportar_relatorio(
-    path_relatorio_json=rel_imp["arquivos_gerados"]["relatorio_json"],
-    metricas_globais=metricas_globais,
-    df_marcadores=df_marcadores,
-)
-if hasattr(adata_imp_audit, "file") and adata_imp_audit.file is not None:
-    adata_imp_audit.file.close()
-del adata_imp_audit
-gc.collect()
-
-print(f"\n[Exportação] Matriz AnnData (.h5ad Gzip) : {PATH_IMPUTADO_H5AD}")
-print(f"[Exportação] Matriz NumPy (.npy)        : {PATH_IMPUTADO_NPY}")
-print(f"[Exportação] Modelo Ativo (.npy)        : {PATH_IMPUTADO_MODELO}")
-print(f"[Exportação] Retrocompatibilidade (.npy) : {PATH_IMPUTADO}")
-
-# 6. Exportação e Validação MTX do Alvo Imputado pós-Hopfield
-exportador_mtx_imp = ExportadorMTX(
-    out_dir=OUT_MTX_ALVO_IMPUTADO, validador=validador_genes
-)
-adata_imp_loaded = ad.read_h5ad(PATH_IMPUTADO_H5AD, backed="r")
-exportador_mtx_imp.exportar(
-    matriz=adata_imp_loaded,
-    genes_referencia=analisador.genes_ordenados,
-    map_features=leitor.map_m,
-    nome_etapa="Alvo Imputado pós-Hopfield (Mathys)",
-)
-if hasattr(adata_imp_loaded, "file") and adata_imp_loaded.file is not None:
-    adata_imp_loaded.file.close()
-del adata_imp_loaded
-gc.collect()
-
-# 7. Projeção SWeeP do Alvo Imputado (Garantia de Mesma Base Ortonormal Congelada - ADR 018/019)
-path_mtx_alvo_imputado = os.path.join(OUT_MTX_ALVO_IMPUTADO, "matrix.mtx")
-print(
-    f"\n[SWeeP Alvo Imputado] Projetando {path_mtx_alvo_imputado} com a mesma base congelada..."
-)
-projetor_m_r = ProjetorSWeePR(
-    path_matriz=path_mtx_alvo_imputado,
-    path_saida=os.path.join(OUT_SWEEP_POS_IMPUTACAO, "sweep_alvo_pos_imputacao.txt"),
-    n_componentes=600,
-    seed=SEED,
-)
-projetor_m_r.projetar()
-
-# 8. Avaliação do Tipo Celular Cross-Dataset via Softmax Class Pooling (Precision, Recall, F1-Score e Support)
-from sklearn.metrics import classification_report
-
-from treinamento.validador_imputacao import NOMES_CLASSES_CEREBRO
-
-nomes_canonicos_m: list[str] = [
-    NOMES_CLASSES_CEREBRO.get(c, f"Classe_{c}") for c in CLASSES_CANONICAS
-]
-
-avaliador_m = AvaliadorHopfield(
-    padroes=perf_imputacao,
-    classes=CLASSES_CANONICAS,
-    nc=nc_imputacao,
-    nomes_classes=nomes_canonicos_m,
-    meta=meta_imputacao,
-    metrica="euclidiana",
-)
-avaliador_m.avaliar_por_atencao(att_m, clo_alvo)
-
-# 8.1 Exibição do Relatório de Classificação Sklearn
-print("\n" + "=" * 65)
-print(
-    f"=== Relatório de Classificação por Tipo Celular ({nome_modelo_imp} - Mathys) ==="
-)
-print("=" * 65)
-print(
-    classification_report(
-        avaliador_m.y_true,
-        avaliador_m.y_pred,
-        labels=CLASSES_CANONICAS,
-        target_names=nomes_canonicos_m,
-        digits=4,
-        zero_division=0,
+if todos_existem_cap13 and not FORCAR_RECALCULO_CAPITULO_13:
+    print("\n" + "=" * 70)
+    print("  [CACHE/IDEMPOTÊNCIA] ARQUIVOS DO CAPÍTULO 13 JÁ EXISTENTES")
+    print("=" * 70)
+    print(
+        f"Todos os artefatos de saída do modelo '{nome_modelo_imp}' ({n_genes_alvo:,} genes) "
+        f"foram encontrados íntegros em disco."
     )
-)
+    print("Recuperação Hopfield e reexportações ignoradas para economia de recursos.")
 
-# 8.2 Tabela Estruturada com Médias Globais (Macro e Weighted)
-df_metricas_completas = avaliador_m.relatorio_classificacao_completo()
-print("\n[Tabela Estruturada de Métricas por Tipo Celular]:")
-print(df_metricas_completas.to_string(index=False))
+    # Vinculação das variáveis essenciais para os capítulos posteriores
+    PATH_IMPUTADO_H5AD = caminhos_cap13["h5ad"]
+    PATH_IMPUTADO_NPY = caminhos_cap13["npy"]
+    PATH_IMPUTADO_MODELO = caminhos_cap13.get(
+        "npy_modelo",
+        os.path.join(OUT_TOP_GENES, f"X_mathys_IMPUTADO_{nome_modelo_imp}.npy"),
+    )
+    PATH_IMPUTADO_LEGADO = caminhos_cap13.get(
+        "npy_legado",
+        os.path.join(OUT_TOP_GENES, "X_mathys_IMPUTADO_rede180.npy"),
+    )
+    PATH_IMPUTADO = PATH_IMPUTADO_LEGADO
 
-# 8.3 Persistência em CSV e JSON
-path_csv_metricas = os.path.join(OUT_IMPUTACAO, "metricas_tipo_celular_mathys.csv")
-path_json_metricas = os.path.join(OUT_IMPUTACAO, "metricas_tipo_celular_mathys.json")
-df_metricas_completas.to_csv(path_csv_metricas, index=False)
-df_metricas_completas.to_json(path_json_metricas, orient="records", indent=2)
-print(f"\n[Persistência] Salvo CSV : {path_csv_metricas}")
-print(f"[Persistência] Salvo JSON: {path_json_metricas}")
+    path_csv_metricas = caminhos_cap13["metricas_csv"]
+    path_json_metricas = caminhos_cap13["metricas_json"]
+    path_fig_metricas = caminhos_cap13["painel_png"]
 
-# 8.4 Painel Gráfico 1 & 2: Matriz de Confusão e Barras Agrupadas
-df_apenas_classes = df_metricas_completas[
-    df_metricas_completas["classe_id"] != "—"
-].copy()
+    # Carrega tabela estruturada de métricas já salva
+    df_metricas_completas = pd.read_csv(path_csv_metricas)
+    print("\n[Tabela Estruturada de Métricas por Tipo Celular (Carregada do Cache)]:")
+    print(df_metricas_completas.to_string(index=False))
 
-fig, (ax_conf, ax_bar) = plt.subplots(1, 2, figsize=(18, 7))
+    print("\n[Artefatos Validados em Cache]:")
+    print(f"  • Matriz AnnData (.h5ad) : {PATH_IMPUTADO_H5AD}")
+    print(f"  • Matriz NumPy (.npy)    : {PATH_IMPUTADO_NPY}")
+    print(f"  • Top Genes Ativo (.npy) : {PATH_IMPUTADO_MODELO}")
+    print(f"  • Matriz MTX             : {caminhos_cap13.get('mtx')}")
+    print(f"  • Projeção SWeeP Alvo    : {caminhos_cap13.get('sweep')}")
+    print(f"  • Relatório Métricas CSV : {path_csv_metricas}")
+    print(f"  • Painel Gráfico PNG     : {path_fig_metricas}")
 
-# Matriz de Confusão com Rótulos Canônicos
-avaliador_m.plotar(
-    titulo=f"Matriz de Confusão — {nome_modelo_imp}\n(Mathys Imputado via Hopfield)",
-    ax=ax_conf,
-)
+    try:
+        from IPython.display import Image, display
 
-# Gráfico de Barras Agrupadas: Precision, Recall e F1-Score
-x_pos = np.arange(len(nomes_canonicos_m))
-bar_w = 0.25
+        display(Image(filename=path_fig_metricas))
+    except Exception:
+        pass
 
-p_vals = df_apenas_classes["precision"].to_numpy(dtype=float)
-r_vals = df_apenas_classes["recall"].to_numpy(dtype=float)
-f_vals = df_apenas_classes["f1_score"].to_numpy(dtype=float)
-s_vals = df_apenas_classes["support"].to_numpy(dtype=int)
+else:
+    # 3. Recuperação na rede Hopfield com injeção de 0.5 nos genes ausentes (Lotes OOM-Safe)
+    print(
+        f"\nRecuperando padrões na Modern Hopfield Network ({nome_modelo_imp}, batch_size=40000, sentinela=0.5, prob=True)..."
+    )
+    Wrecuperado_m, Wprob_m, att_m = modelo_imputacao.retrieve(
+        queries=W_mathys,
+        batch_size=40000,
+        mask_sentinela_ausentes=mask_ausentes,
+        fill_value=0.5,
+        return_probabilities=True,
+        return_attention_weights=True,
+    )
+    print(f"Recuperação concluída! Matriz reconstruída: {Wrecuperado_m.shape}")
 
-ax_bar.bar(x_pos - bar_w, p_vals, bar_w, label="Precision", color="#2b5c8f")
-ax_bar.bar(x_pos, r_vals, bar_w, label="Recall", color="#2a9d8f")
-ax_bar.bar(x_pos + bar_w, f_vals, bar_w, label="F1-Score", color="#e76f51")
+    # 4. Exportação Estruturada OOM-Safe em AnnData (.h5ad Gzip), .npy e JSON (ADR 017/ADR 020)
+    assert analisador.genes_ordenados is not None
 
-ax_bar.set_ylabel("Pontuação (0.0 a 1.0)", fontsize=11)
-ax_bar.set_title(
-    f"Precision, Recall e F1-Score por Tipo Celular\n({nome_modelo_imp} - Mathys Imputado)",
-    fontsize=12,
-    fontweight="bold",
-)
-ax_bar.set_xticks(x_pos)
-ax_bar.set_xticklabels(nomes_canonicos_m, rotation=35, ha="right", fontsize=9)
-ax_bar.set_ylim(0, 1.15)
-ax_bar.grid(axis="y", linestyle="--", alpha=0.5)
-ax_bar.legend(loc="upper right", frameon=True)
+    exportador_imp = ExportadorImputacao(out_dir=OUT_IMPUTACAO)
+    rel_imp = exportador_imp.exportar(
+        w_original=W_mathys,
+        w_recuperado=Wrecuperado_m,
+        genes_canonica=analisador.genes_ordenados,
+        map_features=leitor.map_m,
+        adata_alvo_original=alinhador.path_m_alinhado or PATH_ALVO,
+        classes_reais=clo_alvo,
+        info_modelo={
+            "beta": modelo_imputacao.beta,
+            "n_iters": modelo_imputacao.n_iters,
+            "binary": modelo_imputacao.binary,
+            "threshold": modelo_imputacao.threshold,
+            "nc": nc_imputacao,
+            "n_padroes": perf_imputacao.shape[0],
+        },
+        nome_modelo=nome_modelo_imp,
+        exportar_npy=True,
+        substituir_sentinela=True,
+        limiar_sentinela=0.5,
+        mask_ausentes=mask_ausentes,
+        w_probabilidade=Wprob_m,
+    )
 
-# Anotação de Support acima de cada linhagem
-for idx_b, sup in enumerate(s_vals):
-    h_max = max(p_vals[idx_b], r_vals[idx_b], f_vals[idx_b])
-    ax_bar.annotate(
-        f"n={sup:,}",
-        xy=(x_pos[idx_b], h_max + 0.03),
-        ha="center",
-        va="bottom",
-        fontsize=8,
+    PATH_IMPUTADO_H5AD = rel_imp["arquivos_gerados"]["h5ad"]
+    PATH_IMPUTADO_NPY = rel_imp["arquivos_gerados"]["npy"]
+
+    # Retrocompatibilidade com caminho legado
+    os.makedirs(OUT_TOP_GENES, exist_ok=True)
+    PATH_IMPUTADO_MODELO = os.path.join(
+        OUT_TOP_GENES, f"X_mathys_IMPUTADO_{nome_modelo_imp}.npy"
+    )
+    PATH_IMPUTADO_LEGADO = os.path.join(OUT_TOP_GENES, "X_mathys_IMPUTADO_rede180.npy")
+    PATH_IMPUTADO = PATH_IMPUTADO_LEGADO
+    if PATH_IMPUTADO_NPY and os.path.exists(PATH_IMPUTADO_NPY):
+        shutil.copyfile(PATH_IMPUTADO_NPY, PATH_IMPUTADO_MODELO)
+        shutil.copyfile(PATH_IMPUTADO_NPY, PATH_IMPUTADO_LEGADO)
+
+    # 5. Validação Biológica e Estatística da Imputação (ADR 020)
+    from treinamento import ValidadorImputacao
+
+    adata_imp_audit = ad.read_h5ad(PATH_IMPUTADO_H5AD, backed="r")
+    validador_imp = ValidadorImputacao()
+    metricas_globais = validador_imp.auditar_imputacao_global(
+        adata=adata_imp_audit, mask_ausentes=mask_ausentes
+    )
+    df_marcadores = validador_imp.auditar_marcadores_biologicos(
+        adata=adata_imp_audit,
+        classes_reais=clo_alvo,
+        map_features=leitor.map_m,
+    )
+    validador_imp.imprimir_relatorio(metricas_globais, df_marcadores)
+    validador_imp.exportar_relatorio(
+        path_relatorio_json=rel_imp["arquivos_gerados"]["relatorio_json"],
+        metricas_globais=metricas_globais,
+        df_marcadores=df_marcadores,
+    )
+    if hasattr(adata_imp_audit, "file") and adata_imp_audit.file is not None:
+        adata_imp_audit.file.close()
+    del adata_imp_audit
+    gc.collect()
+
+    print(f"\n[Exportação] Matriz AnnData (.h5ad Gzip) : {PATH_IMPUTADO_H5AD}")
+    print(f"[Exportação] Matriz NumPy (.npy)        : {PATH_IMPUTADO_NPY}")
+    print(f"[Exportação] Modelo Ativo (.npy)        : {PATH_IMPUTADO_MODELO}")
+    print(f"[Exportação] Retrocompatibilidade (.npy) : {PATH_IMPUTADO}")
+
+    # 6. Exportação e Validação MTX do Alvo Imputado pós-Hopfield
+    exportador_mtx_imp = ExportadorMTX(
+        out_dir=OUT_MTX_ALVO_IMPUTADO, validador=validador_genes
+    )
+    adata_imp_loaded = ad.read_h5ad(PATH_IMPUTADO_H5AD, backed="r")
+    exportador_mtx_imp.exportar(
+        matriz=adata_imp_loaded,
+        genes_referencia=analisador.genes_ordenados,
+        map_features=leitor.map_m,
+        nome_etapa="Alvo Imputado pós-Hopfield (Mathys)",
+    )
+    if hasattr(adata_imp_loaded, "file") and adata_imp_loaded.file is not None:
+        adata_imp_loaded.file.close()
+    del adata_imp_loaded
+    gc.collect()
+
+    # 7. Projeção SWeeP do Alvo Imputado (Garantia de Mesma Base Ortonormal Congelada - ADR 018/019)
+    path_mtx_alvo_imputado = os.path.join(OUT_MTX_ALVO_IMPUTADO, "matrix.mtx")
+    print(
+        f"\n[SWeeP Alvo Imputado] Projetando {path_mtx_alvo_imputado} com a mesma base congelada..."
+    )
+    projetor_m_r = ProjetorSWeePR(
+        path_matriz=path_mtx_alvo_imputado,
+        path_saida=os.path.join(
+            OUT_SWEEP_POS_IMPUTACAO, "sweep_alvo_pos_imputacao.txt"
+        ),
+        n_componentes=600,
+        seed=SEED,
+    )
+    projetor_m_r.projetar()
+
+    # 8. Avaliação do Tipo Celular Cross-Dataset via Softmax Class Pooling (Precision, Recall, F1-Score e Support)
+    from sklearn.metrics import classification_report
+
+    from treinamento.validador_imputacao import NOMES_CLASSES_CEREBRO
+
+    nomes_canonicos_m: list[str] = [
+        NOMES_CLASSES_CEREBRO.get(c, f"Classe_{c}") for c in CLASSES_CANONICAS
+    ]
+
+    avaliador_m = AvaliadorHopfield(
+        padroes=perf_imputacao,
+        classes=CLASSES_CANONICAS,
+        nc=nc_imputacao,
+        nomes_classes=nomes_canonicos_m,
+        meta=meta_imputacao,
+        metrica="euclidiana",
+    )
+    avaliador_m.avaliar_por_atencao(att_m, clo_alvo)
+
+    # 8.1 Exibição do Relatório de Classificação Sklearn
+    print("\n" + "=" * 65)
+    print(
+        f"=== Relatório de Classificação por Tipo Celular ({nome_modelo_imp} - Mathys) ==="
+    )
+    print("=" * 65)
+    print(
+        classification_report(
+            avaliador_m.y_true,
+            avaliador_m.y_pred,
+            labels=CLASSES_CANONICAS,
+            target_names=nomes_canonicos_m,
+            digits=4,
+            zero_division=0,
+        )
+    )
+
+    # 8.2 Tabela Estruturada com Médias Globais (Macro e Weighted)
+    df_metricas_completas = avaliador_m.relatorio_classificacao_completo()
+    print("\n[Tabela Estruturada de Métricas por Tipo Celular]:")
+    print(df_metricas_completas.to_string(index=False))
+
+    # 8.3 Persistência em CSV e JSON
+    path_csv_metricas = os.path.join(OUT_IMPUTACAO, "metricas_tipo_celular_mathys.csv")
+    path_json_metricas = os.path.join(
+        OUT_IMPUTACAO, "metricas_tipo_celular_mathys.json"
+    )
+    df_metricas_completas.to_csv(path_csv_metricas, index=False)
+    df_metricas_completas.to_json(path_json_metricas, orient="records", indent=2)
+    print(f"\n[Persistência] Salvo CSV : {path_csv_metricas}")
+    print(f"[Persistência] Salvo JSON: {path_json_metricas}")
+
+    # 8.4 Painel Gráfico 1 & 2: Matriz de Confusão e Barras Agrupadas
+    df_apenas_classes = df_metricas_completas[
+        df_metricas_completas["classe_id"] != "—"
+    ].copy()
+
+    fig, (ax_conf, ax_bar) = plt.subplots(1, 2, figsize=(18, 7))
+
+    # Matriz de Confusão com Rótulos Canônicos
+    avaliador_m.plotar(
+        titulo=f"Matriz de Confusão — {nome_modelo_imp}\n(Mathys Imputado via Hopfield)",
+        ax=ax_conf,
+    )
+
+    # Gráfico de Barras Agrupadas: Precision, Recall e F1-Score
+    x_pos = np.arange(len(nomes_canonicos_m))
+    bar_w = 0.25
+
+    p_vals = df_apenas_classes["precision"].to_numpy(dtype=float)
+    r_vals = df_apenas_classes["recall"].to_numpy(dtype=float)
+    f_vals = df_apenas_classes["f1_score"].to_numpy(dtype=float)
+    s_vals = df_apenas_classes["support"].to_numpy(dtype=int)
+
+    ax_bar.bar(x_pos - bar_w, p_vals, bar_w, label="Precision", color="#2b5c8f")
+    ax_bar.bar(x_pos, r_vals, bar_w, label="Recall", color="#2a9d8f")
+    ax_bar.bar(x_pos + bar_w, f_vals, bar_w, label="F1-Score", color="#e76f51")
+
+    ax_bar.set_ylabel("Pontuação (0.0 a 1.0)", fontsize=11)
+    ax_bar.set_title(
+        f"Precision, Recall e F1-Score por Tipo Celular\n({nome_modelo_imp} - Mathys Imputado)",
+        fontsize=12,
         fontweight="bold",
-        color="#333333",
     )
+    ax_bar.set_xticks(x_pos)
+    ax_bar.set_xticklabels(nomes_canonicos_m, rotation=35, ha="right", fontsize=9)
+    ax_bar.set_ylim(0, 1.15)
+    ax_bar.grid(axis="y", linestyle="--", alpha=0.5)
+    ax_bar.legend(loc="upper right", frameon=True)
 
-plt.tight_layout()
-path_fig_metricas = os.path.join(
-    OUT_IMPUTACAO, "painel_metricas_tipo_celular_mathys.png"
-)
-plt.savefig(path_fig_metricas, dpi=300, bbox_inches="tight")
-plt.show()
-print(f"[Visualização] Gráfico salvo em: {path_fig_metricas}")
-print(avaliador_m)
+    # Anotação de Support acima de cada linhagem
+    for idx_b, sup in enumerate(s_vals):
+        h_max = max(p_vals[idx_b], r_vals[idx_b], f_vals[idx_b])
+        ax_bar.annotate(
+            f"n={sup:,}",
+            xy=(x_pos[idx_b], h_max + 0.03),
+            ha="center",
+            va="bottom",
+            fontsize=8,
+            fontweight="bold",
+            color="#333333",
+        )
+
+    plt.tight_layout()
+    path_fig_metricas = os.path.join(
+        OUT_IMPUTACAO, "painel_metricas_tipo_celular_mathys.png"
+    )
+    plt.savefig(path_fig_metricas, dpi=300, bbox_inches="tight")
+    plt.show()
+    print(f"[Visualização] Gráfico salvo em: {path_fig_metricas}")
+    print(avaliador_m)
 
 
 # %% [markdown]

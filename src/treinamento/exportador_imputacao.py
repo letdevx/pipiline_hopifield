@@ -463,3 +463,88 @@ class ExportadorImputacao:
         print("[ExportadorImputacao] Exportação finalizada com sucesso. [Ok]\n")
 
         return relatorio
+
+    @staticmethod
+    def verificar_imputacao_completa(
+        out_imputacao: PathType,
+        nome_modelo: str,
+        n_genes: int,
+        out_mtx: PathType | None = None,
+        out_sweep: PathType | None = None,
+        out_top_genes: PathType | None = None,
+        prefixo_nome: str | None = None,
+    ) -> tuple[bool, dict[str, str]]:
+        """Verifica se todos os artefatos de saída do Capítulo 13 já existem e estão íntegros.
+
+        Parameters
+        ----------
+        out_imputacao : str | os.PathLike[str]
+            Diretório raiz de saída da imputação (ex: OUT_IMPUTACAO).
+        nome_modelo : str
+            Identificador do modelo ativo (ex: 'rede180' ou 'rede210').
+        n_genes : int
+            Quantidade de genes canônicos processados (ex: 61541).
+        out_mtx : str | os.PathLike[str] | None, optional
+            Diretório de exportação da matriz MTX (ex: OUT_MTX_ALVO_IMPUTADO).
+        out_sweep : str | os.PathLike[str] | None, optional
+            Diretório de saída da projeção SWeeP (ex: OUT_SWEEP_POS_IMPUTACAO).
+        out_top_genes : str | os.PathLike[str] | None, optional
+            Diretório de retrocompatibilidade para matrizes npy (ex: OUT_TOP_GENES).
+        prefixo_nome : str | None, optional
+            Prefixo customizado caso tenha sido usado na exportação.
+
+        Returns
+        -------
+        tuple[bool, dict[str, str]]
+            Uma tupla contendo:
+            - bool: True se todos os artefatos essenciais existem e possuem tamanho > 0.
+            - dict[str, str]: Mapeamento com os caminhos absolutos de todos os artefatos esperados.
+        """
+        out_imp_str = str(out_imputacao)
+        base_nome = (
+            str(prefixo_nome).strip()
+            if prefixo_nome is not None and str(prefixo_nome).strip()
+            else f"mathys_imputado_fujita_{nome_modelo}_{n_genes}genes"
+        )
+
+        caminhos: dict[str, str] = {
+            "h5ad": os.path.join(out_imp_str, f"{base_nome}.h5ad"),
+            "npy": os.path.join(out_imp_str, f"{base_nome}.npy"),
+            "relatorio_json": os.path.join(out_imp_str, f"relatorio_{base_nome}.json"),
+            "metricas_csv": os.path.join(
+                out_imp_str, "metricas_tipo_celular_mathys.csv"
+            ),
+            "metricas_json": os.path.join(
+                out_imp_str, "metricas_tipo_celular_mathys.json"
+            ),
+            "painel_png": os.path.join(
+                out_imp_str, "painel_metricas_tipo_celular_mathys.png"
+            ),
+        }
+
+        if out_top_genes is not None:
+            out_top_str = str(out_top_genes)
+            caminhos["npy_modelo"] = os.path.join(
+                out_top_str, f"X_mathys_IMPUTADO_{nome_modelo}.npy"
+            )
+            caminhos["npy_legado"] = os.path.join(
+                out_top_str, "X_mathys_IMPUTADO_rede180.npy"
+            )
+
+        if out_mtx is not None:
+            out_mtx_str = str(out_mtx)
+            caminhos["mtx"] = os.path.join(out_mtx_str, "matrix.mtx")
+            caminhos["barcodes"] = os.path.join(out_mtx_str, "barcodes.tsv")
+            caminhos["features"] = os.path.join(out_mtx_str, "features.tsv")
+
+        if out_sweep is not None:
+            out_swp_str = str(out_sweep)
+            caminhos["sweep"] = os.path.join(
+                out_swp_str, "sweep_alvo_pos_imputacao.txt"
+            )
+
+        todos_existem = all(
+            os.path.isfile(p) and os.path.getsize(p) > 0 for p in caminhos.values()
+        )
+
+        return todos_existem, caminhos
