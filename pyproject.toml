@@ -131,6 +131,7 @@ convention = "numpy"
 ]
 "pipeline_*.py" = [
     "D",       # Docstrings flexíveis para scripts interativos/notebooks
+    "I",       # Permitir imports por célula em scripts interativos percentuais
     "E402",    # Permitir imports intermediários de blocos de execução
     "F401",    # Imports para checagem condicional em células de ambiente
     "F811",    # Permitir redefinição de variáveis em células
