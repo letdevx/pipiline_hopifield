@@ -48,6 +48,7 @@ import gc
 import importlib
 import os
 import shutil
+import subprocess
 import sys
 
 import anndata as ad
@@ -64,6 +65,10 @@ from sklearn.metrics import classification_report, confusion_matrix
 # ==============================================================================
 # CONFIGURAÇÃO DO REPOSITÓRIO E VALIDAÇÃO FAIL FAST DE INTEGRIDADE GIT (COLAB)
 # ==============================================================================
+import os
+import subprocess
+import sys
+
 REPO_NAME = "pipiline_hopifield"
 REPO_URL = "https://github.com/letdevx/pipiline_hopifield.git"
 REPO_BRANCH = "reconstrução_Pan_Mathys"
@@ -71,7 +76,7 @@ DEST_PATH = f"/content/{REPO_NAME}"
 
 # Commit hash que o HEAD da VM DEVE conter (aceita hash curto de 7+ chars ou SHA-1 de 40 chars)
 # OBRIGATÓRIO NO GOOGLE COLAB: previne execução com código defasado por esquecimento de 'git push'
-EXPECTED_COMMIT = "e97953f"
+EXPECTED_COMMIT = "aeaa804"
 
 
 def _is_google_colab() -> bool:
@@ -179,6 +184,16 @@ def sincronizar_e_validar_repo_colab(
     mensagem = _git_meta(["log", "-1", "--format=%s"])
 
     coincide = head_completo.startswith(exp_clean) or (exp_clean == head_curto)
+
+    if not coincide:
+        # Se o hash esperado for ancestral do HEAD da VM, o repositório já contém as alterações
+        res_ancestor = subprocess.run(
+            ["git", "-C", dest_path, "merge-base", "--is-ancestor", exp_clean, "HEAD"],
+            capture_output=True,
+            check=False,
+        )
+        if res_ancestor.returncode == 0:
+            coincide = True
 
     if not coincide:
         msg_erro = (

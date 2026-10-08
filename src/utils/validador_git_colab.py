@@ -248,6 +248,24 @@ def validar_commit_head(
     coincide = head_completo.startswith(exp_clean) or (exp_clean == head_curto)
 
     if not coincide:
+        # Se o hash esperado for ancestral do HEAD, o repositório já contém o commit esperado
+        res_ancestor = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_path),
+                "merge-base",
+                "--is-ancestor",
+                exp_clean,
+                "HEAD",
+            ],
+            capture_output=True,
+            check=False,
+        )
+        if res_ancestor.returncode == 0:
+            coincide = True
+
+    if not coincide:
         msg_erro = (
             "\n"
             + "=" * 80

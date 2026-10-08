@@ -112,6 +112,25 @@ def test_validar_commit_head_sucesso() -> None:
     assert res_comp["hash_completo"] == hash_completo
 
 
+def test_validar_commit_head_ancestral_sucesso() -> None:
+    """Verifica que informar um commit anterior já contido no histórico é aceito."""
+    # Obter o commit pai (HEAD~1)
+    import subprocess
+
+    res = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "rev-parse", "--short", "HEAD~1"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if res.returncode == 0:
+        pai_hash = res.stdout.strip()
+        resultado = validar_commit_head(
+            REPO_ROOT, expected_commit=pai_hash, forcar_no_local=True
+        )
+        assert resultado is not None
+
+
 def test_validar_commit_head_divergencia_fail_fast() -> None:
     """Verifica disparo e conteúdo detalhado do erro Fail Fast ao divergir."""
     commit_ficticio = "0000000deadbeef"

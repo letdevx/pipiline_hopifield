@@ -18,9 +18,10 @@ HOOKS_DIR = REPO_ROOT / ".git" / "hooks"
 POST_COMMIT_HOOK = HOOKS_DIR / "post-commit"
 
 HOOK_CONTENT = """#!/bin/sh
-# Hook automático pós-commit: atualiza EXPECTED_COMMIT no notebook e executa push
-echo "[Git Hook post-commit] Atualizando EXPECTED_COMMIT no notebook..."
-uv run python scripts/sincronizar_colab.py --push
+# Hook automático pós-commit: envia commits automaticamente para origin
+BRANCH=$(git branch --show-current)
+echo "[Git Hook post-commit] Enviando commits para origin/$BRANCH..."
+git push origin "$BRANCH"
 """
 
 
@@ -43,12 +44,11 @@ def instalar_hook() -> None:
     print(f"Arquivo do hook : {POST_COMMIT_HOOK}")
     print("\nFluxo Automatizado Ativo:")
     print("1. Toda vez que você fizer 'git commit' (no terminal ou pela IDE):")
-    print("   • O hash do commit é capturado;")
-    print("   • O EXPECTED_COMMIT em pipeline_generico_Pan_Mathys.py é atualizado;")
-    print("   • O notebook .ipynb é sincronizado via Jupytext;")
-    print("   • Um 'git push origin <branch>' é disparado automaticamente.")
-    print("2. Ao clicar em 'Run All' na IDE conectada ao Colab:")
-    print("   • O Colab puxa o novo commit e valida a integridade com sucesso.")
+    print("   • O commit é enviado para o GitHub automaticamente via git push.")
+    print("2. Ao rodar no Google Colab:")
+    print(
+        "   • O Colab puxa o novo commit da branch e valida integridade via ancestor/hash."
+    )
     print("=" * 70)
 
 
