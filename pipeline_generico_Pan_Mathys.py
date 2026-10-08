@@ -61,21 +61,180 @@ from numpy.typing import NDArray
 from sklearn.metrics import classification_report, confusion_matrix
 
 # %%
-REPO_NAME = "pipiline_hopifield"  # Nome do seu repo
+# ==============================================================================
+# CONFIGURAÇÃO DO REPOSITÓRIO E VALIDAÇÃO FAIL FAST DE INTEGRIDADE GIT (COLAB)
+# ==============================================================================
+REPO_NAME = "pipiline_hopifield"
 REPO_URL = "https://github.com/letdevx/pipiline_hopifield.git"
+REPO_BRANCH = "reconstrução_Pan_Mathys"
 DEST_PATH = f"/content/{REPO_NAME}"
 
-# Clona ou atualiza o código na VM
-if not os.path.exists(DEST_PATH):
-    print("Clonando código para a VM...")
-    # !git clone {REPO_URL} {DEST_PATH}
+# Commit hash que o HEAD da VM DEVE conter (aceita hash curto de 7+ chars ou SHA-1 de 40 chars)
+# OBRIGATÓRIO NO GOOGLE COLAB: previne execução com código defasado por esquecimento de 'git push'
+EXPECTED_COMMIT = "058e839"
 
-# !cd {DEST_PATH} && git checkout reconstrução_Pan_Mathys && git pull
 
-# Adiciona a raiz do repo e a pasta 'src' da VM ao path do Python
-for _p in (DEST_PATH, os.path.join(DEST_PATH, "src")):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
+def _is_google_colab() -> bool:
+    """Detecta se a execução atual está ocorrendo no Google Colab."""
+    return (
+        "google.colab" in sys.modules
+        or os.path.exists("/content")
+        or os.environ.get("COLAB_GPU") is not None
+        or os.environ.get("COLAB_RELEASE_TAG") is not None
+    )
+
+
+def sincronizar_e_validar_repo_colab(
+    repo_url: str,
+    dest_path: str,
+    branch: str,
+    expected_commit: str | None,
+) -> dict[str, str] | None:
+    """Sincroniza o repositório na VM do Colab e valida o commit HEAD (Fail Fast).
+
+    Raises
+    ------
+    RuntimeError
+        Se EXPECTED_COMMIT for omitido no Colab ou divergir do HEAD clonado.
+    """
+    if not _is_google_colab():
+        print(
+            "[Git Validador] Execução em ambiente local detectada. "
+            "Sincronização remota e validação estrita de commit do Colab ignoradas."
+        )
+        return None
+
+    # 1. Validação de obrigatoriedade no ambiente Colab
+    if expected_commit is None or not expected_commit.strip():
+        raise RuntimeError(
+            "\n"
+            + "=" * 80
+            + "\n[FALHA DE INTEGRIDADE - FAIL FAST] COMMIT ESPERADO NÃO INFORMADO\n"
+            + "=" * 80
+            + "\nNo ambiente do Google Colab, a variável EXPECTED_COMMIT é obrigatória!\n"
+            + "Defina o hash do commit desejado antes de executar o notebook para evitar\n"
+            + "execuções não reproduzíveis ou versões obsoletas do código.\n"
+            + "\nExemplo:\n"
+            + "    EXPECTED_COMMIT = '058e839'  # Hash obtido via 'git rev-parse --short HEAD'\n"
+            + "=" * 80
+        )
+
+    exp_clean = expected_commit.strip().lower()
+    if len(exp_clean) < 7:
+        raise RuntimeError(
+            f"O hash informado '{expected_commit}' possui menos de 7 caracteres. "
+            "Forneça pelo menos 7 caracteres para validação inequívoca."
+        )
+
+    # 2. Clona se o repositório ainda não existir na VM
+    if not os.path.exists(dest_path):
+        print(f"[Colab Git] Clonando '{repo_url}' em '{dest_path}'...")
+        res_clone = subprocess.run(
+            ["git", "clone", repo_url, dest_path],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res_clone.returncode != 0:
+            raise RuntimeError(
+                f"Falha ao clonar repositório:\n{res_clone.stderr.strip()}"
+            )
+
+    # 3. Checkout e atualização da branch remota na VM
+    print(f"[Colab Git] Atualizando branch '{branch}' a partir de origin...")
+    subprocess.run(
+        ["git", "-C", dest_path, "checkout", branch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    subprocess.run(
+        ["git", "-C", dest_path, "fetch", "origin", branch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    res_pull = subprocess.run(
+        ["git", "-C", dest_path, "pull", "origin", branch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if res_pull.returncode != 0:
+        print(f"[Colab Git] Aviso durante git pull:\n{res_pull.stderr.strip()}")
+
+    # 4. Inspeciona o commit HEAD da VM
+    def _git_meta(args: list[str]) -> str:
+        return subprocess.run(
+            ["git", "-C", dest_path, *args],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    head_completo = _git_meta(["rev-parse", "HEAD"]).lower()
+    head_curto = _git_meta(["rev-parse", "--short", "HEAD"]).lower()
+    autor = _git_meta(["log", "-1", "--format=%an"])
+    data = _git_meta(["log", "-1", "--format=%ad", "--date=iso"])
+    mensagem = _git_meta(["log", "-1", "--format=%s"])
+
+    coincide = head_completo.startswith(exp_clean) or (exp_clean == head_curto)
+
+    if not coincide:
+        msg_erro = (
+            "\n"
+            + "=" * 80
+            + "\n[FALHA DE INTEGRIDADE - FAIL FAST] DIVERGÊNCIA DE COMMIT NO GOOGLE COLAB\n"
+            + "=" * 80
+            + f"\n• Commit Esperado : {expected_commit}"
+            + f"\n• Commit no Colab : {head_curto} ({head_completo})"
+            + f"\n• Branch atual    : {branch}"
+            + f"\n• Autor do Commit : {autor}"
+            + f"\n• Data do Commit  : {data}"
+            + f"\n• Mensagem        : {mensagem}"
+            + "\n"
+            + "-" * 80
+            + "\nMOTIVO DA INTERRUPÇÃO:"
+            + "\nO repositório clonado na VM do Google Colab não está no commit esperado."
+            + "\nVocê provavelmente esqueceu de fazer push dos commits locais do seu laptop!"
+            + "\n"
+            + "\nCOMO CORRIGIR:"
+            + "\n1. No terminal do seu laptop, envie os commits mais recentes:"
+            + "\n       git status"
+            + f"\n       git push origin {branch}"
+            + "\n2. No Google Colab, re-execute esta célula para atualizar a VM e prosseguir."
+            + "\n"
+            + "=" * 80
+        )
+        raise RuntimeError(msg_erro)
+
+    print(
+        f"[Git Validador] Integridade confirmada! HEAD no commit esperado: "
+        f"{head_curto} - '{mensagem}' (Branch: {branch})"
+    )
+    return {
+        "hash_completo": head_completo,
+        "hash_curto": head_curto,
+        "autor": autor,
+        "data": data,
+        "mensagem": mensagem,
+        "branch": branch,
+    }
+
+
+# Executa a verificação na inicialização da célula
+sincronizar_e_validar_repo_colab(
+    repo_url=REPO_URL,
+    dest_path=DEST_PATH,
+    branch=REPO_BRANCH,
+    expected_commit=EXPECTED_COMMIT,
+)
+
+# Adiciona caminhos do repositório ao sys.path se estiver no Colab
+if _is_google_colab():
+    for _p in (DEST_PATH, os.path.join(DEST_PATH, "src")):
+        if _p not in sys.path:
+            sys.path.insert(0, _p)
 
 
 # %%

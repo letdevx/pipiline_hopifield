@@ -88,6 +88,9 @@ Além disso, gerencia a estrutura de saídas de forma **100% automática e dinâ
 - **`selecionador_genes_shap.py` (`HopfieldClassifierWrapper`, `SelecionadorGenesSHAPHopfield`)**: Motor de explicabilidade e seleção de features por valores Shapley via `shap.GradientExplainer` (Expected Gradients) aplicado diretamente sobre a função de atenção Softmax da Rede Hopfield Moderna em mini-lotes OOM-Safe no genoma completo (36.591 genes), gerando rankings de marcadores por linhagem celular e conjuntos unificados consolidados. Veja **[[04_Recursos/adrs/adr_023_selecao_features_shap_hopfield|ADR 023]]**.
 - **`gerador_relatorio.py` (`GeradorRelatorio`)**: Compila os resultados dos experimentos em um relatório HTML/Markdown exportável.
 
+### 2.5. `src/utils/` — Utilitários de Diagnóstico e Integridade de Ambiente
+- **`validador_git_colab.py` (`validar_commit_head`, `atualizar_repositorio_colab`, `detectar_ambiente_colab`, `obter_info_commit`)**: Provê salvaguardas baseadas no princípio Fail Fast para assegurar que execuções no Google Colab rodem exatamente o commit Git esperado (`EXPECTED_COMMIT`), realizando sincronização automática e abortando execuções com relatórios detalhados caso haja esquecimento de `git push` no ambiente local. Veja **[[04_Recursos/adrs/adr_024_validacao_fail_fast_commit_colab|ADR 024]]**.
+
 ---
 
 ## 3. Contratos de Dados e Persistência
