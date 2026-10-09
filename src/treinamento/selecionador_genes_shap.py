@@ -499,6 +499,7 @@ class SelecionadorGenesSHAPHopfield:
         n_background: int = 70,
         batch_size: int | None = None,
         dispositivo: str | None = None,
+        max_amostras_por_classe: int | None = None,
         seed: int = 42,
     ) -> SelecionadorGenesSHAPHopfield:
         """Processa o dataset completo via streaming em mini-lotes com acumulação estatística online.
@@ -521,6 +522,9 @@ class SelecionadorGenesSHAPHopfield:
             Tamanho de mini-lote para avaliação de autograd.
         dispositivo : str | None, optional
             Dispositivo de execução ('cuda' ou 'cpu'). Se None, detecta automaticamente.
+        max_amostras_por_classe : int | None, optional
+            Se fornecido, seleciona até esse limite de células por classe de forma estratificada balanceada,
+            reduzindo o tempo de processamento sem alterar a importância dos marcadores dominantes.
         seed : int, default=42
             Semente para reprodutibilidade.
 
@@ -530,11 +534,46 @@ class SelecionadorGenesSHAPHopfield:
             A própria instância calculada em modo streaming.
         """
         b_size: int = int(batch_size if batch_size is not None else self.batch_size)
-        n_total: int = int(matriz_expressao.shape[0])
         n_genes: int = int(matriz_expressao.shape[1])
         n_classes: int = len(self.classes)
         labels_arr: NDArray[np.int_] = np.asarray(labels, dtype=int)
 
+        is_sparse: bool = sp.issparse(matriz_expressao)
+        mat_csr: sp.csr_matrix | None = (
+            sp.csr_matrix(matriz_expressao) if is_sparse else None
+        )
+        mat_dense: NDArray[np.float32] | None = (
+            np.asarray(matriz_expressao, dtype=np.float32) if not is_sparse else None
+        )
+
+        # Amostragem Estratificada Balanceada OOM-Safe se solicitada
+        if max_amostras_por_classe is not None and max_amostras_por_classe > 0:
+            rng_amostra = np.random.RandomState(seed)
+            indices_sel: list[int] = []
+            for c_val in self.classes:
+                idx_c = np.where(labels_arr == c_val)[0]
+                if len(idx_c) > max_amostras_por_classe:
+                    escolhidos = rng_amostra.choice(
+                        idx_c, size=max_amostras_por_classe, replace=False
+                    )
+                    indices_sel.extend(escolhidos.tolist())
+                elif len(idx_c) > 0:
+                    indices_sel.extend(idx_c.tolist())
+
+            indices_sel = sorted(indices_sel)
+            if is_sparse and mat_csr is not None:
+                mat_csr = mat_csr[indices_sel]
+                matriz_expressao = cast(sp.spmatrix, mat_csr)
+            elif mat_dense is not None:
+                mat_dense = mat_dense[indices_sel]
+                matriz_expressao = cast(NDArray[Any], mat_dense)
+            labels_arr = labels_arr[indices_sel]
+            print(
+                f"[SelecionadorGenesSHAP] Amostragem estratificada balanceada aplicada: "
+                f"{len(indices_sel)} células selecionadas (máx {max_amostras_por_classe} por classe)."
+            )
+
+        n_total: int = int(labels_arr.shape[0])
         self.n_genes_analisados = n_genes
 
         # 1. Dispositivo de execução
@@ -566,14 +605,6 @@ class SelecionadorGenesSHAPHopfield:
             f"[SelecionadorGenesSHAP] Modo Streaming iniciado: {n_total} células "
             f"({n_genes} genes) em lotes de {b_size} no dispositivo '{dev_str}' "
             f"com baseline '{metodo_background}' ({bg_tensor.shape[0]} amostras)..."
-        )
-
-        is_sparse: bool = sp.issparse(matriz_expressao)
-        mat_csr: sp.csr_matrix | None = (
-            sp.csr_matrix(matriz_expressao) if is_sparse else None
-        )
-        mat_dense: NDArray[np.float32] | None = (
-            np.asarray(matriz_expressao, dtype=np.float32) if not is_sparse else None
         )
 
         for i in range(0, n_total, b_size):
@@ -652,6 +683,7 @@ class SelecionadorGenesSHAPHopfield:
         metodo_background: str = "centroides",
         batch_size: int | None = None,
         dispositivo: str | None = None,
+        max_amostras_por_classe: int | None = None,
     ) -> SelecionadorGenesSHAPHopfield:
         """Executa a calibração de background e o cálculo de explicabilidade SHAP.
 
@@ -671,6 +703,9 @@ class SelecionadorGenesSHAPHopfield:
             Tamanho de mini-lote para avaliação de autograd.
         dispositivo : str | None, optional
             Dispositivo de execução ('cuda' ou 'cpu').
+        max_amostras_por_classe : int | None, optional
+            Se fornecido em modo streaming, seleciona até esse limite de células por classe
+            de forma balanceada, acelerando drasticamente o cálculo.
 
         Returns
         -------
@@ -689,6 +724,7 @@ class SelecionadorGenesSHAPHopfield:
                 n_background=n_background or 70,
                 batch_size=batch_size,
                 dispositivo=dispositivo,
+                max_amostras_por_classe=max_amostras_por_classe,
                 seed=self.seed,
             )
 

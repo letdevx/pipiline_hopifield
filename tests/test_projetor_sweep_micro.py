@@ -241,3 +241,66 @@ def test_projetor_sweepr_forcar_recriacao(tmp_path: Path) -> None:
     assert not np.allclose(wswp1, wswp2), (
         "Com forcar_recriacao=True e seed diferente, a base deve ser regenerada e as projeções devem diferir."
     )
+
+
+def test_projetor_sweepr_sentinela_decomposta(tmp_path: Path) -> None:
+    """Valida a projeção SWeeP canônica com decomposição exata da sentinela 0.5."""
+    n_celulas = 10
+    n_genes = 16
+    n_comp = 4
+
+    rng = np.random.default_rng(42)
+    mat_densa = rng.integers(0, 2, size=(n_celulas, n_genes)).astype(np.float32)
+
+    mask_ausentes = np.zeros(n_genes, dtype=bool)
+    mask_ausentes[12:16] = True
+
+    mat_com_sentinela = mat_densa.copy()
+    mat_com_sentinela[:, mask_ausentes] = 0.5
+    mat_com_sentinela_esparsa = sp.csr_matrix(mat_com_sentinela)
+
+    mat_pura = mat_densa.copy()
+    mat_pura[:, mask_ausentes] = 0.0
+    mat_pura_esparsa = sp.csr_matrix(mat_pura)
+
+    path_mtx_completo = tmp_path / "completo.mtx"
+    path_mtx_puro = tmp_path / "puro.mtx"
+    path_saida_completo = tmp_path / "saida_completo.txt"
+    path_saida_decomposto = tmp_path / "saida_decomposto.txt"
+    path_orthbase = tmp_path / "orthbase_sent.rds"
+    path_mask_txt = tmp_path / "mask_ausentes.txt"
+
+    sio.mmwrite(str(path_mtx_completo), mat_com_sentinela_esparsa)
+    sio.mmwrite(str(path_mtx_puro), mat_pura_esparsa)
+
+    indices_1based = [i + 1 for i in range(n_genes) if mask_ausentes[i]]
+    with open(path_mask_txt, "w", encoding="utf-8") as f:
+        for idx in indices_1based:
+            f.write(f"{idx}\n")
+
+    # 1. Projeção padrão da matriz com 0.5 gravado no MTX
+    proj_padrao = ProjetorSWeePR(
+        path_matriz=path_mtx_completo,
+        path_saida=path_saida_completo,
+        n_componentes=n_comp,
+        seed=42,
+        path_orthbase=path_orthbase,
+    )
+    proj_padrao.projetar()
+    w_padrao = proj_padrao.Wswp
+    assert w_padrao is not None
+
+    # 2. Projeção da matriz pura com vetor sentinela decomposto
+    proj_dec = ProjetorSWeePR(
+        path_matriz=path_mtx_puro,
+        path_saida=path_saida_decomposto,
+        n_componentes=n_comp,
+        seed=42,
+        path_orthbase=path_orthbase,
+        path_mask_sentinela=path_mask_txt,
+    )
+    proj_dec.projetar()
+    w_dec = proj_dec.Wswp
+    assert w_dec is not None
+
+    np.testing.assert_allclose(w_padrao, w_dec, rtol=1e-5, atol=1e-5)

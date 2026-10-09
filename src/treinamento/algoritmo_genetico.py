@@ -387,8 +387,9 @@ class OtimizadorGeneticoHopfield:
         populacao.extend(sementes_ajustadas[: self.config.tam_populacao])
 
         # 2. Amostragem complementar dentro dos limites do espaço de busca
+        grade_nc = [5, 10, 15, 20, 25, 30, 35, 40, 45]
         while len(populacao) < self.config.tam_populacao:
-            nc = int(self.rng.integers(5, 46))
+            nc = int(self.rng.choice(grade_nc))
             k_viz = int(self.rng.integers(1, 11))
             beta = float(self.rng.uniform(self.config.beta_min, self.config.beta_max))
             threshold = float(self.rng.uniform(-0.2, 0.4))
@@ -627,7 +628,8 @@ class OtimizadorGeneticoHopfield:
         p_mut = self.config.p_mutacao
 
         if self.rng.random() < p_mut:
-            nc = int(np.clip(nc + self.rng.choice([-5, -2, 2, 5]), 5, 45))
+            delta_nc = int(self.rng.choice([-10, -5, 5, 10]))
+            nc = int(np.clip(round((nc + delta_nc) / 5.0) * 5, 5, 45))
 
         if self.rng.random() < p_mut:
             k_viz = int(np.clip(k_viz + self.rng.choice([-1, 1]), 1, 10))

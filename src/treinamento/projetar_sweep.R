@@ -22,15 +22,16 @@ if (length(args) < 2) {
   stop("[rSWeeP] Uso obrigatório: Rscript projetar_sweep.R <path_entrada> <path_saida> [dim_proj] [seed] [path_orthbase]")
 }
 
-path_entrada     <- args[1]
-path_saida       <- args[2]
-dim_proj         <- if (length(args) >= 3) as.integer(args[3]) else 600L
-seed             <- if (length(args) >= 4) as.integer(args[4]) else 42L
-path_orthbase    <- if (length(args) >= 5 && nzchar(args[5])) args[5] else NULL
-forcar_recriacao <- if (length(args) >= 6 && nzchar(args[6])) as.logical(args[6]) else FALSE
+path_entrada        <- args[1]
+path_saida          <- args[2]
+dim_proj            <- if (length(args) >= 3) as.integer(args[3]) else 600L
+seed                <- if (length(args) >= 4) as.integer(args[4]) else 42L
+path_orthbase       <- if (length(args) >= 5 && nzchar(args[5])) args[5] else NULL
+forcar_recriacao    <- if (length(args) >= 6 && nzchar(args[6])) as.logical(args[6]) else FALSE
 if (is.na(forcar_recriacao)) {
   forcar_recriacao <- FALSE
 }
+path_mask_sentinela <- if (length(args) >= 7 && nzchar(args[7])) args[7] else NULL
 
 cat("=================================================================\n")
 cat("          PROJEÇÃO CANÔNICA rSWeeP (UFPR / AIBIALab)             \n")
@@ -41,6 +42,7 @@ cat("[rSWeeP] Dimensão Alvo     :", dim_proj, "\n")
 cat("[rSWeeP] Semente           :", seed, "\n")
 cat("[rSWeeP] Base Congelada    :", ifelse(is.null(path_orthbase), "Não informada", path_orthbase), "\n")
 cat("[rSWeeP] Forçar Recriação  :", forcar_recriacao, "\n")
+cat("[rSWeeP] Máscara Sentinela :", ifelse(is.null(path_mask_sentinela), "Nenhuma (padrão)", path_mask_sentinela), "\n")
 
 # 1. Leitura OOM-Safe da Matriz de Entrada
 cat("[rSWeeP] Carregando matriz de entrada...\n")
@@ -109,6 +111,27 @@ t_proj <- proc.time()
 # Executa o método SWeeP oficial para dgCMatrix
 resultado <- SWeeP(mat, orthbase = base, transpose = FALSE)
 matriz_projetada <- resultado$proj
+
+# Se houver arquivo com máscara ou índices dos genes ausentes (Sentinela 0.5)
+if (!is.null(path_mask_sentinela) && file.exists(path_mask_sentinela)) {
+  cat("[rSWeeP] Aplicando decomposição analítica da sentinela 0.5 a partir da base congelada...\n")
+  linhas_mask <- trimws(readLines(path_mask_sentinela))
+  linhas_mask <- linhas_mask[nzchar(linhas_mask)]
+
+  idx_ausentes <- NULL
+  if (all(linhas_mask %in% c("TRUE", "FALSE", "true", "false", "0", "1"))) {
+    idx_ausentes <- which(as.logical(linhas_mask) | linhas_mask == "1")
+  } else {
+    idx_ausentes <- as.integer(linhas_mask)
+  }
+
+  if (length(idx_ausentes) > 0) {
+    cat(sprintf("[rSWeeP]   Total de %d genes sentinela identificados.\n", length(idx_ausentes)))
+    v_sent <- 0.5 * colSums(base$mat[idx_ausentes, , drop = FALSE])
+    matriz_projetada <- sweep(matriz_projetada, 2, v_sent, "+")
+    cat("[rSWeeP]   Vetor sentinela incorporado com precisão analítica!\n")
+  }
+}
 
 cat(sprintf("[rSWeeP] Projeção concluída em %.2f s! Dimensões da saída: %d x %d\n",
             (proc.time() - t_proj)[[3]], nrow(matriz_projetada), ncol(matriz_projetada)))

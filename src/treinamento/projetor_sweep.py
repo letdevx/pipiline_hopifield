@@ -6,6 +6,7 @@ utilizando estritamente a biblioteca oficial rSWeeP da UFPR via Rscript.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import subprocess
 from collections.abc import Sequence
@@ -255,6 +256,7 @@ class ProjetorSWeePR:
         seed: int = 42,
         path_orthbase: PathType | None = None,
         forcar_recriacao: bool = False,
+        path_mask_sentinela: PathType | None = None,
     ) -> None:
         self.path_matriz: str = str(path_matriz)
         self.path_saida: str = str(path_saida)
@@ -264,6 +266,9 @@ class ProjetorSWeePR:
             str(path_orthbase) if path_orthbase is not None else str(PATH_ORTHBASE_RDS)
         )
         self.forcar_recriacao: bool = bool(forcar_recriacao)
+        self.path_mask_sentinela: str | None = (
+            str(path_mask_sentinela) if path_mask_sentinela is not None else None
+        )
         self.Wswp: NDArray[np.float32] | None = None
 
     @staticmethod
@@ -407,6 +412,8 @@ cat("[ProjetorSWeePR] Ambiente R pronto. rSWeeP versao:", as.character(packageVe
             self.path_orthbase,
             str(self.forcar_recriacao).upper(),
         ]
+        if self.path_mask_sentinela is not None:
+            cmd.append(self.path_mask_sentinela)
 
         result = subprocess.run(cmd, capture_output=True, text=True)
 
@@ -436,6 +443,77 @@ cat("[ProjetorSWeePR] Ambiente R pronto. rSWeeP versao:", as.character(packageVe
         # 3. Carregamento do Resultado Gerado em R
         self._carregar()
         return self
+
+    @classmethod
+    def projetar_com_sentinela_decomposta(
+        cls,
+        path_matriz_pura: PathType,
+        path_saida: PathType,
+        mask_ausentes: NDArray[np.bool_] | Sequence[int],
+        n_componentes: int = 600,
+        seed: int = 42,
+        path_orthbase: PathType | None = None,
+        forcar_recriacao: bool = False,
+    ) -> ProjetorSWeePR:
+        """Executa a projeção rSWeeP oficial da matriz esparsa decompondo a sentinela 0.5.
+
+        Elimina a necessidade de densificar a matriz com 0.5 em disco e gerar arquivos MTX
+        de múltiplos gigabytes, calculando a contribuição constante dos genes ausentes diretamente
+        no R via produto vetorial analítico sobre a base congelada orthBase.
+
+        Parameters
+        ----------
+        path_matriz_pura : PathType
+            Caminho da matriz sem os valores 0.5 injetados (apenas genes medidos).
+        path_saida : PathType
+            Caminho do arquivo .txt tabulado de destino.
+        mask_ausentes : NDArray[bool] | Sequence[int]
+            Máscara booleana dos genes ausentes ou sequência de índices 0-indexed.
+        n_componentes : int, default=600
+            Dimensão do espaço latente SWeeP.
+        seed : int, default=42
+            Semente pseudoaleatória.
+        path_orthbase : PathType | None, default=None
+            Caminho do arquivo RDS da base congelada.
+        forcar_recriacao : bool, default=False
+            Se True, força a recriação da base.
+
+        Returns
+        -------
+        ProjetorSWeePR
+            Instância com o atributo Wswp projetado e carregado.
+        """
+        import tempfile
+
+        mask_arr = np.asarray(mask_ausentes)
+        if mask_arr.dtype == bool:
+            indices_1based = (np.where(mask_arr)[0] + 1).tolist()
+        else:
+            indices_1based = [int(i) + 1 for i in mask_arr]
+
+        with tempfile.NamedTemporaryFile(
+            "w", suffix="_mask_sentinela.txt", delete=False
+        ) as f_tmp:
+            path_tmp_mask = f_tmp.name
+            for idx in indices_1based:
+                f_tmp.write(f"{idx}\n")
+
+        try:
+            projetor = cls(
+                path_matriz=path_matriz_pura,
+                path_saida=path_saida,
+                n_componentes=n_componentes,
+                seed=seed,
+                path_orthbase=path_orthbase,
+                forcar_recriacao=forcar_recriacao,
+                path_mask_sentinela=path_tmp_mask,
+            )
+            projetor.projetar()
+            return projetor
+        finally:
+            if os.path.exists(path_tmp_mask):
+                with contextlib.suppress(OSError):
+                    os.remove(path_tmp_mask)
 
     def _carregar(self) -> None:
         """Carrega a matriz projetada gravada pelo script R em formato tabulado."""

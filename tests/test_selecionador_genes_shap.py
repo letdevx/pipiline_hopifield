@@ -460,3 +460,55 @@ def test_selecionador_genes_shap_selecao_features_2k_5k(
     assert os.path.exists(csv_esperado)
     df_carregado = pl.read_csv(csv_esperado)
     assert len(df_carregado) == 12
+
+
+def test_selecionador_genes_shap_amostragem_estratificada(
+    ambiente_sintetico_hopfield: tuple[
+        ModernHopfieldNetwork,
+        np.ndarray,
+        np.ndarray,
+        list[str],
+        list[int],
+        list[tuple[int, int]],
+        list[str],
+    ],
+) -> None:
+    """Verifica se a amostragem estratificada balanceada reduz o tamanho amostral mantendo a coerência."""
+    (
+        hopfield,
+        X,
+        y,
+        nomes_genes,
+        classes,
+        meta_padroes,
+        nomes_classes,
+    ) = ambiente_sintetico_hopfield
+
+    selecionador = SelecionadorGenesSHAPHopfield(
+        hopfield_net=hopfield,
+        classes=classes,
+        meta_padroes=meta_padroes,
+        nomes_classes=nomes_classes,
+        nomes_genes=nomes_genes,
+        batch_size=4,
+    )
+
+    # Executa com amostragem estratificada de no máximo 5 células por classe (total 15 em vez de 45)
+    selecionador.ajustar(
+        X=X,
+        y=y,
+        streaming=True,
+        metodo_background="centroides",
+        batch_size=4,
+        max_amostras_por_classe=5,
+        dispositivo="cpu",
+    )
+
+    assert selecionador.modo_streaming is True
+    assert selecionador.matriz_impacto_positivo is not None
+    assert selecionador.matriz_impacto_positivo.shape == (3, 30)
+    assert selecionador.matriz_contraste is not None
+    assert selecionador.matriz_contraste.shape == (3, 30)
+    assert selecionador.contagem_por_classe is not None
+    for c in classes:
+        assert selecionador.contagem_por_classe[c] <= 5

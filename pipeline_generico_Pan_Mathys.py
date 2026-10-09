@@ -71,7 +71,7 @@ import sys
 
 REPO_NAME = "pipiline_hopifield"
 REPO_URL = "https://github.com/letdevx/pipiline_hopifield.git"
-REPO_BRANCH = "reconstrução_Pan_Mathys"
+REPO_BRANCH = "reconstrucao_Pan_Mathys_Otimizado"
 DEST_PATH = f"/content/{REPO_NAME}"
 
 # Commit hash que o HEAD da VM DEVE conter (aceita hash curto de 7+ chars ou SHA-1 de 40 chars)
@@ -607,15 +607,42 @@ projetor_r.projetar()
 
 # %%
 path_mtx_sentinela = os.path.join(OUT_MTX_ALVO_SENTINELA, "matrix.mtx")
-print(f"\n[SWeeP Alvo Sentinela] Projetando {path_mtx_sentinela} via rSWeeP...")
+FORCAR_SWEEP_ALVO = globals().get("FORCAR_SWEEP_ALVO", False)
 
-projetor_sentinela_r = ProjetorSWeePR(
-    path_matriz=path_mtx_sentinela,
-    path_saida=PATH_SWEEP_ALVO_SENTINELA,
-    n_componentes=600,
-    seed=SEED,
-)
-projetor_sentinela_r.projetar()
+if os.path.exists(PATH_SWEEP_ALVO_SENTINELA) and not FORCAR_SWEEP_ALVO:
+    print(
+        f"\n[SWeeP Alvo Sentinela] Arquivo já existente em {PATH_SWEEP_ALVO_SENTINELA}. Carregando..."
+    )
+    projetor_sentinela_r = ProjetorSWeePR(
+        path_matriz=path_mtx_sentinela
+        if os.path.exists(path_mtx_sentinela)
+        else path_m_completo,
+        path_saida=PATH_SWEEP_ALVO_SENTINELA,
+        n_componentes=600,
+        seed=SEED,
+    )
+    projetor_sentinela_r.projetar()
+elif os.path.exists(path_mtx_sentinela):
+    print(f"\n[SWeeP Alvo Sentinela] Projetando {path_mtx_sentinela} via rSWeeP...")
+    projetor_sentinela_r = ProjetorSWeePR(
+        path_matriz=path_mtx_sentinela,
+        path_saida=PATH_SWEEP_ALVO_SENTINELA,
+        n_componentes=600,
+        seed=SEED,
+    )
+    projetor_sentinela_r.projetar()
+else:
+    print(
+        "\n[SWeeP Alvo Sentinela] Executando projeção com decomposição analítica da sentinela (rSWeeP oficial)..."
+    )
+    mask_ausentes_cap5 = alinhador.obter_mascara_ausentes()
+    projetor_sentinela_r = ProjetorSWeePR.projetar_com_sentinela_decomposta(
+        path_matriz_pura=path_m_completo,
+        path_saida=PATH_SWEEP_ALVO_SENTINELA,
+        mask_ausentes=mask_ausentes_cap5,
+        n_componentes=600,
+        seed=SEED,
+    )
 
 assert projetor_sentinela_r.Wswp is not None
 assert not np.isnan(projetor_sentinela_r.Wswp).any(), (
@@ -2175,52 +2202,67 @@ selecionador_shap = SelecionadorGenesSHAPHopfield(
 )
 
 # 3. Execução Streaming OOM-Safe com Baseline de Centróides das 7 Classes Canônicas
-print(
-    f"Iniciando cálculo SHAP streaming para {W0_arr.shape[0]} células "
-    f"sobre o espaço genômico completo ({W0_arr.shape[1]} genes) com centróides de baseline..."
-)
+FORCAR_RECALCULO_SHAP = globals().get("FORCAR_RECALCULO_SHAP", False)
+path_csv_shap = os.path.join(OUT_SHAP, "genes_selecionados_shap_2k_5k.csv")
+path_heatmap_shap = os.path.join(OUT_SHAP, "heatmap_biomarcadores_shap.png")
+path_resumo_shap = os.path.join(OUT_SHAP, "resumo_impacto_shap.png")
 
-selecionador_shap.ajustar(
-    X=W0_arr,
-    y=clo_ref,
-    streaming=True,
-    metodo_background="centroides",
-    batch_size=64,
-)
+if (
+    os.path.exists(path_csv_shap)
+    and os.path.exists(path_heatmap_shap)
+    and os.path.exists(path_resumo_shap)
+    and not FORCAR_RECALCULO_SHAP
+):
+    print(f"\n[SHAP Cache] Artefatos já existentes em {OUT_SHAP}.")
+    print(
+        "[SHAP Cache] Carregando features selecionadas do disco (recalculo ignorado)..."
+    )
+    df_features_selecionadas = pl.read_csv(path_csv_shap)
+else:
+    print(
+        f"Iniciando cálculo SHAP streaming para {W0_arr.shape[0]} células "
+        f"sobre o espaço genômico completo ({W0_arr.shape[1]} genes) com centróides de baseline e amostragem balanceada..."
+    )
 
-# 4. Seleção de 2.000 a 5.000 Features Biomarcadoras Balanceadas por Linhagem Celular
-N_FEATURES_SELECIONAR = 3000
-print(
-    f"\nSelecionando {N_FEATURES_SELECIONAR} genes com maior contraste e especificidade celular..."
-)
-df_features_selecionadas = selecionador_shap.selecionar_features_2k_5k(
-    n_features_total=N_FEATURES_SELECIONAR,
-    peso_contraste=0.5,
-    frac_cota_classe=0.7,
-    out_dir_csv=OUT_SHAP,
-)
+    selecionador_shap.ajustar(
+        X=W0_arr,
+        y=clo_ref,
+        streaming=True,
+        metodo_background="centroides",
+        batch_size=64,
+        max_amostras_por_classe=300,
+    )
+
+    # 4. Seleção de 2.000 a 5.000 Features Biomarcadoras Balanceadas por Linhagem Celular
+    N_FEATURES_SELECIONAR = 3000
+    print(
+        f"\nSelecionando {N_FEATURES_SELECIONAR} genes com maior contraste e especificidade celular..."
+    )
+    df_features_selecionadas = selecionador_shap.selecionar_features_2k_5k(
+        n_features_total=N_FEATURES_SELECIONAR,
+        peso_contraste=0.5,
+        frac_cota_classe=0.7,
+        out_dir_csv=OUT_SHAP,
+    )
+
+    # 5. Geração e Plotagem do Heatmap de Biomarcadores Específicos
+    print(f"\nGerando Heatmap Sinótico de Biomarcadores: {path_heatmap_shap}...")
+    selecionador_shap.plotar_heatmap_marcadores(
+        top_n_por_classe=8,
+        out_png=path_heatmap_shap,
+        normalizar_linhas=True,
+        cmap="YlGnBu",
+    )
+
+    # 6. Geração do Gráfico de Barras de Impacto Médio Consolidado
+    print(f"Gerando Sumário de Importância Global: {path_resumo_shap}...")
+    selecionador_shap.plotar_sumario(top_n=10, out_png=path_resumo_shap)
 
 print(f"\n--- Resumo da Seleção de {len(df_features_selecionadas)} Features SHAP ---")
 for c_val in CLASSES_CANONICAS:
     c_nome = NOMES_CLASSES_CEREBRO.get(c_val, f"Classe_{c_val}")
     sub = df_features_selecionadas.filter(pl.col("classe_primaria") == c_val)
-    print(
-        f"  • {c_nome:22s}: {len(sub):4d} genes alocados (Top: {', '.join(sub.head(3)['gene'].to_list())})"
-    )
-
-# 5. Geração e Plotagem do Heatmap de Biomarcadores Específicos
-path_heatmap_shap = os.path.join(OUT_SHAP, "heatmap_biomarcadores_shap.png")
-print(f"\nGerando Heatmap Sinótico de Biomarcadores: {path_heatmap_shap}...")
-selecionador_shap.plotar_heatmap_marcadores(
-    top_n_por_classe=8,
-    out_png=path_heatmap_shap,
-    normalizar_linhas=True,
-    cmap="YlGnBu",
-)
-
-# 6. Geração do Gráfico de Barras de Impacto Médio Consolidado
-path_resumo_shap = os.path.join(OUT_SHAP, "resumo_impacto_shap.png")
-print(f"Gerando Sumário de Importância Global: {path_resumo_shap}...")
-selecionador_shap.plotar_sumario(top_n=10, out_png=path_resumo_shap)
+    top_genes_str = ", ".join(sub.head(3)["gene"].to_list()) if len(sub) > 0 else "—"
+    print(f"  • {c_nome:22s}: {len(sub):4d} genes alocados (Top: {top_genes_str})")
 
 print(f"\n[Concluído] Seleção e visualização SHAP salvas com sucesso em: {OUT_SHAP}")

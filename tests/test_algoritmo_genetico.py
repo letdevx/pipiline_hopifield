@@ -259,3 +259,25 @@ def test_escalonamento_raiz_d_hopfield() -> None:
     assert att_esc.shape == (1, 1)
     np.testing.assert_allclose(att_pura, att_esc, atol=1e-5)
     assert rede_escalonada.scale_by_dim is True
+
+
+def test_algoritmo_genetico_nc_multiplos_de_cinco() -> None:
+    """Verifica se os indivíduos gerados e mutados mantêm nc em múltiplos de 5 para otimização de cache."""
+    cfg = ConfiguracaoAG(tam_populacao=12, n_geracoes=2, seed=42)
+    otimizador = OtimizadorGeneticoHopfield(
+        w0=np.zeros((10, 10), dtype=np.float32),
+        wswp=np.zeros((10, 5), dtype=np.float32),
+        labels=np.ones(10, dtype=int),
+        config=cfg,
+    )
+
+    pop = otimizador.gerar_populacao_inicial()
+    for ind in pop:
+        assert ind.nc % 5 == 0, (
+            f"nc={ind.nc} deveria ser múltiplo de 5 para maximizar cache hits"
+        )
+
+    # Testa que mutações mantêm múltiplos de 5
+    for ind in pop:
+        mut = otimizador.mutar(ind)
+        assert mut.nc % 5 == 0, f"nc mutado={mut.nc} deveria ser múltiplo de 5"
