@@ -70,3 +70,36 @@ Para garantir integridade, desempenho, reprodutibilidade e consistência estrita
      3. **Tipagem Estática:** `uv run pyrefly check` (e/ou `uv run pyright`)
    - NUNCA finalize uma tarefa deixando testes quebrados ou erros de formatação/tipagem pendentes.
 
+---
+
+## Protocolo de Escalabilidade e Boas Práticas em Bioinformática (RNA-Seq Single-Cell & Hardware Modesto)
+
+Para viabilizar a execução do pipeline científico mesmo em hardware modesto (ex.: laptops locais ou instâncias de nuvem com memória limitada) e prevenir falhas de estouro de memória (*Out Of Memory* — OOM) ou tempos de processamento excessivos:
+
+1. **AVALIAÇÃO ASSINTÓTICA PRÉVIA DE COMPLEXIDADE**:
+   - Sempre que o desenvolvedor solicitar a implementação ou alteração de uma funcionalidade, algoritmo ou etapa de processamento, o agente DEVE avaliar previamente a escalabilidade da solução proposta.
+   - Verifique a complexidade de tempo `O(...)` e de espaço/memória `O(...)` em relação à escala real dos dados biológicos (ex.: dezenas de milhares de células `N` × dezenas de milhares de genes `M`).
+
+2. **PRESERVAÇÃO ESTRITA DE MATRIZES ESPARSAS E STREAMING**:
+   - No domínio de scRNA-seq, matrizes de contagem possuem esparsidade típica superior a 90-95%. É expressamente PROIBIDO materializar matrizes densas gigantes na memória RAM (ex.: chamadas a `.toarray()`, `.todense()` ou `np.array()` sobre a matriz global).
+   - Mantenha os dados em formatos esparsos compactos (`scipy.sparse.csr_matrix` ou `csc_matrix`) e utilize processamento em lote (*batching* / *streaming*) ou *backed mode* do AnnData (`h5ad` / `zarr`).
+
+3. **I/O OOM-SAFE E VETO A ARQUIVOS INTERMEDIÁRIOS GIGANTES**:
+   - É proibido gerar arquivos intermediários gigantes em disco (ex.: matrizes MTX descompactadas de dezenas de gigabytes) quando operações analíticas equivalentes, projeções diretas em memória ou decomposições algébricas puderem ser empregadas.
+   - O pipeline deve ser otimizado para viabilizar execução em hardware modesto sem saturação de disco ou lentidão por escrita e leitura de I/O desnecessárias.
+
+4. **EQUIVALÊNCIA ESTRITA DE COMPORTAMENTO**:
+   - Toda proposta de otimização DEVE preservar rigorosamente o comportamento funcional, biológico e numérico esperado pela solução original. Nenhuma aproximação que degrade a exatidão dos resultados deve ser aplicada sem fundamentação matemática comprovada.
+
+5. **DIÁLOGO DIDÁTICO E TOMADA DE DECISÃO INTERATIVA VIA `ask_question`**:
+   - Caso o agente identifique que o dev propôs uma solução *brute force*, ingênua ou não escalável:
+     1. **Explicação Didática:** Explique por que a solução do dev não é uma boa prática para dados de bioinformática/scRNA-seq e apresente a intuição algorítmica de fundo de forma clara e acessível, para que o dev compreenda mesmo sem domínio prévio do ferramental.
+     2. **Proposta Escalável:** Apresente a abordagem escalável alternativa demonstrando seus ganhos de tempo e espaço.
+     3. **Decisão Interativa:** Utilize a ferramenta nativa `ask_question` para permitir ao dev escolher conscientemente:
+        - `(Recomendado) Adotar a abordagem otimizada e escalável sugerida`
+        - `Manter a abordagem original conforme solicitado`
+     4. **Fluxo Pós-Escolha:**
+        - **Se o dev escolher a abordagem otimizada sugerida:** O agente DEVE obrigatoriamente apresentar um plano formal como artefato interativo com `RequestFeedback: true` (renderizando o botão "Proceed" no Antigravity IDE) antes de iniciar qualquer implementação no código.
+        - **Se o dev escolher manter a abordagem original:** Respeite imediatamente a escolha do dev e implemente a abordagem solicitada sem insistência, adicionando apenas comentários técnicos explicativos no código caso pertinente.
+
+
