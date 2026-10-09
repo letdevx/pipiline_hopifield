@@ -76,7 +76,7 @@ DEST_PATH = f"/content/{REPO_NAME}"
 
 # Commit hash que o HEAD da VM DEVE conter (aceita hash curto de 7+ chars ou SHA-1 de 40 chars)
 # OBRIGATÓRIO NO GOOGLE COLAB: previne execução com código defasado por esquecimento de 'git push'
-EXPECTED_COMMIT = "aeaa804"
+EXPECTED_COMMIT = "bc9bacf"
 
 
 def _is_google_colab() -> bool:
