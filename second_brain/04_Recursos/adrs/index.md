@@ -38,6 +38,7 @@ Esta pasta armazena o repositório de decisões formais de arquitetura para gara
 * 📜 **[[04_Recursos/adrs/adr_022_otimizacao_hiperparametros_algoritmo_genetico|ADR 022: Otimização de Hiperparâmetros da Modern Hopfield Network via Algoritmo Genético]]**
 * 📜 **[[04_Recursos/adrs/adr_023_selecao_features_shap_hopfield|ADR 023: Seleção e Interpretabilidade de Features Gênicas via SHAP sobre Modern Hopfield Network]]**
 * 📜 **[[04_Recursos/adrs/adr_024_validacao_fail_fast_commit_colab|ADR 024: Validação Fail Fast de Integridade e Versão do Repositório Git no Google Colab]]**
+* 📜 **[[04_Recursos/adrs/adr_025_diagnostico_overfitting_cross_dataset|ADR 025: Diagnóstico Formal de Overfitting na Imputação Cross-Dataset via Masked Gene Holdout e Streaming OOM-Safe]]**
 
 ---
 

@@ -40,6 +40,7 @@ except ImportError:
 # - **12.2** Otimização de Hiperparâmetros via Algoritmo Genético (`OtimizadorGeneticoHopfield`)
 # - **12.3** Treinamento da Rede Hopfield com Configuração Ótima do AG (`rede{n_padroes}`)
 # - **13.** Imputação cross-dataset — Mathys com Sentinela Neutra 0.5
+# - **13.1** Diagnóstico Formal de Overfitting Cross-Dataset (`AuditorOverfittingCrossDataset` via Masked Holdout)
 # - **14.** Seleção de Features Gênicas e Heatmap de Biomarcadores via SHAP (`ADR 023`)
 
 # %%
@@ -2137,6 +2138,145 @@ else:
     plt.show()
     print(f"[Visualização] Gráfico salvo em: {path_fig_metricas}")
     print(avaliador_m)
+
+
+# %% [markdown]
+# #### 13.1 Diagnóstico Formal de Overfitting Cross-Dataset (AuditorOverfittingCrossDataset) 🛡️
+# Avalia formalmente a generalização da rede Hopfield no conjunto alvo (Mathys) via Masked Gene Holdout:
+# 1. **Mascaramento Artificial de Genes:** Oculta 10% dos genes presentes no Mathys injetando a sentinela 0.5.
+# 2. **Processamento em Lotes OOM-Safe:** Inferência em streaming com preservação do Ground Truth real.
+# 3. **Curvas Discriminativas Contínuas:** Avaliação de ROC-AUC e PR-AUC em relação à prevalência basal P0.
+# 4. **Especificidade Biológica por Linhagem:** F1-Score estratificado e taxa de ativação em marcadores cerebrais.
+# 5. **Parecer Consolidado e Idempotência:** Verificação multinível (APROVADO / ALERTA / REPROVADO) com cache local.
+
+# %%
+print("\n" + "=" * 70)
+print("  DIAGNÓSTICO FORMAL DE OVERFITTING CROSS-DATASET — MATHYS (HOLD OUT)")
+print("=" * 70)
+
+from treinamento.diagnostico_overfitting import AuditorOverfittingCrossDataset
+from treinamento.validador_imputacao import (
+    MARCADORES_CANONICOS_CEREBRO,
+    NOMES_CLASSES_CEREBRO,
+)
+
+FORCAR_RECALCULO_CAPITULO_13_1 = False
+
+path_csv_overfitting = os.path.join(
+    OUT_IMPUTACAO, "metricas_overfitting_cross_mathys.csv"
+)
+path_json_overfitting = os.path.join(
+    OUT_IMPUTACAO, "metricas_overfitting_cross_mathys.json"
+)
+path_png_overfitting = os.path.join(
+    OUT_IMPUTACAO, "painel_overfitting_cross_mathys.png"
+)
+
+arquivos_overfitting_existem = (
+    os.path.exists(path_csv_overfitting)
+    and os.path.exists(path_json_overfitting)
+    and os.path.exists(path_png_overfitting)
+)
+
+if arquivos_overfitting_existem and not FORCAR_RECALCULO_CAPITULO_13_1:
+    print("\n" + "=" * 70)
+    print("  [CACHE/IDEMPOTÊNCIA] DIAGNÓSTICO DO CAPÍTULO 13.1 JÁ EXISTENTE")
+    print("=" * 70)
+    df_overfitting_cache = pd.read_csv(path_csv_overfitting)
+    print("\n[Tabela Estruturada de Diagnóstico de Overfitting Cross-Dataset]:")
+    print(df_overfitting_cache.to_string(index=False))
+
+    try:
+        from IPython.display import Image, display
+
+        display(Image(filename=path_png_overfitting))
+    except Exception:
+        pass
+else:
+    # 1. Mapeamento dos marcadores canônicos cerebrais para índices
+    assert analisador.genes_ordenados is not None
+    gene_to_idx_cross = {g: i for i, g in enumerate(analisador.genes_ordenados)}
+    marcadores_cross_idx: dict[int, list[int]] = {}
+    for c_id, marc_list in MARCADORES_CANONICOS_CEREBRO.items():
+        indices_marc = [
+            gene_to_idx_cross[g] for g in marc_list if g in gene_to_idx_cross
+        ]
+        if indices_marc:
+            marcadores_cross_idx[c_id] = indices_marc
+
+    # 2. Instanciação e Execução do Auditor Cross-Dataset
+    auditor_cross = AuditorOverfittingCrossDataset(
+        modelo=modelo_imputacao,
+        limiar_roc_auc_aprovado=0.70,
+        limiar_roc_auc_alerta=0.60,
+        limiar_razao_pr_auc_aprovado=2.0,
+        limiar_razao_pr_auc_alerta=1.5,
+        limiar_f1_ativo_aprovado=0.45,
+        seed=SEED,
+    )
+
+    resultado_cross = auditor_cross.executar_auditoria(
+        matriz_alvo=W_mathys,
+        mask_ausentes=mask_ausentes,
+        classes_reais=clo_alvo,
+        nomes_classes=NOMES_CLASSES_CEREBRO,
+        marcadores_indices=marcadores_cross_idx,
+        taxa_mascaramento=0.10,
+        batch_size=5000,
+        seed=SEED,
+    )
+
+    # 3. Exibição do Parecer Consolidado
+    print("\n" + "-" * 70)
+    print(
+        f"  PARECER CONSOLIDADO DE ROBUSTEZ CROSS-DATASET: [{resultado_cross.status}]"
+    )
+    print("-" * 70)
+    print(f"  • ROC-AUC (Genes Mascarados) : {resultado_cross.roc_auc:.4f}")
+    print(
+        f"  • PR-AUC / Prevalência Basal : {resultado_cross.pr_auc:.4f} / {resultado_cross.prevalencia_basal:.4f} "
+        f"({resultado_cross.razao_pr_auc_basal:.2f}x ganho)"
+    )
+    print(f"  • F1-Score da Classe Ativa   : {resultado_cross.f1_ativo:.4f}")
+    print(
+        f"  • Precisão / Recall Ativo    : {resultado_cross.precisao_ativo:.4f} / {resultado_cross.recall_ativo:.4f}"
+    )
+    print(
+        f"  • Acurácia Binária           : {resultado_cross.acuracia_binaria * 100:.2f}%"
+    )
+    print(
+        f"  • Genes Mascarados no Alvo   : {resultado_cross.n_genes_mascarados:,} genes"
+    )
+    print(
+        f"  • Coordenadas Auditadas      : {resultado_cross.n_coordenadas_auditadas:,}"
+    )
+
+    if resultado_cross.alertas:
+        print("\n[Alertas Emitidos]:")
+        for al in resultado_cross.alertas:
+            print(f"  ⚠️  {al}")
+
+    if resultado_cross.recomendacoes:
+        print("\n[Recomendações]:")
+        for rec in resultado_cross.recomendacoes:
+            print(f"  💡 {rec}")
+
+    # 4. Exportação e Gráficos
+    auditor_cross.exportar_relatorio(
+        resultado=resultado_cross,
+        path_csv=path_csv_overfitting,
+        path_json=path_json_overfitting,
+    )
+    print(f"\n[Persistência] CSV de Diagnóstico  : {path_csv_overfitting}")
+    print(f"[Persistência] JSON de Diagnóstico : {path_json_overfitting}")
+
+    auditor_cross.gerar_painel_grafico(
+        resultado=resultado_cross,
+        path_saida=path_png_overfitting,
+        titulo=f"Diagnóstico de Overfitting — {nome_modelo_imp} (Mathys)",
+    )
+    plt.show()
+    print(f"[Visualização] Gráfico salvo em     : {path_png_overfitting}")
 
 
 # %% [markdown]

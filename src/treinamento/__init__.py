@@ -13,8 +13,10 @@ from .carregador_dados_fujita import (
     remapear_labels_canonicos,
 )
 from .diagnostico_overfitting import (
+    AuditorOverfittingCrossDataset,
     AuditorOverfittingHopfield,
     InjetorPerturbacaoTranscritica,
+    ResultadoDiagnosticoCrossDataset,
     ResultadoDiagnosticoOverfitting,
 )
 from .estrategias_clusterizacao import (
@@ -35,6 +37,7 @@ from .selecionador_genes_shap import (
 from .validador_imputacao import ValidadorImputacao
 
 __all__ = [
+    "AuditorOverfittingCrossDataset",
     "AuditorOverfittingHopfield",
     "AvaliadorHopfield",
     "CarregadorDados",
@@ -54,6 +57,7 @@ __all__ = [
     "OtimizadorGeneticoHopfield",
     "ProjetorSWeP",
     "ProjetorSWeePR",
+    "ResultadoDiagnosticoCrossDataset",
     "ResultadoDiagnosticoOverfitting",
     "SelecionadorGenesSHAPHopfield",
     "ValidadorImputacao",
