@@ -42,6 +42,7 @@ except ImportError:
 # - **13.** Imputação cross-dataset — Mathys com Sentinela Neutra 0.5
 # - **13.1** Diagnóstico Formal de Overfitting Cross-Dataset (`AuditorOverfittingCrossDataset` via Masked Holdout)
 # - **14.** Seleção de Features Gênicas e Heatmap de Biomarcadores via SHAP (`ADR 023`)
+# - **15.** Comparação Topológica e Visualização Dimensional (PCA, UMAP e t-SNE — `ADR 026`)
 
 # %%
 
@@ -310,6 +311,7 @@ from config import (
     OUT_MTX_ALVO_SENTINELA,
     OUT_MTX_REFERENCIA,
     OUT_SHAP,
+    OUT_EMBEDDINGS,
     OUT_SWEEP_ALVO_POS_IMPUTACAO,
     OUT_SWEEP_POS_IMPUTACAO,
     OUT_TOP_GENES,
@@ -2406,3 +2408,100 @@ for c_val in CLASSES_CANONICAS:
     print(f"  • {c_nome:22s}: {len(sub):4d} genes alocados (Top: {top_genes_str})")
 
 print(f"\n[Concluído] Seleção e visualização SHAP salvas com sucesso em: {OUT_SHAP}")
+
+
+# %% [markdown]
+# #### 15. Comparação Topológica e Visualização Dimensional (PCA, UMAP e t-SNE) 🗺️
+# Avalia visual e geometricamente a harmonização das linhagens celulares cross-dataset no espaço rSWeeP 600D (ADR 026).
+# 1. **Grid 3 × 3:** Compara Referência (Pan), Alvo Original (com sentinela 0.5) e Alvo Pós-Imputação (Hopfield).
+# 2. **Alinhamento Padronizado:** PCA e UMAP ajustados na Referência; t-SNE conjunto sobre 100% das células.
+# 3. **Métricas de Separação:** Silhouette Score antes vs depois da imputação.
+# 4. **Idempotência e Cache:** Persistência em alta resolução (300 DPI) e tabelas de coordenadas.
+
+# %%
+print("\n" + "=" * 70)
+print("=== 15. Comparação Topológica e Embeddings Dimensionais (PCA, UMAP, t-SNE) ===")
+print("=" * 70)
+
+from src.pca import ComparadorEmbeddings
+from treinamento.validador_imputacao import NOMES_CLASSES_CEREBRO
+
+FORCAR_RECALCULO_CAPITULO_15 = globals().get("FORCAR_RECALCULO_CAPITULO_15", False)
+os.makedirs(OUT_EMBEDDINGS, exist_ok=True)
+
+# 1. Obtenção OOM-Safe das Matrizes Compactas rSWeeP 600D
+print("\n[Capítulo 15] Carregando matrizes rSWeeP 600D...")
+
+# A. Referência Pan
+if "carregador" in globals() and getattr(carregador, "Wswp", None) is not None:
+    X_sweep_ref = carregador.Wswp
+elif os.path.exists(PATH_SWEEP_REFERENCIA):
+    X_sweep_ref = np.loadtxt(PATH_SWEEP_REFERENCIA, dtype=np.float32)
+else:
+    raise FileNotFoundError(f"Matriz SWeeP da referência não encontrada em {PATH_SWEEP_REFERENCIA}")
+
+# B. Alvo Original Mathys (com sentinela 0.5)
+if "projetor_sentinela_r" in globals() and getattr(projetor_sentinela_r, "Wswp", None) is not None:
+    X_sweep_orig = projetor_sentinela_r.Wswp
+elif os.path.exists(PATH_SWEEP_ALVO_SENTINELA):
+    X_sweep_orig = np.loadtxt(PATH_SWEEP_ALVO_SENTINELA, dtype=np.float32)
+else:
+    raise FileNotFoundError(f"Matriz SWeeP do alvo original não encontrada em {PATH_SWEEP_ALVO_SENTINELA}")
+
+# C. Alvo Pós-Imputação Mathys (Hopfield recuperado)
+path_sweep_pos = os.path.join(OUT_SWEEP_POS_IMPUTACAO, "sweep_alvo_pos_imputacao.txt")
+if "projetor_m_r" in globals() and getattr(projetor_m_r, "Wswp", None) is not None:
+    X_sweep_pos = projetor_m_r.Wswp
+elif os.path.exists(path_sweep_pos):
+    X_sweep_pos = np.loadtxt(path_sweep_pos, dtype=np.float32)
+else:
+    raise FileNotFoundError(f"Matriz SWeeP do alvo pós-imputação não encontrada em {path_sweep_pos}")
+
+print(f"  • Referência Pan      : {X_sweep_ref.shape[0]:,} células × {X_sweep_ref.shape[1]} dimensões")
+print(f"  • Alvo Original       : {X_sweep_orig.shape[0]:,} células × {X_sweep_orig.shape[1]} dimensões")
+print(f"  • Alvo Pós-Imputação  : {X_sweep_pos.shape[0]:,} células × {X_sweep_pos.shape[1]} dimensões")
+
+# 2. Mapeamento de Rótulos Celulares Canônicos
+nomes_canonicos_grid = [
+    NOMES_CLASSES_CEREBRO.get(c, f"Classe_{c}") for c in CLASSES_CANONICAS
+]
+
+# 3. Orquestração e Processamento OOM-Safe dos Embeddings
+comparador_grid = ComparadorEmbeddings(
+    seed=SEED,
+    n_neighbors=30,
+    min_dist=0.3,
+    perplexity=30.0,
+    tsne_iter=1000,
+    pca_pre_tsne=50,
+)
+
+resultado_cap15 = comparador_grid.processar_e_salvar(
+    x_ref=X_sweep_ref,
+    x_orig=X_sweep_orig,
+    x_pos=X_sweep_pos,
+    y_ref=clo_ref,
+    y_alvo=clo_alvo,
+    nomes_classes=nomes_canonicos_grid,
+    out_dir=OUT_EMBEDDINGS,
+    forcar_recalculo=FORCAR_RECALCULO_CAPITULO_15,
+    sample_size_silhouette=5000,
+)
+
+# 4. Apresentação das Métricas Quantitativas de Agrupamento Biológico
+print("\n" + "-" * 70)
+print("  MÉTRICAS DE SEPARAÇÃO E COERÊNCIA BIOLÓGICA (SILHOUETTE SCORE)")
+print("-" * 70)
+print(resultado_cap15.df_metricas.to_string(index=False))
+
+# 5. Exibição do Painel Gráfico no Notebook
+if resultado_cap15.caminho_png and os.path.exists(resultado_cap15.caminho_png):
+    try:
+        from IPython.display import Image, display
+
+        print(f"\n[Visualização] Exibindo Painel Sinótico 3 × 3: {resultado_cap15.caminho_png}")
+        display(Image(filename=resultado_cap15.caminho_png))
+    except Exception:
+        pass
+
+print("\n[Capítulo 15 Concluído] Comparações topológicas dimensionais concluídas com sucesso!")

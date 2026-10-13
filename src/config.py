@@ -108,6 +108,7 @@ OUT_HOPFIELD: str = os.path.join(OUTPUTS, "hopfield")
 OUT_IMPUTACAO: str = os.path.join(OUTPUTS, "imputacao")
 OUT_RELATORIO: str = os.path.join(OUTPUTS, "relatorio")
 OUT_SHAP: str = os.path.join(OUTPUTS, "shap")
+OUT_EMBEDDINGS: str = os.path.join(OUTPUTS, "embeddings_comparativos")
 OUT_SWEEP_ALVO_POS_IMPUTACAO: str = os.path.join(OUTPUTS, "sweep_alvo_pos_imputacao")
 OUT_SWEEP_POS_IMPUTACAO: str = OUT_SWEEP_ALVO_POS_IMPUTACAO
 
@@ -215,6 +216,7 @@ def configurar_diretorios(
     OUT_IMPUTACAO = os.path.join(OUTPUTS, "imputacao")
     OUT_RELATORIO = os.path.join(OUTPUTS, "relatorio")
     OUT_SHAP = os.path.join(OUTPUTS, "shap")
+    OUT_EMBEDDINGS = os.path.join(OUTPUTS, "embeddings_comparativos")
     OUT_SWEEP_ALVO_POS_IMPUTACAO = os.path.join(OUTPUTS, "sweep_alvo_pos_imputacao")
     OUT_SWEEP_POS_IMPUTACAO = OUT_SWEEP_ALVO_POS_IMPUTACAO
 
@@ -243,6 +245,7 @@ def configurar_diretorios(
             OUT_IMPUTACAO,
             OUT_RELATORIO,
             OUT_SHAP,
+            OUT_EMBEDDINGS,
             OUT_SWEEP_ALVO_POS_IMPUTACAO,
             OUT_MTX_REFERENCIA,
             OUT_MTX_ALVO_SENTINELA,
