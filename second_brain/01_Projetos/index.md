@@ -17,7 +17,9 @@ Esta pasta abriga todos os projetos de pesquisa com metas ativas, entregáveis e
 * 🎓 **[[01_Projetos/proposta_mestrado/index|Projeto de Mestrado UFPR]]**
   * Proposta oficial da pesquisa de mestrado (Leticia Astolpho Silvano, UFPR): integração de dados de scRNA-seq, mitigação de efeito de lote e recuperação de perfis via Projeções SWeeP e Redes Hopfield Modernas.
 * 🧬 **[[01_Projetos/pipeline_hopfield_expandido/index|Pipeline Hopfield Expandido (~11.000 Genes)]]**
-  * Projeto principal de alinhamento cross-dataset (Fujita vs Mathys), projeção rSWeeP 600D, imputação via Modern Hopfield Network com sentinela $0.5$ e validação em 7 classes celulares.
+  * Projeto principal de alinhamento cross-dataset (Fujita vs Mathys), projeção rSWeeP 600D, imputação via Modern Hopfield Network com sentinela 0.5 e validação em 7 classes celulares.
+* 📊 **[Documentação do Pipeline Genérico Pan × Mathys](file:///home/rasert/workspace/pipiline_hopifield/docs/pipeline_pan_mathys.md)**
+  * Especificação técnica e diagramas Mermaid de ponta a ponta do notebook `pipeline_generico_Pan_Mathys.ipynb`.
 
 ---
 

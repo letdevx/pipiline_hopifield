@@ -56,7 +56,8 @@ def _extrair_nome_dataset(caminho: str) -> str:
     str
         Nome base do arquivo sem extensão, com caracteres especiais convertidos para sublinhado.
     """
-    stem = Path(caminho).stem
+    caminho_normalizado = caminho.replace("\\", "/")
+    stem = Path(caminho_normalizado).stem
     # Remove ou substitui caracteres especiais por sublinhado
     sanitizado = re.sub(r"[^\w\-]", "_", stem)
     return sanitizado or "dados"
