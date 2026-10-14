@@ -253,3 +253,55 @@ def test_painel_grafico_e_exportacao_relatorio(tmp_path: Path) -> None:
         dados_json = json.load(f)
     assert dados_json["status"] == resultado.status
     assert "roc_auc" in dados_json["metricas_globais"]
+
+
+def test_auditor_cross_varredura_limiar_otimo(tmp_path: Path) -> None:
+    """Valida a varredura automática de limiar ótimo e métricas calibradas."""
+    n_celulas = 80
+    n_genes = 40
+    rng = np.random.default_rng(99)
+
+    # Matriz com esparsidade e sinal conhecido
+    matriz = (rng.uniform(0, 1, size=(n_celulas, n_genes)) > 0.80).astype(np.float32)
+    modelo = MockModeloHopfieldPerfeito(n_features=n_genes)
+    auditor = AuditorOverfittingCrossDataset(
+        modelo=modelo,
+        limiar_roc_auc_aprovado=0.70,
+        limiar_razao_pr_auc_aprovado=2.0,
+        limiar_f1_ativo_aprovado=0.45,
+        seed=42,
+    )
+
+    resultado = auditor.executar_auditoria(
+        matriz_alvo=matriz,
+        taxa_mascaramento=0.15,
+        batch_size=40,
+    )
+
+    # Verifica novos atributos de calibração
+    assert hasattr(resultado, "limiar_otimo")
+    assert 0.0 <= resultado.limiar_otimo <= 1.0
+    assert hasattr(resultado, "f1_ativo_calibrado")
+    assert resultado.f1_ativo_calibrado >= resultado.f1_ativo
+    assert hasattr(resultado, "status_calibrado")
+    assert resultado.status_calibrado in ["APROVADO", "ALERTA", "REPROVADO"]
+
+    # Exportação deve conter as novas métricas calibradas
+    path_csv = tmp_path / "metricas_calibradas.csv"
+    path_json = tmp_path / "metricas_calibradas.json"
+    auditor.exportar_relatorio(
+        resultado=resultado,
+        path_csv=path_csv,
+        path_json=path_json,
+    )
+
+    df = pd.read_csv(path_csv)
+    assert "Limiar_Otimo" in df["metrica"].values
+    assert "F1_Ativo_Calibrado" in df["metrica"].values
+    assert "Status_Calibrado" in df["metrica"].values
+
+    with open(path_json, encoding="utf-8") as f:
+        dados_json = json.load(f)
+    assert "limiar_otimo" in dados_json["metricas_globais"]
+    assert "f1_ativo_calibrado" in dados_json["metricas_globais"]
+    assert "status_calibrado" in dados_json

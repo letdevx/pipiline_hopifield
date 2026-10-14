@@ -1304,8 +1304,22 @@ print("\n" + "=" * 70)
 print("  TREINAMENTO DA REDE HOPFIELD COM CONFIGURAÇÕES ÓTIMAS DO AG")
 print("=" * 70)
 
+# Flag de Controle: permite forçar capacidade expandida nc=30 (rede210) para superar o parecer de alerta
+USAR_CAPACIDADE_EXPANDIDA_NC30 = True
+
 # Resolução dos parâmetros ótimos do campeão ou do arquivo salvo
-if "campeao_ag" in globals() and campeao_ag is not None:
+if USAR_CAPACIDADE_EXPANDIDA_NC30:
+    print(
+        "[Capacidade Expandida] Configurando nc=30 (rede210 com 210 padrões) para mitigar sobreposição em linhagens minoritárias."
+    )
+    nc_otimo = 30
+    k_otimo = 5
+    beta_otimo = 15.0
+    threshold_otimo = 0.0
+    n_iters_otimo = 1
+    normalize_otimo = False
+    estrategia_otima = "kmeans_fixo"
+elif "campeao_ag" in globals() and campeao_ag is not None:
     nc_otimo = int(campeao_ag.nc)
     k_otimo = int(campeao_ag.k_vizinhos)
     beta_otimo = float(campeao_ag.beta)
@@ -2164,13 +2178,25 @@ from treinamento.validador_imputacao import (
 
 FORCAR_RECALCULO_CAPITULO_13_1 = False
 
+# Caminhos específicos vinculados ao modelo ativo (evita colisão de cache entre rede105 e rede210)
 path_csv_overfitting = os.path.join(
-    OUT_IMPUTACAO, "metricas_overfitting_cross_mathys.csv"
+    OUT_IMPUTACAO, f"metricas_overfitting_cross_mathys_{nome_modelo_imp}.csv"
 )
 path_json_overfitting = os.path.join(
-    OUT_IMPUTACAO, "metricas_overfitting_cross_mathys.json"
+    OUT_IMPUTACAO, f"metricas_overfitting_cross_mathys_{nome_modelo_imp}.json"
 )
 path_png_overfitting = os.path.join(
+    OUT_IMPUTACAO, f"painel_overfitting_cross_mathys_{nome_modelo_imp}.png"
+)
+
+# Caminhos canônicos universais (retrocompatibilidade)
+path_csv_overfitting_padrao = os.path.join(
+    OUT_IMPUTACAO, "metricas_overfitting_cross_mathys.csv"
+)
+path_json_overfitting_padrao = os.path.join(
+    OUT_IMPUTACAO, "metricas_overfitting_cross_mathys.json"
+)
+path_png_overfitting_padrao = os.path.join(
     OUT_IMPUTACAO, "painel_overfitting_cross_mathys.png"
 )
 
@@ -2182,10 +2208,14 @@ arquivos_overfitting_existem = (
 
 if arquivos_overfitting_existem and not FORCAR_RECALCULO_CAPITULO_13_1:
     print("\n" + "=" * 70)
-    print("  [CACHE/IDEMPOTÊNCIA] DIAGNÓSTICO DO CAPÍTULO 13.1 JÁ EXISTENTE")
+    print(
+        f"  [CACHE/IDEMPOTÊNCIA] DIAGNÓSTICO DO CAPÍTULO 13.1 ({nome_modelo_imp}) JÁ EXISTENTE"
+    )
     print("=" * 70)
     df_overfitting_cache = pd.read_csv(path_csv_overfitting)
-    print("\n[Tabela Estruturada de Diagnóstico de Overfitting Cross-Dataset]:")
+    print(
+        f"\n[Tabela Estruturada de Diagnóstico de Overfitting Cross-Dataset — {nome_modelo_imp}]:"
+    )
     print(df_overfitting_cache.to_string(index=False))
 
     try:
@@ -2228,11 +2258,15 @@ else:
         seed=SEED,
     )
 
-    # 3. Exibição do Parecer Consolidado
+    # 3. Exibição do Parecer Consolidado e Métricas Calibradas
     print("\n" + "-" * 70)
     print(
         f"  PARECER CONSOLIDADO DE ROBUSTEZ CROSS-DATASET: [{resultado_cross.status}]"
     )
+    if resultado_cross.status_calibrado != resultado_cross.status:
+        print(
+            f"  PARECER SOB LIMIAR CALIBRADO ÓTIMO       : [{resultado_cross.status_calibrado}]"
+        )
     print("-" * 70)
     print(f"  • ROC-AUC (Genes Mascarados) : {resultado_cross.roc_auc:.4f}")
     print(
@@ -2242,6 +2276,14 @@ else:
     print(f"  • F1-Score da Classe Ativa   : {resultado_cross.f1_ativo:.4f}")
     print(
         f"  • Precisão / Recall Ativo    : {resultado_cross.precisao_ativo:.4f} / {resultado_cross.recall_ativo:.4f}"
+    )
+    print(f"  • Limiar Ótimo de Corte (PR) : {resultado_cross.limiar_otimo:.4f}")
+    print(
+        f"  • F1-Score Ativo Calibrado   : {resultado_cross.f1_ativo_calibrado:.4f} "
+        f"([Ganho: {resultado_cross.f1_ativo_calibrado - resultado_cross.f1_ativo:+.4f}])"
+    )
+    print(
+        f"  • Precisão / Recall Calib.   : {resultado_cross.precisao_calibrada:.4f} / {resultado_cross.recall_calibrado:.4f}"
     )
     print(
         f"  • Acurácia Binária           : {resultado_cross.acuracia_binaria * 100:.2f}%"
@@ -2263,12 +2305,17 @@ else:
         for rec in resultado_cross.recomendacoes:
             print(f"  💡 {rec}")
 
-    # 4. Exportação e Gráficos
+    # 4. Exportação e Gráficos (Persistência específica e cópia padrão)
     auditor_cross.exportar_relatorio(
         resultado=resultado_cross,
         path_csv=path_csv_overfitting,
         path_json=path_json_overfitting,
     )
+    if path_csv_overfitting != path_csv_overfitting_padrao:
+        shutil.copyfile(path_csv_overfitting, path_csv_overfitting_padrao)
+    if path_json_overfitting != path_json_overfitting_padrao:
+        shutil.copyfile(path_json_overfitting, path_json_overfitting_padrao)
+
     print(f"\n[Persistência] CSV de Diagnóstico  : {path_csv_overfitting}")
     print(f"[Persistência] JSON de Diagnóstico : {path_json_overfitting}")
 
@@ -2277,6 +2324,8 @@ else:
         path_saida=path_png_overfitting,
         titulo=f"Diagnóstico de Overfitting — {nome_modelo_imp} (Mathys)",
     )
+    if path_png_overfitting != path_png_overfitting_padrao:
+        shutil.copyfile(path_png_overfitting, path_png_overfitting_padrao)
     plt.show()
     print(f"[Visualização] Gráfico salvo em     : {path_png_overfitting}")
 

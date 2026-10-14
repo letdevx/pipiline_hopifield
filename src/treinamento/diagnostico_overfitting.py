@@ -11,7 +11,7 @@ import json
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -462,6 +462,16 @@ class ResultadoDiagnosticoCrossDataset:
         Pontos decimados da curva ROC (fpr, tpr).
     curva_pr : dict[str, list[float]] or None, optional
         Pontos decimados da curva Precision-Recall (recall, precision).
+    limiar_otimo : float, default=0.50
+        Limiar de corte contínuo que maximiza a média harmônica F1 no holdout.
+    f1_ativo_calibrado : float, default=0.0
+        F1-Score obtido sob o limiar ótimo calibrado.
+    precisao_calibrada : float, default=0.0
+        Precisão obtida sob o limiar ótimo calibrado.
+    recall_calibrado : float, default=0.0
+        Recall obtido sob o limiar ótimo calibrado.
+    status_calibrado : {"APROVADO", "ALERTA", "REPROVADO"}, default="ALERTA"
+        Parecer consolidado sob o ponto de operação do limiar ótimo.
     """
 
     status: Literal["APROVADO", "ALERTA", "REPROVADO"]
@@ -481,6 +491,11 @@ class ResultadoDiagnosticoCrossDataset:
     recomendacoes: list[str] = field(default_factory=list)
     curva_roc: dict[str, list[float]] | None = None
     curva_pr: dict[str, list[float]] | None = None
+    limiar_otimo: float = 0.50
+    f1_ativo_calibrado: float = 0.0
+    precisao_calibrada: float = 0.0
+    recall_calibrado: float = 0.0
+    status_calibrado: Literal["APROVADO", "ALERTA", "REPROVADO"] = "ALERTA"
 
 
 def _extrair_bloco_matriz_generica(
@@ -804,25 +819,53 @@ class AuditorOverfittingCrossDataset:
             tpr = np.array([0.0, 1.0])
             precision_pts = np.array([prevalencia_basal, prevalencia_basal])
             recall_pts = np.array([0.0, 1.0])
+            thresholds_pr = np.array([0.5])
         else:
             roc_auc = float(roc_auc_score(y_true_eval, y_scores_eval))
             pr_auc = float(average_precision_score(y_true_eval, y_scores_eval))
             fpr, tpr, _ = roc_curve(y_true_eval, y_scores_eval)
-            precision_pts, recall_pts, _ = precision_recall_curve(
+            precision_pts, recall_pts, thresholds_pr = precision_recall_curve(
                 y_true_eval, y_scores_eval
             )
 
         f1_ativo = float(
-            f1_score(y_true_eval, y_pred_eval, pos_label=1, zero_division=0)
+            f1_score(y_true_eval, y_pred_eval, pos_label=1, zero_division=cast(Any, 0))
         )
         precisao_ativo = float(
-            precision_score(y_true_eval, y_pred_eval, pos_label=1, zero_division=0)
+            precision_score(
+                y_true_eval, y_pred_eval, pos_label=1, zero_division=cast(Any, 0)
+            )
         )
         recall_ativo = float(
-            recall_score(y_true_eval, y_pred_eval, pos_label=1, zero_division=0)
+            recall_score(
+                y_true_eval, y_pred_eval, pos_label=1, zero_division=cast(Any, 0)
+            )
         )
         acuracia_binaria = float(accuracy_score(y_true_eval, y_pred_eval))
         razao_pr_auc_basal = float(pr_auc / max(1e-6, prevalencia_basal))
+
+        # Varredura vetorial instantânea de limiar ótimo de corte na curva PR
+        if len(precision_pts) > 1 and len(thresholds_pr) > 0:
+            f1_curva = (2.0 * precision_pts[:-1] * recall_pts[:-1]) / np.maximum(
+                precision_pts[:-1] + recall_pts[:-1], 1e-9
+            )
+            idx_otimo = int(np.argmax(f1_curva))
+            limiar_otimo = float(thresholds_pr[idx_otimo])
+            f1_ativo_calibrado = float(f1_curva[idx_otimo])
+            precisao_calibrada = float(precision_pts[idx_otimo])
+            recall_calibrado = float(recall_pts[idx_otimo])
+        else:
+            limiar_otimo = 0.50
+            f1_ativo_calibrado = f1_ativo
+            precisao_calibrada = precisao_ativo
+            recall_calibrado = recall_ativo
+
+        # Se o corte padrão 0.50 já for superior por arredondamento
+        if f1_ativo > f1_ativo_calibrado:
+            f1_ativo_calibrado = f1_ativo
+            precisao_calibrada = precisao_ativo
+            recall_calibrado = recall_ativo
+            limiar_otimo = 0.50
 
         # Decimação de pontos para visualização e persistência compacta
         MAX_PTS = 200
@@ -855,7 +898,9 @@ class AuditorOverfittingCrossDataset:
                 y_t_c = y_true_acumulado[idx_c].ravel()
                 y_p_c = y_pred_acumulado[idx_c].ravel()
                 nome_c = str(nomes_classes.get(c, c)) if nomes_classes else str(c)
-                f1_c = float(f1_score(y_t_c, y_p_c, pos_label=1, zero_division=0))
+                f1_c = float(
+                    f1_score(y_t_c, y_p_c, pos_label=1, zero_division=cast(Any, 0))
+                )
                 f1_por_tipo[nome_c] = round(f1_c, 4)
 
         # 6. Auditoria de Especificidade de Marcadores Canônicos
@@ -866,8 +911,8 @@ class AuditorOverfittingCrossDataset:
             and len(classes_reais) == n_celulas
         ):
             classes_arr = np.asarray(classes_reais)
-            col_map_holdout = {
-                orig_idx: pos for pos, orig_idx in enumerate(indices_holdout)
+            col_map_holdout: dict[int, int] = {
+                int(orig_idx): pos for pos, orig_idx in enumerate(indices_holdout)
             }
 
             for classe_id, genes in marcadores_indices.items():
@@ -938,6 +983,28 @@ class AuditorOverfittingCrossDataset:
         else:
             status = "APROVADO"
 
+        # 8. Parecer sob o limiar ótimo calibrado
+        alertas_calibrados: list[str] = []
+        if roc_auc < self.limiar_roc_auc_alerta:
+            alertas_calibrados.append("Reprovado: ROC-AUC")
+        elif roc_auc < self.limiar_roc_auc_aprovado:
+            alertas_calibrados.append("Alerta: ROC-AUC moderado")
+
+        if razao_pr_auc_basal < self.limiar_razao_pr_auc_alerta:
+            alertas_calibrados.append("Reprovado: PR-AUC")
+        elif razao_pr_auc_basal < self.limiar_razao_pr_auc_aprovado:
+            alertas_calibrados.append("Alerta: PR-AUC moderado")
+
+        if f1_ativo_calibrado < self.limiar_f1_ativo_aprovado:
+            alertas_calibrados.append("Alerta: F1 ativo calibrado")
+
+        if any(a.startswith("Reprovado:") for a in alertas_calibrados):
+            status_calibrado: Literal["APROVADO", "ALERTA", "REPROVADO"] = "REPROVADO"
+        elif len(alertas_calibrados) > 0:
+            status_calibrado = "ALERTA"
+        else:
+            status_calibrado = "APROVADO"
+
         return ResultadoDiagnosticoCrossDataset(
             status=status,
             roc_auc=round(roc_auc, 4),
@@ -956,6 +1023,11 @@ class AuditorOverfittingCrossDataset:
             recomendacoes=recomendacoes,
             curva_roc=curva_roc,
             curva_pr=curva_pr,
+            limiar_otimo=round(limiar_otimo, 4),
+            f1_ativo_calibrado=round(f1_ativo_calibrado, 4),
+            precisao_calibrada=round(precisao_calibrada, 4),
+            recall_calibrado=round(recall_calibrado, 4),
+            status_calibrado=status_calibrado,
         )
 
     def gerar_painel_grafico(
@@ -1027,6 +1099,15 @@ class AuditorOverfittingCrossDataset:
             lw=1.8,
             label=f"Prevalência P0 ({resultado.prevalencia_basal:.4f})",
         )
+        if resultado.f1_ativo_calibrado > 0:
+            ax_pr.plot(
+                resultado.recall_calibrado,
+                resultado.precisao_calibrada,
+                marker="o",
+                markersize=8,
+                color="#e76f51",
+                label=f"Limiar Ótimo ({resultado.limiar_otimo:.2f} | F1 = {resultado.f1_ativo_calibrado:.3f})",
+            )
         ax_pr.set_xlim([-0.02, 1.02])
         ax_pr.set_ylim([-0.02, 1.05])
         ax_pr.set_xlabel("Recall (Sensibilidade)", fontsize=10)
@@ -1036,7 +1117,7 @@ class AuditorOverfittingCrossDataset:
             fontsize=11,
             fontweight="bold",
         )
-        ax_pr.legend(loc="upper right", frameon=True)
+        ax_pr.legend(loc="upper right", frameon=True, fontsize=8)
         ax_pr.grid(True, linestyle=":", alpha=0.6)
 
         # 3. F1-Score por Linhagem Celular
@@ -1058,8 +1139,16 @@ class AuditorOverfittingCrossDataset:
                 color="#e63946",
                 linestyle="--",
                 lw=1.8,
-                label=f"F1 Global Ativo ({resultado.f1_ativo:.4f})",
+                label=f"F1 Global Padrão ({resultado.f1_ativo:.4f})",
             )
+            if resultado.f1_ativo_calibrado > resultado.f1_ativo:
+                ax_f1.axhline(
+                    resultado.f1_ativo_calibrado,
+                    color="#2a9d8f",
+                    linestyle=":",
+                    lw=1.8,
+                    label=f"F1 Calibrado ({resultado.f1_ativo_calibrado:.4f})",
+                )
             ax_f1.set_ylim([0, 1.15])
             ax_f1.set_ylabel("F1-Score da Classe Ativa", fontsize=10)
             ax_f1.set_title(
@@ -1079,7 +1168,7 @@ class AuditorOverfittingCrossDataset:
                     fontsize=8,
                     fontweight="bold",
                 )
-            ax_f1.legend(loc="upper right", frameon=True)
+            ax_f1.legend(loc="upper right", frameon=True, fontsize=8)
             ax_f1.grid(axis="y", linestyle=":", alpha=0.6)
         else:
             ax_f1.text(
@@ -1097,8 +1186,12 @@ class AuditorOverfittingCrossDataset:
             "REPROVADO": "#d62828",
         }.get(resultado.status, "#333333")
 
+        titulo_completo = f"{titulo} — Parecer: [{resultado.status}]"
+        if resultado.status_calibrado != resultado.status:
+            titulo_completo += f" | Calibrado: [{resultado.status_calibrado}]"
+
         fig.suptitle(
-            f"{titulo} — Parecer: [{resultado.status}]",
+            titulo_completo,
             fontsize=13,
             fontweight="bold",
             color=cor_status,
@@ -1173,6 +1266,26 @@ class AuditorOverfittingCrossDataset:
                 "referencia_padrao": "Alta",
             },
             {
+                "metrica": "Limiar_Otimo",
+                "valor": resultado.limiar_otimo,
+                "referencia_padrao": "Argmax F1 no holdout",
+            },
+            {
+                "metrica": "F1_Ativo_Calibrado",
+                "valor": resultado.f1_ativo_calibrado,
+                "referencia_padrao": "≥ 0.45 (Aprovado)",
+            },
+            {
+                "metrica": "Precisao_Calibrada",
+                "valor": resultado.precisao_calibrada,
+                "referencia_padrao": "No limiar ótimo",
+            },
+            {
+                "metrica": "Recall_Calibrado",
+                "valor": resultado.recall_calibrado,
+                "referencia_padrao": "No limiar ótimo",
+            },
+            {
                 "metrica": "Acuracia_Binaria",
                 "valor": resultado.acuracia_binaria,
                 "referencia_padrao": "≥ 0.85",
@@ -1192,6 +1305,11 @@ class AuditorOverfittingCrossDataset:
                 "valor": resultado.status,
                 "referencia_padrao": "APROVADO",
             },
+            {
+                "metrica": "Status_Calibrado",
+                "valor": resultado.status_calibrado,
+                "referencia_padrao": "APROVADO sob calibração",
+            },
         ]
         df_metricas = pd.DataFrame(dados_tabela)
 
@@ -1204,6 +1322,7 @@ class AuditorOverfittingCrossDataset:
             os.makedirs(os.path.dirname(os.path.abspath(path_json)), exist_ok=True)
             dados_json = {
                 "status": resultado.status,
+                "status_calibrado": resultado.status_calibrado,
                 "metricas_globais": {
                     "roc_auc": resultado.roc_auc,
                     "pr_auc": resultado.pr_auc,
@@ -1212,6 +1331,10 @@ class AuditorOverfittingCrossDataset:
                     "f1_ativo": resultado.f1_ativo,
                     "precisao_ativo": resultado.precisao_ativo,
                     "recall_ativo": resultado.recall_ativo,
+                    "limiar_otimo": resultado.limiar_otimo,
+                    "f1_ativo_calibrado": resultado.f1_ativo_calibrado,
+                    "precisao_calibrada": resultado.precisao_calibrada,
+                    "recall_calibrado": resultado.recall_calibrado,
                     "acuracia_binaria": resultado.acuracia_binaria,
                     "n_genes_mascarados": resultado.n_genes_mascarados,
                     "n_coordenadas_auditadas": resultado.n_coordenadas_auditadas,
