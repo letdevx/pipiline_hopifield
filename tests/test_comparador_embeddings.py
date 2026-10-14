@@ -25,7 +25,6 @@ def dados_sinteticos_sweep() -> tuple[
     n_dim = 600
     n_ref = 60
     n_alvo_orig = 50
-    n_alvo_pos = 50
 
     # Três classes canônicas de teste
     nomes_classes = ["Ast", "Ex", "Oli"]
@@ -36,9 +35,18 @@ def dados_sinteticos_sweep() -> tuple[
     # Matrizes com sinal biológico artificial
     centroides = rng.normal(0, 2, size=(3, n_dim))
 
-    x_ref = np.array([centroides[c] + rng.normal(0, 0.5, size=n_dim) for c in y_ref], dtype=np.float32)
-    x_alvo_orig = np.array([centroides[c] + rng.normal(0, 1.5, size=n_dim) for c in y_alvo], dtype=np.float32)
-    x_alvo_pos = np.array([centroides[c] + rng.normal(0, 0.6, size=n_dim) for c in y_alvo], dtype=np.float32)
+    x_ref = np.array(
+        [centroides[c] + rng.normal(0, 0.5, size=n_dim) for c in y_ref],
+        dtype=np.float32,
+    )
+    x_alvo_orig = np.array(
+        [centroides[c] + rng.normal(0, 1.5, size=n_dim) for c in y_alvo],
+        dtype=np.float32,
+    )
+    x_alvo_pos = np.array(
+        [centroides[c] + rng.normal(0, 0.6, size=n_dim) for c in y_alvo],
+        dtype=np.float32,
+    )
 
     return x_ref, x_alvo_orig, x_alvo_pos, y_ref, y_alvo, nomes_classes
 
@@ -84,7 +92,9 @@ def test_tsne_cofit_conjunto_split(
 ) -> None:
     """Testa se o t-SNE executa co-fit sobre todas as células com pré-PCA e split exato."""
     x_ref, x_orig, x_pos, _, _, _ = dados_sinteticos_sweep
-    comparador = ComparadorEmbeddings(seed=42, tsne_iter=250, perplexity=10.0, pca_pre_tsne=20)
+    comparador = ComparadorEmbeddings(
+        seed=42, tsne_iter=250, perplexity=10.0, pca_pre_tsne=20
+    )
 
     c_ref, c_orig, c_pos = comparador.calcular_tsne(x_ref, x_orig, x_pos)
 
@@ -131,7 +141,9 @@ def test_gerar_painel_grid_3x3(
     x_ref, x_orig, x_pos, y_ref, y_alvo, nomes_classes = dados_sinteticos_sweep
     out_png = str(tmp_path / "teste_grid_3x3.png")
 
-    comparador = ComparadorEmbeddings(seed=42, tsne_iter=250, perplexity=10.0, pca_pre_tsne=20)
+    comparador = ComparadorEmbeddings(
+        seed=42, tsne_iter=250, perplexity=10.0, pca_pre_tsne=20
+    )
     resultado = comparador.executar_comparacao(
         x_ref=x_ref,
         x_orig=x_orig,
@@ -160,7 +172,9 @@ def test_orquestracao_completa_e_cache(
     x_ref, x_orig, x_pos, y_ref, y_alvo, nomes_classes = dados_sinteticos_sweep
     out_dir = tmp_path / "saida_embeddings"
 
-    comparador = ComparadorEmbeddings(seed=42, tsne_iter=250, perplexity=10.0, pca_pre_tsne=20)
+    comparador = ComparadorEmbeddings(
+        seed=42, tsne_iter=250, perplexity=10.0, pca_pre_tsne=20
+    )
     res1 = comparador.processar_e_salvar(
         x_ref=x_ref,
         x_orig=x_orig,

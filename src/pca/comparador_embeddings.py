@@ -7,18 +7,20 @@ a matriz alvo original (com sentinela) e a matriz alvo pós-imputação.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import os
-from typing import Any, Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
-from numpy.typing import NDArray
 import pandas as pd
+import umap
+from matplotlib.figure import Figure
+from numpy.typing import NDArray
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.metrics import silhouette_score
-import umap
 
 
 @dataclass
@@ -129,7 +131,12 @@ class ComparadorEmbeddings:
         x_ref: NDArray[np.float32] | np.ndarray,
         x_orig: NDArray[np.float32] | np.ndarray,
         x_pos: NDArray[np.float32] | np.ndarray,
-    ) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.float32], tuple[float, float]]:
+    ) -> tuple[
+        NDArray[np.float32],
+        NDArray[np.float32],
+        NDArray[np.float32],
+        tuple[float, float],
+    ]:
         """Ajusta o PCA na referência e transforma os alvos pré e pós-imputação.
 
         Parameters
@@ -197,9 +204,9 @@ class ComparadorEmbeddings:
             random_state=self.seed,
             transform_seed=self.seed,
         )
-        coord_ref = redutor_umap.fit_transform(x_ref).astype(np.float32)
-        coord_orig = redutor_umap.transform(x_orig).astype(np.float32)
-        coord_pos = redutor_umap.transform(x_pos).astype(np.float32)
+        coord_ref = np.asarray(redutor_umap.fit_transform(x_ref), dtype=np.float32)
+        coord_orig = np.asarray(redutor_umap.transform(x_orig), dtype=np.float32)
+        coord_pos = np.asarray(redutor_umap.transform(x_pos), dtype=np.float32)
 
         return coord_ref, coord_orig, coord_pos
 
@@ -319,9 +326,21 @@ class ComparadorEmbeddings:
         )
 
         linhas = [
-            {"metodo": metodo, "condicao": "Referência (Pan)", "silhouette_score": score_ref},
-            {"metodo": metodo, "condicao": "Alvo Original (Mathys)", "silhouette_score": score_orig},
-            {"metodo": metodo, "condicao": "Alvo Pós-Imputação (Hopfield)", "silhouette_score": score_pos},
+            {
+                "metodo": metodo,
+                "condicao": "Referência (Pan)",
+                "silhouette_score": score_ref,
+            },
+            {
+                "metodo": metodo,
+                "condicao": "Alvo Original (Mathys)",
+                "silhouette_score": score_orig,
+            },
+            {
+                "metodo": metodo,
+                "condicao": "Alvo Pós-Imputação (Hopfield)",
+                "silhouette_score": score_pos,
+            },
         ]
         return pd.DataFrame(linhas)
 
@@ -360,7 +379,9 @@ class ComparadorEmbeddings:
             Objeto com todos os dados calculados.
         """
         print("[ComparadorEmbeddings] 1/3 Calculando PCA (Fit na Referência Pan)...")
-        c_pca_ref, c_pca_orig, c_pca_pos, var_exp = self.calcular_pca(x_ref, x_orig, x_pos)
+        c_pca_ref, c_pca_orig, c_pca_pos, var_exp = self.calcular_pca(
+            x_ref, x_orig, x_pos
+        )
 
         print("[ComparadorEmbeddings] 2/3 Calculando UMAP (Fit na Referência Pan)...")
         c_umap_ref, c_umap_orig, c_umap_pos = self.calcular_umap(x_ref, x_orig, x_pos)
@@ -372,13 +393,31 @@ class ComparadorEmbeddings:
 
         print("[ComparadorEmbeddings] Calculando índices Silhouette de separação...")
         df_pca = self.calcular_metricas_silhouette(
-            "PCA", c_pca_ref, c_pca_orig, c_pca_pos, y_ref, y_alvo, sample_size=sample_size_silhouette
+            "PCA",
+            c_pca_ref,
+            c_pca_orig,
+            c_pca_pos,
+            y_ref,
+            y_alvo,
+            sample_size=sample_size_silhouette,
         )
         df_umap = self.calcular_metricas_silhouette(
-            "UMAP", c_umap_ref, c_umap_orig, c_umap_pos, y_ref, y_alvo, sample_size=sample_size_silhouette
+            "UMAP",
+            c_umap_ref,
+            c_umap_orig,
+            c_umap_pos,
+            y_ref,
+            y_alvo,
+            sample_size=sample_size_silhouette,
         )
         df_tsne = self.calcular_metricas_silhouette(
-            "t-SNE", c_tsne_ref, c_tsne_orig, c_tsne_pos, y_ref, y_alvo, sample_size=sample_size_silhouette
+            "t-SNE",
+            c_tsne_ref,
+            c_tsne_orig,
+            c_tsne_pos,
+            y_ref,
+            y_alvo,
+            sample_size=sample_size_silhouette,
         )
         df_metricas = pd.concat([df_pca, df_umap, df_tsne], ignore_index=True)
 
@@ -412,7 +451,7 @@ class ComparadorEmbeddings:
         resultado: ResultadoComparacaoEmbeddings,
         out_png: str | None = None,
         dpi: int = 300,
-    ) -> plt.Figure:
+    ) -> Figure:
         """Renderiza o Painel Sinótico 3 × 3 padronizado e salva em alta resolução.
 
         Linhas: PCA, UMAP, t-SNE.
@@ -429,7 +468,7 @@ class ComparadorEmbeddings:
 
         Returns
         -------
-        plt.Figure
+        Figure
             Objeto da figura matplotlib gerada.
         """
         # Configuração da figura 3x3
@@ -452,24 +491,38 @@ class ComparadorEmbeddings:
                 "PCA",
                 f"PC1 ({resultado.var_exp_pca[0] * 100:.1f}%)",
                 f"PC2 ({resultado.var_exp_pca[1] * 100:.1f}%)",
-                [resultado.coord_pca_ref, resultado.coord_pca_orig, resultado.coord_pca_pos],
+                [
+                    resultado.coord_pca_ref,
+                    resultado.coord_pca_orig,
+                    resultado.coord_pca_pos,
+                ],
             ),
             (
                 "UMAP",
                 "UMAP 1",
                 "UMAP 2",
-                [resultado.coord_umap_ref, resultado.coord_umap_orig, resultado.coord_umap_pos],
+                [
+                    resultado.coord_umap_ref,
+                    resultado.coord_umap_orig,
+                    resultado.coord_umap_pos,
+                ],
             ),
             (
                 "t-SNE",
                 "t-SNE 1",
                 "t-SNE 2",
-                [resultado.coord_tsne_ref, resultado.coord_tsne_orig, resultado.coord_tsne_pos],
+                [
+                    resultado.coord_tsne_ref,
+                    resultado.coord_tsne_orig,
+                    resultado.coord_tsne_pos,
+                ],
             ),
         ]
 
         # Iteração sobre as 3 linhas e 3 colunas
-        for row_idx, (nome_metodo, xlabel, ylabel, coords_condicoes) in enumerate(grid_dados):
+        for row_idx, (nome_metodo, xlabel, ylabel, coords_condicoes) in enumerate(
+            grid_dados
+        ):
             for col_idx, coords in enumerate(coords_condicoes):
                 ax = axs[row_idx, col_idx]
                 rotulos = resultado.y_ref if col_idx == 0 else resultado.y_alvo
@@ -491,12 +544,19 @@ class ComparadorEmbeddings:
 
                 # Títulos de Coluna apenas na primeira linha
                 if row_idx == 0:
-                    ax.set_title(colunas_nomes[col_idx], fontsize=13, fontweight="bold", pad=12)
+                    ax.set_title(
+                        colunas_nomes[col_idx], fontsize=13, fontweight="bold", pad=12
+                    )
 
                 # Títulos de Linha / Métricas no eixo Y
                 ax.set_xlabel(xlabel, fontsize=10, labelpad=5)
                 if col_idx == 0:
-                    ax.set_ylabel(f"{nome_metodo}\n{ylabel}", fontsize=11, fontweight="bold", labelpad=8)
+                    ax.set_ylabel(
+                        f"{nome_metodo}\n{ylabel}",
+                        fontsize=11,
+                        fontweight="bold",
+                        labelpad=8,
+                    )
                 else:
                     ax.set_ylabel(ylabel, fontsize=10, labelpad=5)
 
@@ -578,7 +638,9 @@ class ComparadorEmbeddings:
             Objeto consolidado dos resultados.
         """
         os.makedirs(out_dir, exist_ok=True)
-        path_png = os.path.join(out_dir, "grid_3x3_pca_umap_tsne_referencia_vs_alvos.png")
+        path_png = os.path.join(
+            out_dir, "grid_3x3_pca_umap_tsne_referencia_vs_alvos.png"
+        )
         path_coord = os.path.join(out_dir, "coordenadas_grid_pca_umap_tsne.csv")
         path_metricas = os.path.join(out_dir, "metricas_separacao_clusters_cap15.csv")
 
@@ -589,13 +651,17 @@ class ComparadorEmbeddings:
             and os.path.exists(path_metricas)
             and not forcar_recalculo
         ):
-            print(f"[Cache Capítulo 15] Artefatos já existentes em {out_dir}. Carregando do disco...")
+            print(
+                f"[Cache Capítulo 15] Artefatos já existentes em {out_dir}. Carregando do disco..."
+            )
             df_coord = pd.read_csv(path_coord)
             df_metricas = pd.read_csv(path_metricas)
 
             # Reconstituição rápida das coordenadas a partir do cache
             def _extrair(metodo: str, cond: str) -> NDArray[np.float32]:
-                sub = df_coord[(df_coord["metodo"] == metodo) & (df_coord["condicao"] == cond)]
+                sub = df_coord[
+                    (df_coord["metodo"] == metodo) & (df_coord["condicao"] == cond)
+                ]
                 return sub[["dim1", "dim2"]].to_numpy(dtype=np.float32)
 
             res = ResultadoComparacaoEmbeddings(
@@ -634,10 +700,19 @@ class ComparadorEmbeddings:
         # Montagem do DataFrame consolidado de coordenadas
         linhas_coord: list[dict[str, Any]] = []
 
-        def _adicionar_pontos(metodo: str, condicao: str, coords: NDArray[np.float32], rotulos: NDArray[np.int64]) -> None:
+        def _adicionar_pontos(
+            metodo: str,
+            condicao: str,
+            coords: NDArray[np.float32],
+            rotulos: NDArray[np.int64],
+        ) -> None:
             for i in range(len(coords)):
                 c_idx = int(rotulos[i])
-                c_nome = res.nomes_classes[c_idx] if c_idx < len(res.nomes_classes) else f"Classe_{c_idx}"
+                c_nome = (
+                    res.nomes_classes[c_idx]
+                    if c_idx < len(res.nomes_classes)
+                    else f"Classe_{c_idx}"
+                )
                 linhas_coord.append(
                     {
                         "metodo": metodo,
@@ -651,16 +726,28 @@ class ComparadorEmbeddings:
                 )
 
         _adicionar_pontos("PCA", "Referência (Pan)", res.coord_pca_ref, res.y_ref)
-        _adicionar_pontos("PCA", "Alvo Original (Mathys)", res.coord_pca_orig, res.y_alvo)
-        _adicionar_pontos("PCA", "Alvo Pós-Imputação (Hopfield)", res.coord_pca_pos, res.y_alvo)
+        _adicionar_pontos(
+            "PCA", "Alvo Original (Mathys)", res.coord_pca_orig, res.y_alvo
+        )
+        _adicionar_pontos(
+            "PCA", "Alvo Pós-Imputação (Hopfield)", res.coord_pca_pos, res.y_alvo
+        )
 
         _adicionar_pontos("UMAP", "Referência (Pan)", res.coord_umap_ref, res.y_ref)
-        _adicionar_pontos("UMAP", "Alvo Original (Mathys)", res.coord_umap_orig, res.y_alvo)
-        _adicionar_pontos("UMAP", "Alvo Pós-Imputação (Hopfield)", res.coord_umap_pos, res.y_alvo)
+        _adicionar_pontos(
+            "UMAP", "Alvo Original (Mathys)", res.coord_umap_orig, res.y_alvo
+        )
+        _adicionar_pontos(
+            "UMAP", "Alvo Pós-Imputação (Hopfield)", res.coord_umap_pos, res.y_alvo
+        )
 
         _adicionar_pontos("t-SNE", "Referência (Pan)", res.coord_tsne_ref, res.y_ref)
-        _adicionar_pontos("t-SNE", "Alvo Original (Mathys)", res.coord_tsne_orig, res.y_alvo)
-        _adicionar_pontos("t-SNE", "Alvo Pós-Imputação (Hopfield)", res.coord_tsne_pos, res.y_alvo)
+        _adicionar_pontos(
+            "t-SNE", "Alvo Original (Mathys)", res.coord_tsne_orig, res.y_alvo
+        )
+        _adicionar_pontos(
+            "t-SNE", "Alvo Pós-Imputação (Hopfield)", res.coord_tsne_pos, res.y_alvo
+        )
 
         df_coord_salvar = pd.DataFrame(linhas_coord)
         df_coord_salvar.to_csv(path_coord, index=False)

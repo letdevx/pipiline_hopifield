@@ -2438,15 +2438,22 @@ if "carregador" in globals() and getattr(carregador, "Wswp", None) is not None:
 elif os.path.exists(PATH_SWEEP_REFERENCIA):
     X_sweep_ref = np.loadtxt(PATH_SWEEP_REFERENCIA, dtype=np.float32)
 else:
-    raise FileNotFoundError(f"Matriz SWeeP da referência não encontrada em {PATH_SWEEP_REFERENCIA}")
+    raise FileNotFoundError(
+        f"Matriz SWeeP da referência não encontrada em {PATH_SWEEP_REFERENCIA}"
+    )
 
 # B. Alvo Original Mathys (com sentinela 0.5)
-if "projetor_sentinela_r" in globals() and getattr(projetor_sentinela_r, "Wswp", None) is not None:
+if (
+    "projetor_sentinela_r" in globals()
+    and getattr(projetor_sentinela_r, "Wswp", None) is not None
+):
     X_sweep_orig = projetor_sentinela_r.Wswp
 elif os.path.exists(PATH_SWEEP_ALVO_SENTINELA):
     X_sweep_orig = np.loadtxt(PATH_SWEEP_ALVO_SENTINELA, dtype=np.float32)
 else:
-    raise FileNotFoundError(f"Matriz SWeeP do alvo original não encontrada em {PATH_SWEEP_ALVO_SENTINELA}")
+    raise FileNotFoundError(
+        f"Matriz SWeeP do alvo original não encontrada em {PATH_SWEEP_ALVO_SENTINELA}"
+    )
 
 # C. Alvo Pós-Imputação Mathys (Hopfield recuperado)
 path_sweep_pos = os.path.join(OUT_SWEEP_POS_IMPUTACAO, "sweep_alvo_pos_imputacao.txt")
@@ -2455,11 +2462,19 @@ if "projetor_m_r" in globals() and getattr(projetor_m_r, "Wswp", None) is not No
 elif os.path.exists(path_sweep_pos):
     X_sweep_pos = np.loadtxt(path_sweep_pos, dtype=np.float32)
 else:
-    raise FileNotFoundError(f"Matriz SWeeP do alvo pós-imputação não encontrada em {path_sweep_pos}")
+    raise FileNotFoundError(
+        f"Matriz SWeeP do alvo pós-imputação não encontrada em {path_sweep_pos}"
+    )
 
-print(f"  • Referência Pan      : {X_sweep_ref.shape[0]:,} células × {X_sweep_ref.shape[1]} dimensões")
-print(f"  • Alvo Original       : {X_sweep_orig.shape[0]:,} células × {X_sweep_orig.shape[1]} dimensões")
-print(f"  • Alvo Pós-Imputação  : {X_sweep_pos.shape[0]:,} células × {X_sweep_pos.shape[1]} dimensões")
+print(
+    f"  • Referência Pan      : {X_sweep_ref.shape[0]:,} células × {X_sweep_ref.shape[1]} dimensões"
+)
+print(
+    f"  • Alvo Original       : {X_sweep_orig.shape[0]:,} células × {X_sweep_orig.shape[1]} dimensões"
+)
+print(
+    f"  • Alvo Pós-Imputação  : {X_sweep_pos.shape[0]:,} células × {X_sweep_pos.shape[1]} dimensões"
+)
 
 # 2. Mapeamento de Rótulos Celulares Canônicos
 nomes_canonicos_grid = [
@@ -2499,9 +2514,13 @@ if resultado_cap15.caminho_png and os.path.exists(resultado_cap15.caminho_png):
     try:
         from IPython.display import Image, display
 
-        print(f"\n[Visualização] Exibindo Painel Sinótico 3 × 3: {resultado_cap15.caminho_png}")
+        print(
+            f"\n[Visualização] Exibindo Painel Sinótico 3 × 3: {resultado_cap15.caminho_png}"
+        )
         display(Image(filename=resultado_cap15.caminho_png))
     except Exception:
         pass
 
-print("\n[Capítulo 15 Concluído] Comparações topológicas dimensionais concluídas com sucesso!")
+print(
+    "\n[Capítulo 15 Concluído] Comparações topológicas dimensionais concluídas com sucesso!"
+)
