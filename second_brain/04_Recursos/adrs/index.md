@@ -41,6 +41,7 @@ Esta pasta armazena o repositório de decisões formais de arquitetura para gara
 * 📜 **[[04_Recursos/adrs/adr_025_diagnostico_overfitting_cross_dataset|ADR 025: Diagnóstico Formal de Overfitting na Imputação Cross-Dataset via Masked Gene Holdout e Streaming OOM-Safe]]**
 * 📜 **[[04_Recursos/adrs/adr_026_comparacao_topologica_embeddings_capitulo_15|ADR 026: Comparação Topológica e Visualização Dimensional Cross-Dataset (Capítulo 15 - PCA, UMAP, t-SNE)]]**
 * 📜 **[[04_Recursos/adrs/adr_027_otimizacao_capacidade_associativa_e_limiar_overfitting|ADR 027: Otimização da Capacidade Associativa (rede210 com nc=30) e Varredura Automática de Limiar de Binarização no Diagnóstico de Overfitting]]**
+* 📜 **[[04_Recursos/adrs/adr_028_marcador_sentinela_alinhamento_multidataset|ADR 028: Inserção Física e Padronizada de Sentinelas (0.5) em Datasets Alvo via MarcadorSentinela e Lotes OOM-Safe]]**
 
 ---
 

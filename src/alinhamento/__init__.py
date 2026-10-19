@@ -11,6 +11,7 @@ from .analisador_cobertura import AnalisadorCobertura
 from .analisador_sobreposicao import AnalisadorSobreposicao
 from .exportador_mtx import ExportadorMTX
 from .leitor_features import LeitorFeatures
+from .marcador_sentinela import MarcadorSentinela
 from .selecionador_genes_diferenciais import SelecionadorGenesDiferenciais
 from .selecionador_genes_frequentes import SelecionadorGenesFrequentes
 from .validador_alinhamento import ValidadorAlinhamento
@@ -24,6 +25,7 @@ __all__ = [
     "AnalisadorSobreposicao",
     "ExportadorMTX",
     "LeitorFeatures",
+    "MarcadorSentinela",
     "SelecionadorGenesDiferenciais",
     "SelecionadorGenesFrequentes",
     "ValidadorAlinhamento",

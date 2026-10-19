@@ -363,6 +363,7 @@ from alinhamento import (
     AnalisadorSobreposicao,
     ExportadorMTX,
     LeitorFeatures,
+    MarcadorSentinela,
     ValidadorAlinhamento,
     ValidadorFeatures,
     ValidadorOrdemGenes,
@@ -516,7 +517,7 @@ gc.collect()
 
 # %%
 # ==============================================================================
-# Uso direto das matrizes completas alinhadas (Zero cópia / 100% Esparso)
+# Inserção Física e Padronizada de Sentinela (0.5) via MarcadorSentinela (ADR 028)
 # ==============================================================================
 path_f_completo = alinhador.path_f_alinhado  # adataF_binarizado_alinhado.h5ad
 path_m_completo = alinhador.path_m_alinhado  # adataM_binarizado_alinhado.h5ad
@@ -526,64 +527,43 @@ path_todos_genes = os.path.join(OUT_ALINHAMENTO, "genes_canonicos_completos.csv"
 path_mtx_sentinela = os.path.join(OUT_MTX_ALVO_SENTINELA, "matrix.mtx")
 path_genes_sentinela = os.path.join(OUT_MTX_ALVO_SENTINELA, "genes_referencia.tsv")
 path_barcodes_sentinela = os.path.join(OUT_MTX_ALVO_SENTINELA, "barcodes.tsv")
-
-# Checagem de existência prévia de todos os artefatos gerados
-arquivos_cap4_existem = (
-    os.path.exists(path_todos_genes)
-    and os.path.exists(path_mtx_sentinela)
-    and os.path.exists(path_genes_sentinela)
-    and os.path.exists(path_barcodes_sentinela)
+path_m_sentinela_h5ad = os.path.join(
+    OUT_ALINHAMENTO, "adataM_binarizado_sentinela.h5ad"
+)
+path_tracking_cap4 = os.path.join(
+    OUT_ALINHAMENTO, "tracking_genes_adicionados_mathys.csv"
 )
 
-exportador_mtx_sentinela = ExportadorMTX(
-    out_dir=OUT_MTX_ALVO_SENTINELA, validador=validador_genes
-)
-
-FORCAR_CAP4 = globals().get("FORCAR_CAP4", False)
-
-if arquivos_cap4_existem and not FORCAR_CAP4:
-    print(
-        f"[Capítulo 4] Artefatos já existentes em {OUT_MTX_ALVO_SENTINELA} e {path_todos_genes}.\n"
-        "[Capítulo 4] Pulando carregamento em memória e injeção do sentinela 0.5 (economia de RAM/CPU)."
-    )
-    # Validação rápida de integridade da pasta existente
-    validador_genes.validar_pasta_mtx(
-        OUT_MTX_ALVO_SENTINELA,
-        genes_referencia=analisador.genes_ordenados,
-    )
-else:
-    print(
-        "[Capítulo 4] Artefatos ausentes ou regravação forçada solicitada. "
-        "Processando injeção de sentinela 0.5..."
-    )
-    # 1. Salva a lista completa de genes para o Carregador
+# 1. Salva a lista completa de genes canônicos para o Carregador
+if not os.path.exists(path_todos_genes):
     pd.DataFrame({"gene": analisador.genes_ordenados}).to_csv(
         path_todos_genes, index=False
     )
 
-    # 2. Carrega matriz do alvo, injeta 0.5 nas colunas ausentes e exporta MTX
-    adata_m_alin = ad.read_h5ad(alinhador.path_m_alinhado)
-    mask_ausentes_cap4 = alinhador.obter_mascara_ausentes()
-    X_sentinela = adata_m_alin.X.copy()
-    if sp.issparse(X_sentinela):
-        X_sentinela = X_sentinela.tolil()
-        X_sentinela[:, mask_ausentes_cap4] = 0.5
-        X_sentinela = X_sentinela.tocsr()
-    else:
-        X_sentinela = np.asarray(X_sentinela, dtype=np.float32)
-        X_sentinela[:, mask_ausentes_cap4] = 0.5
+FORCAR_CAP4 = globals().get("FORCAR_CAP4", False)
 
-    exportador_mtx_sentinela.exportar(
-        matriz=X_sentinela,
-        genes=analisador.genes_ordenados,
-        genes_referencia=analisador.genes_ordenados,
-        map_features=leitor.map_m,
-        barcodes=adata_m_alin.obs_names.tolist(),
-        nome_etapa="Alvo com Sentinela 0.5 (Mathys)",
-        forcar=True,
-    )
-    del adata_m_alin, X_sentinela
-    gc.collect()
+# 2. Injeção física padronizada de 0.5 via MarcadorSentinela em lotes OOM-Safe
+marcador = MarcadorSentinela(
+    genes_referencia=analisador.genes_ordenados,
+    map_features_alvo=leitor.map_m,
+    fill_value=0.5,
+    chunk_size=5000,
+)
+
+adata_m_sentinela = marcador.marcar_dataset(
+    adata_alvo=path_m_completo,
+    path_saida_h5ad=path_m_sentinela_h5ad,
+    path_tracking_csv=path_tracking_cap4,
+    exportar_mtx=True,
+    path_saida_mtx=OUT_MTX_ALVO_SENTINELA,
+    forcar=FORCAR_CAP4,
+)
+
+mask_ausentes_cap4 = marcador.obter_mascara_ausentes()
+print(
+    f"[Capítulo 4] MarcadorSentinela concluído: {adata_m_sentinela.shape[0]:,} células × "
+    f"{adata_m_sentinela.shape[1]:,} genes ({int(np.sum(mask_ausentes_cap4)):,} com sentinela 0.5)."
+)
 
 
 # %% [markdown]
