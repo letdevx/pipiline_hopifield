@@ -71,10 +71,28 @@ PATH_REFERENCIA: str = os.environ.get(
     os.path.join(PATH_BASE, "imputs", "pan_anotado.h5ad"),
 )
 
-# Entrada Conjunto Alvo
+# Entrada Conjunto Alvo (Dataset F: Fujita filtrado e normalizado)
+_LOCAL_ALVO_F: str = (
+    r"C:\Users\Leticia\Documents\Letworkspace\Sweep-Harmonization\Meus_testes"
+    r"\Controle_qualidade\dataF\MatrizfiltradaenormalizadaF\matrizFiltradaeNormalizadaF.h5ad"
+)
+_DRIVE_ALVO_F: str = (
+    r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace"
+    r"/Sweep-Harmonization/Meus_testes/Controle_qualidade/dataF/MatrizfiltradaenormalizadaF/matrizFiltradaeNormalizadaF.h5ad"
+)
+_IMPUTS_ALVO_F: str = os.path.join(
+    PATH_BASE, "imputs", "matrizFiltradaeNormalizadaF.h5ad"
+)
+
+_PATH_ALVO_PADRAO: str = (
+    _LOCAL_ALVO_F
+    if os.path.exists(_LOCAL_ALVO_F)
+    else (_DRIVE_ALVO_F if os.path.exists(_DRIVE_ALVO_F) else _IMPUTS_ALVO_F)
+)
+
 PATH_ALVO: str = os.environ.get(
     "PATH_ALVO",
-    os.path.join(PATH_BASE, "imputs", "matriz_anotada_finalM.h5ad"),
+    _PATH_ALVO_PADRAO,
 )
 
 # Identificadores automáticos dos conjuntos
@@ -85,7 +103,24 @@ NOME_ALVO: str = os.environ.get("NOME_ALVO") or _extrair_nome_dataset(PATH_ALVO)
 PATH_FEATURES_REFERENCIA: str = os.path.join(
     PATH_BASE, "imputs", "featuresPANcorrigido.tsv"
 )
-PATH_FEATURES_ALVO: str = os.path.join(PATH_BASE, "imputs", "featuresM.tsv")
+_LOCAL_FEATURES_F: str = (
+    r"C:\Users\Leticia\Documents\Letworkspace\Sweep-Harmonization\Meus_testes"
+    r"\Controle_qualidade\dataF\dados_combinados\features.tsv\features.tsv"
+)
+_IMPUTS_FEATURES_F: str = os.path.join(PATH_BASE, "imputs", "featuresF.tsv")
+_PATH_FEATURES_ALVO_PADRAO: str = (
+    _LOCAL_FEATURES_F
+    if os.path.exists(_LOCAL_FEATURES_F)
+    else (
+        _IMPUTS_FEATURES_F
+        if os.path.exists(_IMPUTS_FEATURES_F)
+        else os.path.join(PATH_BASE, "imputs", "featuresM.tsv")
+    )
+)
+PATH_FEATURES_ALVO: str = os.environ.get(
+    "PATH_FEATURES_ALVO",
+    _PATH_FEATURES_ALVO_PADRAO,
+)
 
 # Base Ortonormal Congelada e Rótulos
 PATH_ORTHBASE_RDS: str = os.environ.get(
@@ -100,7 +135,9 @@ PATH_LABELS_ALVO: str = os.path.join(
 # ---------------------------------------------------------------------------
 # Saídas dinâmicas — inicializadas no padrão output_<nome_ref>_<nome_alvo>
 # ---------------------------------------------------------------------------
-OUTPUTS: str = os.path.join(PATH_BASE, f"output_{NOME_REF}_{NOME_ALVO}")
+OUTPUTS: str = os.environ.get("OUTPUTS") or os.path.join(
+    PATH_BASE, f"output_{NOME_REF}_{NOME_ALVO}"
+)
 OUT_BINARIZACAO: str = os.path.join(OUTPUTS, "binarizacao")
 OUT_ALINHAMENTO: str = os.path.join(OUTPUTS, "alinhamento")
 OUT_TOP_GENES: str = os.path.join(OUTPUTS, "top_genes")

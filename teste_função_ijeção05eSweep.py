@@ -314,7 +314,9 @@ print(f"[Genes] Total de genes na referência canônica: {len(genes_canonica):,}
 DIR_TESTE_EXP = os.path.join(OUTPUTS, "experimento_sentinela_mlp")
 os.makedirs(DIR_TESTE_EXP, exist_ok=True)
 
-PATH_ALVO_SENTINELA_H5AD = os.path.join(DIR_TESTE_EXP, "alvo_mathys_com_sentinela.h5ad")
+PATH_ALVO_SENTINELA_H5AD = os.path.join(
+    DIR_TESTE_EXP, f"alvo_{getattr(config, 'NOME_ALVO', 'alvo')}_com_sentinela.h5ad"
+)
 PATH_TRACKING_CSV = os.path.join(DIR_TESTE_EXP, "tracking_genes_ausentes.csv")
 DIR_MTX_SENTINELA = os.path.join(DIR_TESTE_EXP, "mtx_sentinela")
 PATH_SWEEP_SENTINELA_TXT = os.path.join(
