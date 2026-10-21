@@ -29,8 +29,12 @@ from .extrator_padroes import ExtratorPadroesSubcluster
 from .gerador_conjunto_treinamento import GeradorConjuntoTreinamento
 from .gerador_relatorio import GeradorRelatorio
 from .hopfield import ModernHopfieldNetwork
-from .hopfield_kerastuner import HopfieldKerasTuner
 from .projetor_sweep import ProjetorSWeePR, ProjetorSWeP
+
+try:
+    from .hopfield_kerastuner import HopfieldKerasTuner
+except ImportError:
+    HopfieldKerasTuner = None  # type: ignore[assignment,misc]
 from .selecionador_genes_shap import (
     HopfieldClassifierWrapper,
     SelecionadorGenesSHAPHopfield,

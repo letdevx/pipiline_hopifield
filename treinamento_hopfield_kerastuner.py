@@ -79,6 +79,9 @@ if IN_COLAB:
         ],
         check=False,
     )
+    import importlib
+
+    importlib.invalidate_caches()
 
     # 2. Sincronização do repositório no Colab
     REPO_URL = "https://github.com/letdevx/pipiline_hopifield.git"
@@ -88,19 +91,51 @@ if IN_COLAB:
     if not os.path.exists(DEST_PATH):
         print(f"[Colab] Clonando repositório '{REPO_URL}' em '{DEST_PATH}'...")
         subprocess.run(
-            ["git", "clone", "-b", REPO_BRANCH, REPO_URL, DEST_PATH], check=False
+            ["git", "clone", REPO_URL, DEST_PATH],
+            capture_output=True,
+            check=False,
         )
-    else:
-        print(f"[Colab] Atualizando repositório em '{DEST_PATH}'...")
-        subprocess.run(["git", "-C", DEST_PATH, "checkout", REPO_BRANCH], check=False)
-        subprocess.run(
-            ["git", "-C", DEST_PATH, "pull", "origin", REPO_BRANCH], check=False
-        )
+
+    print(f"[Colab] Sincronizando com a branch '{REPO_BRANCH}'...")
+    subprocess.run(
+        ["git", "-C", DEST_PATH, "fetch", "origin"],
+        capture_output=True,
+        check=False,
+    )
+    subprocess.run(
+        ["git", "-C", DEST_PATH, "checkout", "-f", REPO_BRANCH],
+        capture_output=True,
+        check=False,
+    )
+    subprocess.run(
+        ["git", "-C", DEST_PATH, "reset", "--hard", f"origin/{REPO_BRANCH}"],
+        capture_output=True,
+        check=False,
+    )
+    subprocess.run(
+        ["git", "-C", DEST_PATH, "pull", "origin", REPO_BRANCH],
+        capture_output=True,
+        check=False,
+    )
+
+    res_head = subprocess.run(
+        ["git", "-C", DEST_PATH, "log", "-1", "--oneline"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    print(f"[Colab Git] HEAD ativo na VM: {res_head.stdout.strip()}")
 
     # Adiciona repositório ao sys.path
     for p in (DEST_PATH, os.path.join(DEST_PATH, "src")):
         if p not in sys.path:
             sys.path.insert(0, p)
+
+    # Limpa módulos cacheados de execuções prévias
+    for mod_name in list(sys.modules.keys()):
+        if mod_name == "src" or mod_name.startswith("src."):
+            del sys.modules[mod_name]
+    importlib.invalidate_caches()
 
     # 3. Montagem do Google Drive
     try:
@@ -137,11 +172,26 @@ from src.config import PATH_REFERENCIA
 from src.treinamento import (
     AvaliadorHopfield,
     CarregadorDadosFujita,
-    HopfieldKerasTuner,
     InjetorPerturbacaoTranscritica,
     ProjetorSWeP,
     remapear_labels_canonicos,
 )
+
+# Importação resiliente de HopfieldKerasTuner
+try:
+    from src.treinamento import HopfieldKerasTuner
+except ImportError:
+    try:
+        from src.treinamento.hopfield_kerastuner import HopfieldKerasTuner
+    except ImportError as err_kt:
+        raise ImportError(
+            "\n" + "=" * 75 + "\n[ERRO DE IMPORTAÇÃO - KERAS-TUNER]"
+            "\nNão foi possível importar 'HopfieldKerasTuner'."
+            "\nSe você estiver no Google Colab, certifique-se de que o pacote 'keras-tuner' está instalado:"
+            "\n    !pip install -q keras-tuner>=1.4.8"
+            "\nE em seguida reinicie a sessão do kernel (Runtime -> Restart session)."
+            f"\nDetalhes técnicos: {err_kt}\n" + "=" * 75
+        ) from err_kt
 
 # Fixação de semente determinística para reprodutibilidade estrita
 SEED: int = 42
