@@ -325,6 +325,7 @@ class ValidadorOrdemGenes:
         genes: Sequence[str],
         genes_referencia: Sequence[str],
         nome_etapa: str = "Etapa",
+        validar_regex: bool = True,
     ) -> bool:
         """Executa validação completa combinada (Matriz + Genes + Regex) com fail-fast.
 
@@ -338,6 +339,8 @@ class ValidadorOrdemGenes:
             Identificadores da referência canônica.
         nome_etapa : str, default="Etapa"
             Identificador descritivo para mensagens de log.
+        validar_regex : bool, default=True
+            Se True, aplica checagem de regex sobre a coluna de Ensembl IDs.
 
         Returns
         -------
@@ -345,11 +348,16 @@ class ValidadorOrdemGenes:
             True se todas as validações forem concluídas com sucesso.
         """
         print(f"\n[ValidadorOrdemGenes] Iniciando auditoria para '{nome_etapa}'...")
-        self.validar_genes(genes, genes_referencia, validar_regex=True)
+        self.validar_genes(genes, genes_referencia, validar_regex=validar_regex)
         self.validar_matriz(matriz, genes_referencia, checar_nans=True)
-        print(
-            f"  [OK] {len(genes):,} genes auditados: 100% de conformidade posicional e sintática (Regex)."
-        )
+        if validar_regex:
+            print(
+                f"  [OK] {len(genes):,} genes auditados: 100% de conformidade posicional e sintática (Regex)."
+            )
+        else:
+            print(
+                f"  [OK] {len(genes):,} genes auditados: 100% de conformidade posicional (validação sintática de regex desativada)."
+            )
         print(f"  [OK] Matriz com shape {matriz.shape} íntegra e livre de NaNs/Infs.")
         print(f"[ValidadorOrdemGenes] '{nome_etapa}': APROVADO com sucesso! [Ok]\n")
         return True

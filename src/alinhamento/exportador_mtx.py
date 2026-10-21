@@ -88,6 +88,7 @@ class ExportadorMTX:
         barcodes: Sequence[str] | None = None,
         nome_etapa: str = "Exportação MTX",
         forcar: bool = False,
+        validar_regex: bool | None = None,
     ) -> dict[str, Any]:
         """Exporta matriz e metadados para a pasta configurada.
 
@@ -108,6 +109,10 @@ class ExportadorMTX:
             Rótulo descritivo para logs de auditoria.
         forcar : bool, default=False
             Se True, regrava mesmo se os arquivos já existirem.
+        validar_regex : bool | None, default=None
+            Se True, valida o regex canônico Ensembl (ENSG...).
+            Se False, desativa a validação sintática (permite símbolos gênicos).
+            Se None (padrão), auto-detecta conforme o formato dos primeiros identificadores.
 
         Returns
         -------
@@ -132,8 +137,19 @@ class ExportadorMTX:
             print(
                 f"[ExportadorMTX] Arquivos já existem em {self.out_dir}, validando integridade..."
             )
+            vr_existente = (
+                validar_regex
+                if validar_regex is not None
+                else (
+                    any(str(g).strip().startswith("ENS") for g in genes_referencia[:50])
+                    if genes_referencia is not None
+                    else True
+                )
+            )
             if genes_referencia is not None:
-                return self.validador.validar_pasta_mtx(self.out_dir, genes_referencia)
+                return self.validador.validar_pasta_mtx(
+                    self.out_dir, genes_referencia, validar_regex=vr_existente
+                )
             return {
                 "status": "EXISTENTE",
                 "pasta": self.out_dir,
@@ -184,11 +200,21 @@ class ExportadorMTX:
         ref_comparacao = (
             genes_referencia if genes_referencia is not None else genes_lista
         )
+        if validar_regex is None:
+            tem_ens = any(str(g).strip().startswith("ENS") for g in genes_lista[:50])
+            validar_regex = tem_ens
+            if not validar_regex:
+                print(
+                    "[ExportadorMTX] Identificadores de genes detectados como símbolos gênicos. "
+                    "Validação sintática de Ensembl regex desativada automaticamente."
+                )
+
         self.validador.validar_tudo_ou_falhar(
             matriz=matriz_esparsa,
             genes=genes_lista,
             genes_referencia=ref_comparacao,
             nome_etapa=f"Pré-Gravação: {nome_etapa}",
+            validar_regex=validar_regex,
         )
 
         # 3. Gravação de matrix.mtx (OOM-Safe via scipy.io.mmwrite)
@@ -227,7 +253,7 @@ class ExportadorMTX:
         relatorio = self.validador.validar_pasta_mtx(
             self.out_dir,
             genes_referencia=ref_comparacao,
-            validar_regex=True,
+            validar_regex=validar_regex,
         )
         print(
             f"[ExportadorMTX] '{nome_etapa}' exportada e validada com sucesso! [Ok]\n"

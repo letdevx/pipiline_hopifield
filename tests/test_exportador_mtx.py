@@ -138,3 +138,30 @@ def test_exportador_mtx_anndata_backed(tmp_path):
     finally:
         if hasattr(adata_backed, "file") and adata_backed.file is not None:
             adata_backed.file.close()
+
+
+def test_exportador_mtx_com_simbolos_genicos(tmp_path):
+    """Testa exportação quando a matriz possui símbolos gênicos em vez de Ensembl IDs."""
+    out_dir = tmp_path / "mtx_simbolos"
+    n_celulas, n_genes = 10, 4
+    simbolos = ["MIR1302-2HG", "FAM138A", "OR4F5", "AL627309"]
+    barcodes = [f"cell_{i}" for i in range(n_celulas)]
+
+    rng = np.random.default_rng(42)
+    x_csr = sp.csr_matrix((rng.random((n_celulas, n_genes)) > 0.5).astype(np.float32))
+
+    adata = ad.AnnData(X=x_csr)
+    adata.obs_names = barcodes
+    adata.var_names = simbolos
+
+    exportador = ExportadorMTX(out_dir=out_dir)
+    # Testa auto-detecção (validar_regex=None)
+    res = exportador.exportar(matriz=adata, forcar=True)
+
+    assert res["status"] == "APROVADO"
+    assert res["n_celulas"] == n_celulas
+    assert res["n_genes"] == n_genes
+
+    # Testa também passando explicitamente validar_regex=False
+    res_explicit = exportador.exportar(matriz=adata, forcar=True, validar_regex=False)
+    assert res_explicit["status"] == "APROVADO"

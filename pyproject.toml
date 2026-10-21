@@ -168,6 +168,19 @@ convention = "numpy"
     "NPY002",  # Sementes legadas de compatibilidade em notebooks
     "SIM105",  # Blocos try-except legados de compatibilidade
 ]
+"sweep_*.py" = [
+    "D",       # Docstrings flexíveis para scripts interativos/notebooks
+    "I",       # Permitir imports por célula em scripts interativos percentuais
+    "E402",    # Permitir imports intermediários de blocos de execução
+    "F401",    # Imports para checagem condicional em células de ambiente
+    "F811",    # Permitir redefinição de variáveis em células
+    "E702",    # Permitir múltiplas instruções por linha em plots interativos
+    "E712",    # Permitir comparações literais em filtros interativos
+    "B905",    # Zip sem strict em células exploratórias
+    "NPY002",  # Sementes legadas de compatibilidade em notebooks
+    "SIM105",  # Blocos try-except legados de compatibilidade
+]
+
 
 [tool.ruff.format]
 quote-style = "double"
