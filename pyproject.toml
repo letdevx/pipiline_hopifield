@@ -12,6 +12,7 @@ dependencies = [
     "anndata>=0.10.0",
     "h5py>=3.10.0",
     "hdbscan>=0.8.39",
+    "keras-tuner>=1.4.8",
     "matplotlib>=3.8.0",
     "numpy>=1.26.0",
     "pandas>=2.0.0",
@@ -143,6 +144,19 @@ convention = "numpy"
     "SIM105",  # Blocos try-except legados de compatibilidade
 ]
 "teste_*.py" = [
+    "D",       # Docstrings flexíveis para scripts interativos/notebooks
+    "I",       # Permitir imports por célula em scripts interativos percentuais
+    "E402",    # Permitir imports intermediários de blocos de execução
+    "F401",    # Imports para checagem condicional em células de ambiente
+    "F811",    # Permitir redefinição de variáveis em células
+    "F821",    # Permitir funções de ambiente interativo como display()
+    "E702",    # Permitir múltiplas instruções por linha em plots interativos
+    "E712",    # Permitir comparações literais em filtros interativos
+    "B905",    # Zip sem strict em células exploratórias
+    "NPY002",  # Sementes legadas de compatibilidade em notebooks
+    "SIM105",  # Blocos try-except legados de compatibilidade
+]
+"treinamento_*.py" = [
     "D",       # Docstrings flexíveis para scripts interativos/notebooks
     "I",       # Permitir imports por célula em scripts interativos percentuais
     "E402",    # Permitir imports intermediários de blocos de execução

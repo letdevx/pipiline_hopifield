@@ -29,6 +29,7 @@ from .extrator_padroes import ExtratorPadroesSubcluster
 from .gerador_conjunto_treinamento import GeradorConjuntoTreinamento
 from .gerador_relatorio import GeradorRelatorio
 from .hopfield import ModernHopfieldNetwork
+from .hopfield_kerastuner import HopfieldKerasTuner
 from .projetor_sweep import ProjetorSWeePR, ProjetorSWeP
 from .selecionador_genes_shap import (
     HopfieldClassifierWrapper,
@@ -51,6 +52,7 @@ __all__ = [
     "GeradorConjuntoTreinamento",
     "GeradorRelatorio",
     "HopfieldClassifierWrapper",
+    "HopfieldKerasTuner",
     "IndividuoHopfield",
     "InjetorPerturbacaoTranscritica",
     "ModernHopfieldNetwork",

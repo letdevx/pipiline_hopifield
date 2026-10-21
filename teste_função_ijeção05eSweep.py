@@ -46,11 +46,11 @@ except ImportError:
 # ==============================================================================
 REPO_NAME = "pipiline_hopifield"
 REPO_URL = "https://github.com/letdevx/pipiline_hopifield.git"
-REPO_BRANCH = "reconstrucao_Pan_Mathys_Otimizado"
+REPO_BRANCH = "reconstrução_Fujita_com_mlp_funcionando_corretamente"
 DEST_PATH = f"/content/{REPO_NAME}"
 
 # Commit hash esperado no Colab (ADR 024)
-EXPECTED_COMMIT = "be19fe03517afcc8d4313adedfc558d0ef7409cd"
+EXPECTED_COMMIT = "e8f3f17"
 
 
 def _is_google_colab() -> bool:
@@ -101,13 +101,13 @@ def sincronizar_e_validar_repo_colab(
     # 2. Checkout e pull da branch remota
     print(f"[Colab Git] Atualizando branch '{branch}' a partir de origin...")
     subprocess.run(
-        ["git", "-C", dest_path, "checkout", branch],
+        ["git", "-C", dest_path, "fetch", "origin", branch],
         capture_output=True,
         text=True,
         check=False,
     )
     subprocess.run(
-        ["git", "-C", dest_path, "fetch", "origin", branch],
+        ["git", "-C", dest_path, "checkout", branch],
         capture_output=True,
         text=True,
         check=False,
