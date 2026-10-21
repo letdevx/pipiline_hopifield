@@ -82,19 +82,23 @@ class InjetorPerturbacaoTranscritica:
 
     Gera cópias imutáveis das matrizes transcricionais aplicando perturbações
     controladas sem alteração in-place dos dados originais.
+    Suporta matrizes densas NumPy e esparsas SciPy (csr_matrix) de modo OOM-safe.
     """
 
     def aplicar_dropout(
         self,
-        matriz: NDArray[Any],
+        matriz: NDArray[Any] | sp.spmatrix,
         taxa: float,
         seed: int | None = None,
-    ) -> NDArray[np.float32]:
+    ) -> NDArray[np.float32] | sp.spmatrix:
         """Zera estocasticamente uma fração dos genes ativos sem mutação in-place.
+
+        Suporta matrizes densas NumPy e esparsas SciPy (csr_matrix), preservando a
+        esparsidade e operando de modo OOM-safe sobre os dados não nulos.
 
         Parameters
         ----------
-        matriz : NDArray[Any]
+        matriz : NDArray[Any] | sp.spmatrix
             Matriz de expressão binária de dimensões (n_celulas × n_genes).
         taxa : float
             Fração de genes ativos a serem desativados (0.0 a 1.0).
@@ -103,7 +107,7 @@ class InjetorPerturbacaoTranscritica:
 
         Returns
         -------
-        NDArray[np.float32]
+        NDArray[np.float32] | sp.spmatrix
             Cópia da matriz com o dropout artificial aplicado.
 
         Raises
@@ -115,6 +119,22 @@ class InjetorPerturbacaoTranscritica:
             raise ValueError(
                 f"Taxa de dropout deve estar entre 0.0 e 1.0, recebido {taxa}"
             )
+
+        if sp.issparse(matriz):
+            copia_csr = sp.csr_matrix(matriz, copy=True)
+            if taxa == 0.0:
+                return copia_csr
+
+            rng = np.random.default_rng(seed)
+            # Em matrizes binárias esparsas scRNA-seq, o vetor data contém os genes ativos (>0)
+            n_ativos = len(copia_csr.data)
+            if n_ativos > 0:
+                n_remover = int(np.round(n_ativos * taxa))
+                indices_sorteados = rng.choice(n_ativos, size=n_remover, replace=False)
+                copia_csr.data[indices_sorteados] = 0.0
+                copia_csr.eliminate_zeros()
+
+            return copia_csr
 
         copia = np.array(matriz, dtype=np.float32, copy=True)
         if taxa == 0.0:
@@ -135,15 +155,15 @@ class InjetorPerturbacaoTranscritica:
 
     def aplicar_bit_flip(
         self,
-        matriz: NDArray[Any],
+        matriz: NDArray[Any] | sp.spmatrix,
         taxa: float,
         seed: int | None = None,
-    ) -> NDArray[np.float32]:
+    ) -> NDArray[np.float32] | sp.spmatrix:
         """Inverte aleatoriamente uma fração dos valores da matriz binária.
 
         Parameters
         ----------
-        matriz : NDArray[Any]
+        matriz : NDArray[Any] | sp.spmatrix
             Matriz de expressão binária de dimensões (n_celulas × n_genes).
         taxa : float
             Fração total de posições a terem seus bits invertidos (0.0 a 1.0).
@@ -152,7 +172,7 @@ class InjetorPerturbacaoTranscritica:
 
         Returns
         -------
-        NDArray[np.float32]
+        NDArray[np.float32] | sp.spmatrix
             Cópia da matriz com inversões estocásticas aplicadas.
 
         Raises
@@ -164,6 +184,28 @@ class InjetorPerturbacaoTranscritica:
             raise ValueError(
                 f"Taxa de bit flip deve estar entre 0.0 e 1.0, recebido {taxa}"
             )
+
+        if sp.issparse(matriz):
+            copia_csr = sp.csr_matrix(matriz, copy=True)
+            if taxa == 0.0:
+                return copia_csr
+
+            rng = np.random.default_rng(seed)
+            n_rows, n_cols = copia_csr.shape
+            n_total = n_rows * n_cols
+            n_inverter = int(np.round(n_total * taxa))
+
+            if n_inverter > 0:
+                copia_lil = copia_csr.tolil()
+                indices_lineares = rng.choice(n_total, size=n_inverter, replace=False)
+                idx_linhas, idx_cols = np.unravel_index(
+                    indices_lineares, (n_rows, n_cols)
+                )
+                for r, c in zip(idx_linhas, idx_cols, strict=True):
+                    copia_lil[r, c] = 0.0 if copia_lil[r, c] > 0.5 else 1.0
+                return copia_lil.tocsr()
+
+            return copia_csr
 
         copia = np.array(matriz, dtype=np.float32, copy=True)
         if taxa == 0.0:
@@ -253,9 +295,9 @@ class AuditorOverfittingHopfield:
 
     def executar_auditoria(
         self,
-        x_treino: NDArray[Any],
+        x_treino: NDArray[Any] | sp.spmatrix,
         y_treino: Sequence[int] | NDArray[Any],
-        x_val: NDArray[Any],
+        x_val: NDArray[Any] | sp.spmatrix,
         y_val: Sequence[int] | NDArray[Any],
         niveis_ruido: Sequence[float] = (0.05, 0.15, 0.30),
     ) -> ResultadoDiagnosticoOverfitting:
@@ -263,11 +305,11 @@ class AuditorOverfittingHopfield:
 
         Parameters
         ----------
-        x_treino : NDArray[Any]
+        x_treino : NDArray[Any] | sp.spmatrix
             Matriz transcricional de treino (n_celulas_treino × n_genes).
         y_treino : Sequence[int] or NDArray[Any]
             Rótulos celulares verdadeiros das células de treino.
-        x_val : NDArray[Any]
+        x_val : NDArray[Any] | sp.spmatrix
             Matriz transcricional de validação holdout (n_celulas_val × n_genes).
         y_val : Sequence[int] or NDArray[Any]
             Rótulos celulares verdadeiros das células de validação.
@@ -285,8 +327,16 @@ class AuditorOverfittingHopfield:
             Se as dimensões gênicas de x_val divergirem do modelo ou se houver
             incompatibilidade entre células e rótulos.
         """
-        x_val_arr = np.asarray(x_val, dtype=np.float32)
-        x_treino_arr = np.asarray(x_treino, dtype=np.float32)
+        x_val_arr: NDArray[np.float32] | sp.csr_matrix = (
+            sp.csr_matrix(x_val)
+            if sp.issparse(x_val)
+            else np.asarray(x_val, dtype=np.float32)
+        )
+        x_treino_arr: NDArray[np.float32] | sp.csr_matrix = (
+            sp.csr_matrix(x_treino)
+            if sp.issparse(x_treino)
+            else np.asarray(x_treino, dtype=np.float32)
+        )
         y_val_list = [int(r) for r in y_val]
         y_treino_list = [int(r) for r in y_treino]
 
@@ -297,12 +347,12 @@ class AuditorOverfittingHopfield:
                 f"Espaço gênico divergente: modelo espera {n_genes_esperados} genes, "
                 f"recebido {x_val_arr.shape[1]}"
             )
-        if len(x_val_arr) != len(y_val_list):
+        if x_val_arr.shape[0] != len(y_val_list):
             raise ValueError(
-                f"Incompatibilidade de dimensões: x_val possui {len(x_val_arr)} células, "
+                f"Incompatibilidade de dimensões: x_val possui {x_val_arr.shape[0]} células, "
                 f"mas y_val possui {len(y_val_list)} rótulos"
             )
-        if len(x_val_arr) == 0:
+        if x_val_arr.shape[0] == 0:
             raise ValueError("Conjunto de validação x_val não pode ser vazio")
 
         alertas: list[str] = []

@@ -249,7 +249,7 @@ class OtimizadorGeneticoHopfield:
 
         # Injetor de ruído estocástico pré-computado para estabilidade
         injetor = InjetorPerturbacaoTranscritica()
-        self.x_val_ruido: NDArray[np.float32] = injetor.aplicar_dropout(
+        self.x_val_ruido: NDArray[np.float32] | sp.spmatrix = injetor.aplicar_dropout(
             matriz=self.x_val,
             taxa=self.config.taxa_ruido_estresse,
             seed=self.config.seed,

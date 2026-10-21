@@ -4,6 +4,7 @@ from typing import cast
 
 import numpy as np
 import pytest
+import scipy.sparse as sp
 from numpy.typing import NDArray
 
 from src.synthetic.gerador_ground_truth import GeradorGroundTruthSintetico
@@ -293,3 +294,70 @@ def test_auditor_emite_status_aprovado_para_rede_com_generalizacao_robusta() -> 
     assert resultado.status == "APROVADO"
     assert len(resultado.alertas) == 0
     assert resultado.gap_generalizacao <= 0.15
+
+
+def test_injetor_perturbacao_aplica_dropout_esparso_csr() -> None:
+    """Testa se aplicar_dropout opera de forma OOM-Safe em matrizes esparsas csr_matrix sem mutação in-place."""
+    injetor = InjetorPerturbacaoTranscritica()
+    dados_densos = np.array(
+        [
+            [1.0, 0.0, 1.0, 0.0, 1.0],
+            [0.0, 1.0, 0.0, 1.0, 0.0],
+            [1.0, 1.0, 1.0, 0.0, 0.0],
+        ],
+        dtype=np.float32,
+    )
+    matriz_esparsa = sp.csr_matrix(dados_densos)
+    nnz_original = matriz_esparsa.nnz
+
+    # Aplica 40% de dropout
+    matriz_perturbada = injetor.aplicar_dropout(matriz_esparsa, taxa=0.40, seed=42)
+
+    # Garante preservação de tipo esparso
+    assert sp.issparse(matriz_perturbada)
+    # Garante imutabilidade da matriz original
+    assert matriz_esparsa.nnz == nnz_original
+    # A matriz perturbada deve ter menos elementos não-nulos
+    assert matriz_perturbada.nnz < nnz_original
+    # Taxa 0.0 deve retornar cópia idêntica
+    copia_zero = injetor.aplicar_dropout(matriz_esparsa, taxa=0.0)
+    assert copia_zero.nnz == nnz_original
+
+
+def test_injetor_perturbacao_aplica_bit_flip_esparso_csr() -> None:
+    """Testa se aplicar_bit_flip opera corretamente em csr_matrix sem mutação in-place."""
+    injetor = InjetorPerturbacaoTranscritica()
+    matriz_esparsa = sp.csr_matrix(
+        np.array([[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]], dtype=np.float32)
+    )
+    matriz_flip = injetor.aplicar_bit_flip(matriz_esparsa, taxa=0.33, seed=42)
+
+    assert sp.issparse(matriz_flip)
+    assert matriz_flip.shape == matriz_esparsa.shape
+
+
+def test_auditor_executar_auditoria_com_matrizes_esparsas() -> None:
+    """Testa execução completa do auditor quando os dados de entrada são matrizes esparsas scipy.sparse."""
+    rede, prototipos, rotulos_prototipos, matriz_pura, labels = (
+        _criar_cenario_sintetico()
+    )
+    auditor = AuditorOverfittingHopfield(
+        modelo=rede,
+        padroes_referencia=prototipos,
+        rotulos_padroes=rotulos_prototipos,
+        limiar_entropia_minima=0.0,
+    )
+
+    matriz_treino_sp = sp.csr_matrix(matriz_pura)
+    matriz_val_sp = sp.csr_matrix(matriz_pura)
+
+    resultado = auditor.executar_auditoria(
+        x_treino=matriz_treino_sp,
+        y_treino=labels,
+        x_val=matriz_val_sp,
+        y_val=labels,
+        niveis_ruido=(0.10,),
+    )
+
+    assert resultado.status in ("APROVADO", "ALERTA", "REPROVADO")
+    assert 0.10 in resultado.fidelidade_sob_ruido
