@@ -31,14 +31,15 @@ except ImportError:
     # !pip install -q "pandas==2.2.3" anndata scanpy polars
 
 # %% [markdown]
-# # Teste: Injeção de Sentinelas (0.5) via MarcadorSentinela e Vetorização rSWeeP 600D
+# # Teste: Injeção de Sentinelas (0.5) nas Colunas Faltantes do Fujita no Dataset PAN e Projeção rSWeeP 600D
 #
-# Avalia o impacto da inclusão do ruído de valores sentinela (0.5) nas colunas de genes ausentes
-# sobre a acurácia de classificação de um modelo MLP projetado no espaço latente rSWeeP 600D.
+# Avalia o comportamento e a representação latente do dataset canônico de referência PAN
+# ao injetar valores sentinela (0.5) nas exatas colunas de genes ausentes do dataset Fujita,
+# mapeadas a partir de `tracking_genes_adicionados_Fujita.csv`.
 #
-# Este script utiliza a infraestrutura completa e a resolução dinâmica de caminhos
-# configurada no `pipeline_generico_Pan_Mathys.ipynb`, suportando tanto o Google Colab
-# quanto o ambiente local Windows/Linux.
+# Este experimento reconfigura a árvore de diretórios de saída para o padrão dinâmico
+# `output_pan_anotado_pan_com_sentinela_05`, persistindo a matriz AnnData modificada,
+# a exportação Matrix Market (.mtx) e a projeção vetorial rSWeeP 600D oficial.
 
 # %%
 # ==============================================================================
@@ -244,23 +245,24 @@ importlib.reload(config)
 
 from config import (
     OUT_ALINHAMENTO,
-    OUT_MTX_ALVO_SENTINELA,
+    OUT_TREINAMENTO,
     OUTPUTS,
-    PATH_ALVO,
-    PATH_FEATURES_ALVO,
-    PATH_FEATURES_REFERENCIA,
-    PATH_LABELS_ALVO,
-    PATH_LABELS_REFERENCIA,
     PATH_ORTHBASE_RDS,
     PATH_REFERENCIA,
-    PATH_SWEEP_ALVO_SENTINELA,
-    PATH_SWEEP_REFERENCIA,
     configurar_diretorios,
 )
 
-print(f"[Config] Diretório de saídas ativo: {OUTPUTS}")
+# Reconfiguração dinâmica da árvore de diretórios do projeto para:
+# output_pan_anotado_pan_com_sentinela_05
+OUTPUTS_EXP = configurar_diretorios(
+    nome_ref="pan_anotado",
+    nome_alvo="pan_com_sentinela_05",
+    criar_diretorios=True,
+)
+
+print(f"[Config] Diretório de saídas ativo: {OUTPUTS_EXP}")
 print(
-    f"[Config] Referência: '{getattr(config, 'NOME_REF', 'ref')}' | Alvo: '{getattr(config, 'NOME_ALVO', 'alvo')}'"
+    f"[Config] Referência: '{getattr(config, 'NOME_REF', 'pan_anotado')}' | Alvo: '{getattr(config, 'NOME_ALVO', 'pan_com_sentinela_05')}'"
 )
 
 # %%
@@ -271,89 +273,180 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
-from sklearn.metrics import accuracy_score, classification_report
-from sklearn.model_selection import train_test_split
-from sklearn.neural_network import MLPClassifier
 
-from alinhamento import LeitorFeatures, MarcadorSentinela
-from treinamento import (
-    ProjetorSWeePR,
-    carregar_labels,
-    remapear_labels_canonicos,
-)
+from alinhamento import ExportadorMTX
+from treinamento import ProjetorSWeePR
 
 # %%
 # ==============================================================================
-# DEFINIÇÃO DOS ARTEFATOS E ESPAÇO GÊNICO DA REFERÊNCIA
+# RESOLUÇÃO DINÂMICA DE CAMINHOS DOS ARTEFATOS E DADOS DE ENTRADA
 # ==============================================================================
 SEED = 42
 
-# 1. Identificação do espaço de genes canônicos da referência
-path_todos_genes = os.path.join(OUT_ALINHAMENTO, "genes_canonicos_completos.csv")
-leitor = LeitorFeatures(PATH_FEATURES_REFERENCIA, PATH_FEATURES_ALVO)
-leitor.ler()
+# Variáveis opcionais de override para apontar caminhos específicos manualmente
+CAMINHO_PAN_CUSTOMIZADO = ""
+CAMINHO_TRACKING_CUSTOMIZADO = ""
 
-genes_canonica: list[str]
-if os.path.exists(path_todos_genes):
-    print(f"[Genes] Carregando genes canônicos de {path_todos_genes}...")
-    df_genes = pd.read_csv(path_todos_genes)
-    col_g = "gene" if "gene" in df_genes.columns else df_genes.columns[0]
-    genes_canonica = df_genes[col_g].dropna().tolist()
-else:
-    print(
-        f"[Genes] Carregando genes canônicos diretamente da referência: {PATH_REFERENCIA}..."
+
+def resolver_caminho_pan(customizado: str = "") -> str:
+    """Localiza o dataset PAN (pan_anotado.h5ad) entre caminhos do Google Drive e locais."""
+    if customizado and os.path.exists(customizado):
+        return customizado
+
+    candidatos = [
+        getattr(config, "PATH_REFERENCIA", ""),
+        r"C:\Users\Leticia\Documents\Letworkspace\Teste hop\imputs\pan_anotado.h5ad",
+        r"C:\Users\Leticia\Downloads\pan_anotado.h5ad",
+        r"C:\Users\Leticia\Documents\Letworkspace\Sweep-Harmonization\Meus_testes\Colocando tipo celular nos dados\matriz_anotada_binaria.h5ad",
+        "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs/pan_anotado.h5ad",
+        "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs/PAN_Bin/pan_anotado.h5ad",
+        "/content/drive/MyDrive/Teste hop/imputs/pan_anotado.h5ad",
+        "/content/drive/MyDrive/pan_anotado.h5ad",
+        os.path.join(ROOT_DIR, "imputs", "pan_anotado.h5ad"),
+    ]
+
+    for cand in candidatos:
+        if cand and os.path.exists(cand):
+            return cand
+
+    raise FileNotFoundError(
+        "[Erro] Dataset 'pan_anotado.h5ad' não encontrado nos caminhos mapeados. "
+        "Verifique a montagem do Google Drive ou informe 'CAMINHO_PAN_CUSTOMIZADO'."
     )
-    _adata_ref = ad.read_h5ad(PATH_REFERENCIA, backed="r")
-    genes_canonica = list(_adata_ref.var_names)
-    if hasattr(_adata_ref, "file") and _adata_ref.file is not None:
-        _adata_ref.file.close()
 
-print(f"[Genes] Total de genes na referência canônica: {len(genes_canonica):,}")
 
-# 2. Definição do diretório de saída do teste
-DIR_TESTE_EXP = os.path.join(OUTPUTS, "experimento_sentinela_mlp")
-os.makedirs(DIR_TESTE_EXP, exist_ok=True)
+def resolver_caminho_tracking_fujita(customizado: str = "") -> str:
+    """Localiza o arquivo tracking_genes_adicionados_Fujita.csv entre locais e Drive."""
+    if customizado and os.path.exists(customizado):
+        return customizado
 
-PATH_ALVO_SENTINELA_H5AD = os.path.join(
-    DIR_TESTE_EXP, f"alvo_{getattr(config, 'NOME_ALVO', 'alvo')}_com_sentinela.h5ad"
+    candidatos = [
+        r"C:\Users\Leticia\Documents\Letworkspace\Teste faltantes Pan\Dados\tracking_genes_adicionados_Fujita.csv",
+        "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste faltantes Pan/Dados/tracking_genes_adicionados_Fujita.csv",
+        "/content/drive/MyDrive/Teste faltantes Pan/Dados/tracking_genes_adicionados_Fujita.csv",
+        os.path.join(
+            OUTPUTS_EXP, "alinhamento", "tracking_genes_adicionados_Fujita.csv"
+        ),
+        os.path.join(ROOT_DIR, "tracking_genes_adicionados_Fujita.csv"),
+    ]
+
+    for cand in candidatos:
+        if cand and os.path.exists(cand):
+            return cand
+
+    raise FileNotFoundError(
+        "[Erro] Arquivo 'tracking_genes_adicionados_Fujita.csv' não encontrado. "
+        "Verifique o caminho do arquivo de tracking ou informe 'CAMINHO_TRACKING_CUSTOMIZADO'."
+    )
+
+
+PATH_PAN_RESOLVIDO = resolver_caminho_pan(CAMINHO_PAN_CUSTOMIZADO)
+PATH_TRACKING_RESOLVIDO = resolver_caminho_tracking_fujita(CAMINHO_TRACKING_CUSTOMIZADO)
+
+print(f"[Entrada] Matriz PAN : {PATH_PAN_RESOLVIDO}")
+print(f"[Entrada] Tracking   : {PATH_TRACKING_RESOLVIDO}")
+
+# Definição e criação das subpastas no diretório configurado
+DIR_ALINHAMENTO = config.OUT_ALINHAMENTO
+DIR_TREINAMENTO = config.OUT_TREINAMENTO
+DIR_MTX_SENTINELA = os.path.join(DIR_ALINHAMENTO, "mtx_pan_sentinela")
+os.makedirs(DIR_MTX_SENTINELA, exist_ok=True)
+os.makedirs(DIR_TREINAMENTO, exist_ok=True)
+
+PATH_PAN_SENTINELA_H5AD = os.path.join(OUTPUTS_EXP, "pan_com_sentinela_05.h5ad")
+PATH_TRACKING_COPIA = os.path.join(
+    DIR_ALINHAMENTO, "tracking_genes_adicionados_fujita.csv"
 )
-PATH_TRACKING_CSV = os.path.join(DIR_TESTE_EXP, "tracking_genes_ausentes.csv")
-DIR_MTX_SENTINELA = os.path.join(DIR_TESTE_EXP, "mtx_sentinela")
 PATH_SWEEP_SENTINELA_TXT = os.path.join(
-    DIR_TESTE_EXP, "matriz_sweep600d_com_sentinela.txt"
+    DIR_TREINAMENTO, "matriz_sweep600d_pan_com_sentinela.txt"
+)
+PATH_SWEEP_SENTINELA_NPY = os.path.join(
+    DIR_TREINAMENTO, "matriz_sweep600d_pan_com_sentinela.npy"
 )
 
 # %%
 # ==============================================================================
-# ETAPA 1: INJEÇÃO FÍSICA DE SENTINELAS (0.5) VIA MarcadorSentinela (ADR 028)
+# ETAPA 1: INJEÇÃO FÍSICA OOM-SAFE DE SENTINELAS (0.5) NO DATASET PAN
 # ==============================================================================
 print("\n" + "=" * 75)
-print("  ETAPA 1: INJEÇÃO FÍSICA DE SENTINELAS (0.5) NO DATASET ALVO")
+print("  ETAPA 1: INJEÇÃO FÍSICA DE SENTINELAS (0.5) NO DATASET PAN")
 print("=" * 75)
 
-marcador = MarcadorSentinela(
-    genes_referencia=genes_canonica,
-    map_features_alvo=leitor.map_m,
-    fill_value=0.5,
-    chunk_size=5000,
+# 1. Carrega o arquivo de tracking e extrai as posições de colunas ausentes
+df_tracking = pd.read_csv(PATH_TRACKING_RESOLVIDO)
+print(f"[Tracking] Total de registros no arquivo: {len(df_tracking):,}")
+
+if "posicao_coluna" not in df_tracking.columns:
+    raise ValueError(
+        f"Coluna 'posicao_coluna' ausente no arquivo de tracking: {df_tracking.columns.tolist()}"
+    )
+
+indices_colunas_ausentes = df_tracking["posicao_coluna"].dropna().astype(int).to_numpy()
+indices_colunas_ausentes = np.unique(indices_colunas_ausentes)
+print(
+    f"[Tracking] Posições únicas de colunas ausentes do Fujita a injetar 0.5: {len(indices_colunas_ausentes):,}"
+)
+print(f"  • Menor índice de coluna: {indices_colunas_ausentes.min()}")
+print(f"  • Maior índice de coluna: {indices_colunas_ausentes.max()}")
+
+# 2. Carrega a matriz do dataset PAN
+print(f"\n[PAN] Carregando AnnData: {PATH_PAN_RESOLVIDO}...")
+adata_pan = ad.read_h5ad(PATH_PAN_RESOLVIDO)
+n_obs, n_vars = adata_pan.shape
+print(f"[PAN] Dimensões originais: {n_obs:,} células × {n_vars:,} genes")
+
+if indices_colunas_ausentes.max() >= n_vars:
+    raise IndexError(
+        f"Índice de coluna máximo ({indices_colunas_ausentes.max()}) excede o número "
+        f"de genes do dataset PAN ({n_vars}). Verifique se a matriz PAN já está alinhada ao espaço canônico."
+    )
+
+# 3. Injeção de Sentinelas (0.5) em lotes OOM-Safe preservando formato esparso
+assert adata_pan.X is not None, "A matriz adata_pan.X não pode ser nula."
+CHUNK_SIZE = 5000
+chunks_modificados: list[sp.csr_matrix] = []
+
+print(
+    f"[Injeção] Injetando valor 0.5 nas colunas ausentes em lotes de {CHUNK_SIZE:,} células..."
+)
+for inicio in range(0, n_obs, CHUNK_SIZE):
+    fim = min(inicio + CHUNK_SIZE, n_obs)
+    fatia = adata_pan.X[inicio:fim]
+
+    # Converte o lote para csr_matrix e lil_matrix sem alocar matriz global densa
+    chunk_mat = sp.csr_matrix(fatia, dtype=np.float32)
+    chunk_lil = chunk_mat.tolil()
+    chunk_lil[:, indices_colunas_ausentes] = 0.5
+    chunks_modificados.append(sp.csr_matrix(chunk_lil, dtype=np.float32))
+
+# Monta a matriz final esparsa CSR
+adata_pan.X = sp.vstack(chunks_modificados, format="csr")
+print(
+    f"[Injeção] Injeção concluída com sucesso! Formato esparso CSR: {adata_pan.X.shape} (nnz: {adata_pan.X.nnz:,})"
 )
 
-adata_sentinela = marcador.marcar_dataset(
-    adata_alvo=PATH_ALVO,
-    path_saida_h5ad=PATH_ALVO_SENTINELA_H5AD,
-    path_tracking_csv=PATH_TRACKING_CSV,
-    exportar_mtx=True,
-    path_saida_mtx=DIR_MTX_SENTINELA,
-    forcar=True,
-)
+# 4. Atualiza metadados var com máscara de auditoria
+mask_sentinela = np.zeros(n_vars, dtype=bool)
+mask_sentinela[indices_colunas_ausentes] = True
+adata_pan.var["sentinela_fujita_05"] = mask_sentinela
 
-mask_ausentes = marcador.obter_mascara_ausentes()
+# 5. Persiste o AnnData modificado
 print(
-    f"[MarcadorSentinela] Matriz alinhada: {adata_sentinela.shape[0]:,} células × {adata_sentinela.shape[1]:,} genes."
+    f"\n[Persistência] Gravando AnnData com sentinela em: {PATH_PAN_SENTINELA_H5AD}..."
 )
-print(
-    f"[MarcadorSentinela] Genes ausentes preenchidos com 0.5: {int(np.sum(mask_ausentes)):,}"
-)
+adata_pan.write_h5ad(PATH_PAN_SENTINELA_H5AD, compression="gzip")
+tamanho_mb = os.path.getsize(PATH_PAN_SENTINELA_H5AD) / (1024 * 1024)
+print(f"[Persistência] Arquivo .h5ad gravado com sucesso! ({tamanho_mb:.2f} MB)")
+
+# Salva cópia do tracking no diretório de alinhamento
+df_tracking.to_csv(PATH_TRACKING_COPIA, index=False)
+print(f"[Persistência] Cópia do tracking salva em: {PATH_TRACKING_COPIA}")
+
+# 6. Exportação no formato Matrix Market (MTX) para rSWeeP
+print(f"\n[MTX] Exportando formato Matrix Market em: {DIR_MTX_SENTINELA}...")
+exportador = ExportadorMTX(out_dir=DIR_MTX_SENTINELA)
+exportador.exportar(matriz=adata_pan, forcar=True)
+print(f"[MTX] Exportação concluída com sucesso em {DIR_MTX_SENTINELA}")
 
 # %%
 # ==============================================================================
@@ -376,7 +469,18 @@ projetor_sentinela = ProjetorSWeePR(
 projetor_sentinela.projetar()
 
 W_sweep_sentinela = projetor_sentinela.Wswp
-assert W_sweep_sentinela is not None
-print(
-    f"[rSWeeP] Projeção 600D concluída com sucesso! Dimensões: {W_sweep_sentinela.shape}"
+assert W_sweep_sentinela is not None, "Erro: A matriz projetada retornou None!"
+assert not np.isnan(W_sweep_sentinela).any(), (
+    "Erro: Detectados valores NaN na projeção rSWeeP!"
 )
+
+# Salva também a projeção no formato binário NumPy (.npy) para carga ultrarrápida
+np.save(PATH_SWEEP_SENTINELA_NPY, W_sweep_sentinela)
+
+print("\n" + "=" * 75)
+print(" [rSWeeP] PROJEÇÃO 600D CONCLUÍDA COM SUCESSO!")
+print(f"  • Shape final : {W_sweep_sentinela.shape} (células × 600 dimensões)")
+print(f"  • TXT salvo em: {PATH_SWEEP_SENTINELA_TXT}")
+print(f"  • NPY salvo em: {PATH_SWEEP_SENTINELA_NPY}")
+print(f"  • OrthBase    : {projetor_sentinela.path_orthbase}")
+print("=" * 75)
