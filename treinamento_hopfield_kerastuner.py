@@ -168,12 +168,13 @@ from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import StratifiedShuffleSplit
 
 # Importações dos módulos do pipeline local
-from src.config import PATH_REFERENCIA
+from src.config import PATH_LABELS_REFERENCIA, PATH_REFERENCIA, PATH_SWEEP_REFERENCIA
 from src.treinamento import (
     AvaliadorHopfield,
     CarregadorDadosFujita,
     InjetorPerturbacaoTranscritica,
     ProjetorSWeP,
+    carregar_labels,
     remapear_labels_canonicos,
 )
 

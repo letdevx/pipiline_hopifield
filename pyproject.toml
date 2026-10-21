@@ -162,7 +162,6 @@ convention = "numpy"
     "E402",    # Permitir imports intermediários de blocos de execução
     "F401",    # Imports para checagem condicional em células de ambiente
     "F811",    # Permitir redefinição de variáveis em células
-    "F821",    # Permitir funções de ambiente interativo como display()
     "E702",    # Permitir múltiplas instruções por linha em plots interativos
     "E712",    # Permitir comparações literais em filtros interativos
     "B905",    # Zip sem strict em células exploratórias
