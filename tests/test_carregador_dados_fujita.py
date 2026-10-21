@@ -89,3 +89,58 @@ def test_carregador_dados_fujita_sweep_txt_tab(tmp_path: Path) -> None:
     assert carregador.Wswp.shape == (n_amostras, n_comp)
     assert carregador.Wswp.dtype == np.float32
     np.testing.assert_allclose(carregador.Wswp, dados_sweep, atol=1e-5)
+
+
+def test_carregador_dados_fujita_h5ad_formato_e_binarizar(tmp_path: Path) -> None:
+    """Testa suporte a formato='h5ad', guarda de adata, extração de labels de obs e binarização."""
+    import anndata as ad
+    import pandas as pd
+    import scipy.sparse as sp
+
+    n_celulas = 10
+    n_genes = 8
+    # Matriz contínua com zeros e positivos
+    X_cont = np.array(
+        [
+            [0.0, 2.5, 0.0, 1.2, 0.0, 0.0, 3.1, 0.0],
+            [1.0, 0.0, 4.0, 0.0, 0.0, 0.5, 0.0, 2.0],
+            [0.0, 0.0, 0.0, 0.0, 5.0, 0.0, 1.0, 0.0],
+            [0.5, 1.5, 2.5, 3.5, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            [0.0, 0.2, 0.0, 0.8, 0.0, 1.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0],
+            [0.0, 0.0, 1.0, 0.0, 2.0, 0.0, 0.0, 0.0],
+            [3.0, 2.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
+    X_sp = sp.csr_matrix(X_cont)
+    obs_df = pd.DataFrame(
+        {"cell_type_code": [1, 2, 3, 4, 5, 6, 7, 1, 2, 3]},
+        index=[f"cell_{i}" for i in range(n_celulas)],
+    )
+    var_df = pd.DataFrame(index=[f"gene_{j}" for j in range(n_genes)])
+    adata = ad.AnnData(X=X_sp, obs=obs_df, var=var_df)
+
+    path_h5ad = tmp_path / "teste_dados.h5ad"
+    adata.write_h5ad(path_h5ad)
+
+    # Instanciação com formato="h5ad" explícito (não deve lançar TypeError)
+    carregador = CarregadorDadosFujita(path_h5ad, formato="h5ad")
+    carregador.carregar()
+
+    assert carregador.adata is not None
+    assert carregador.labels is not None
+    assert len(carregador.labels) == n_celulas
+    assert list(carregador.labels) == [1, 2, 3, 4, 5, 6, 7, 1, 2, 3]
+
+    # Binarização estrita
+    carregador.binarizar(limiar=0.0)
+    assert carregador.W0 is not None
+    assert sp.issparse(carregador.W0)
+
+    # Verifica se todos os valores não nulos são exatamente 1.0
+    csr = sp.csr_matrix(carregador.W0)
+    assert np.all(np.isin(csr.data, [1.0]))
+    assert csr.shape == (n_celulas, n_genes)

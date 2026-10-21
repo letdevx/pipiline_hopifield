@@ -283,19 +283,126 @@ if caminho_dados_resolvido:
 
     W0 = carregador.W0
     assert W0 is not None
-    assert carregador.adata is not None
 
-    labels_raw = carregador.adata.obs.get("cell_type_code", None)
+    # 1. Resolução inteligente dos rótulos celulares
+    labels_raw = None
+    if carregador.labels is not None:
+        labels_raw = carregador.labels
+        print(
+            f"  • Rótulos carregados diretamente pelo CarregadorDados: {labels_raw.shape}"
+        )
+    elif carregador.adata is not None and hasattr(carregador.adata, "obs"):
+        for col_cand in (
+            "cell_type_code",
+            "cell_type",
+            "celltype",
+            "CellType",
+            "Subcluster",
+            "broad_type",
+            "cluster",
+            "labels",
+            "label",
+            "clo",
+            "cl",
+        ):
+            if col_cand in carregador.adata.obs:
+                labels_raw = carregador.adata.obs[col_cand].to_numpy()
+                print(f"  • Rótulos identificados na coluna adata.obs['{col_cand}']")
+                break
+
+    if labels_raw is None:
+        # Busca arquivo canônico de rótulos (PanNumerico.csv) no Drive ou local
+        dir_dados = os.path.dirname(caminho_dados_resolvido)
+        cands_labels = [
+            os.path.join(dir_dados, "PanNumerico.csv"),
+            os.path.join(dir_dados, "cell_types_binarioF.txt"),
+            os.path.join(dir_dados, "tipos_celulares_numericoMs.txt"),
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs/PanNumerico.csv",
+            "/content/drive/MyDrive/Teste hop/imputs/PanNumerico.csv",
+            "/content/drive/MyDrive/imputs/PanNumerico.csv",
+            "/content/drive/MyDrive/PanNumerico.csv",
+            PATH_LABELS_REFERENCIA,
+        ]
+        for c_lbl in cands_labels:
+            if c_lbl and os.path.exists(c_lbl):
+                print(f"  • Rótulos carregados do arquivo externo: {c_lbl}")
+                labels_raw = carregar_labels(c_lbl)
+                break
+
     if labels_raw is not None:
-        labels_arr, _ = remapear_labels_canonicos(labels_raw.to_numpy())
+        labels_arr, _ = remapear_labels_canonicos(labels_raw)
     else:
+        print(
+            "  • [Aviso] Rótulos específicos não encontrados; atribuindo classe canônica padrão (1)."
+        )
         labels_arr = np.ones(W0.shape[0], dtype=int)
 
-    # Projeção no espaço latente SWeeP 600D
-    print("[SWeeP] Projetando matriz de referência para 600 dimensões...")
-    projetor = ProjetorSWeP(d_target=600, seed=SEED)
-    Wswp = projetor.projetar(W0)
-    print(f"[Sucesso] W0: {W0.shape} | Wswp: {Wswp.shape}")
+    # Filtra células desconhecidas (classe 0) caso existam, mantendo apenas classes canônicas 1 a 7
+    masc_validos = np.isin(labels_arr, CLASSES_CANONICAS)
+    if 0 < int(masc_validos.sum()) < len(labels_arr):
+        print(
+            f"  • Filtrando {int((~masc_validos).sum())} células sem anotação canônica..."
+        )
+        W0 = W0[masc_validos]
+        labels_arr = labels_arr[masc_validos]
+
+    # 2. Resolução do espaço SWeeP 600D (Busca pré-computado ou projeta)
+    cands_sweep = [
+        os.path.join(
+            os.path.dirname(caminho_dados_resolvido), "matriz_reduzida_sweepREF.txt"
+        ),
+        os.path.join(
+            os.path.dirname(caminho_dados_resolvido), "matriz_sweep_ausentes.npy"
+        ),
+        os.path.join(
+            os.path.dirname(caminho_dados_resolvido), "matriz_sweep_ausentes.txt"
+        ),
+        "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/output_pan_anotado_matriz_anotada_finalM/treinamento/matriz_reduzida_sweepREF.txt",
+        "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs/matriz_reduzida_sweepREF.txt",
+        "/content/drive/MyDrive/Teste hop/imputs/matriz_reduzida_sweepREF.txt",
+        "/content/drive/MyDrive/matriz_reduzida_sweepREF.txt",
+        PATH_SWEEP_REFERENCIA,
+    ]
+    path_sweep_encontrado: str | None = None
+    for c_swp in cands_sweep:
+        if c_swp and os.path.exists(c_swp):
+            path_sweep_encontrado = c_swp
+            break
+
+    if (
+        not path_sweep_encontrado
+        and IN_COLAB
+        and os.path.exists("/content/drive/MyDrive")
+    ):
+        import glob
+
+        achados_swp = glob.glob(
+            "/content/drive/**/matriz_reduzida_sweep*.txt", recursive=True
+        )
+        if achados_swp:
+            path_sweep_encontrado = achados_swp[0]
+
+    Wswp = None
+    if path_sweep_encontrado:
+        print(f"[SWeeP] Carregando projeção pré-computada: {path_sweep_encontrado}")
+        carregador.path_sweep = path_sweep_encontrado
+        carregador._carregar_sweep()
+        if carregador.Wswp is not None and carregador.Wswp.shape[0] >= W0.shape[0]:
+            Wswp = carregador.Wswp[: W0.shape[0]]
+
+    if Wswp is None:
+        print(
+            f"[SWeeP] Projetando matriz ({W0.shape[0]} células × {W0.shape[1]} genes) para 600 dimensões..."
+        )
+        projetor = ProjetorSWeP(n_features=W0.shape[1], n_componentes=600, seed=SEED)
+        projetor.gerar_base()
+        projetor.projetar(W0)
+        assert projetor.Wswp is not None
+        Wswp = projetor.Wswp
+
+    print(
+        f"[Sucesso] W0: {W0.shape} | Wswp: {Wswp.shape} | Rótulos: {labels_arr.shape}"
+    )
 else:
     print("=" * 70)
     print(

@@ -20,6 +20,7 @@ import keras_tuner as kt  # isort: skip
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.sparse as sp
+from matplotlib.figure import Figure
 from numpy.typing import NDArray
 
 from .avaliador_hopfield import AvaliadorHopfield
@@ -224,18 +225,18 @@ class HopfieldKerasTuner(kt.Tuner):
         hp = trial.hyperparameters
 
         # Definição do espaço de busca
-        nc: int = hp.Int("nc", min_value=10, max_value=35, step=5, default=20)
-        k_vizinhos: int = hp.Int(
-            "k_vizinhos", min_value=1, max_value=7, step=2, default=3
+        nc: int = int(hp.Int("nc", min_value=10, max_value=35, step=5, default=20))
+        k_vizinhos: int = int(
+            hp.Int("k_vizinhos", min_value=1, max_value=7, step=2, default=3)
         )
-        beta: float = hp.Float(
-            "beta", min_value=0.2, max_value=4.0, step=0.2, default=1.0
+        beta: float = float(
+            hp.Float("beta", min_value=0.2, max_value=4.0, step=0.2, default=1.0)
         )
-        threshold: float = hp.Float(
-            "threshold", min_value=0.1, max_value=0.7, step=0.1, default=0.5
+        threshold: float = float(
+            hp.Float("threshold", min_value=0.1, max_value=0.7, step=0.1, default=0.5)
         )
-        normalize: bool = hp.Boolean("normalize", default=False)
-        scale_by_dim: bool = hp.Boolean("scale_by_dim", default=True)
+        normalize: bool = bool(hp.Boolean("normalize", default=False))
+        scale_by_dim: bool = bool(hp.Boolean("scale_by_dim", default=True))
         estrategia_raw = hp.Choice(
             "estrategia", ["kmeans_fixo", "kmeans_dinamico"], default="kmeans_fixo"
         )
@@ -388,7 +389,7 @@ class HopfieldKerasTuner(kt.Tuner):
             json.dump(resumo, f, indent=2)
         print(f"[HopfieldKerasTuner] Histórico exportado para: {path_str}")
 
-    def gerar_painel_convergencia(self, path_png: PathType | None = None) -> plt.Figure:
+    def gerar_painel_convergencia(self, path_png: PathType | None = None) -> Figure:
         """Gera painel gráfico ilustrando a evolução dos trials no KerasTuner.
 
         Parameters

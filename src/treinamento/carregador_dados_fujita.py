@@ -144,6 +144,10 @@ class CarregadorDados:
         Índices das colunas de genes ativas.
     genes : pd.DataFrame | None
         DataFrame com nomes de genes.
+    adata : ad.AnnData | None
+        Objeto AnnData mantido em memória caso a matriz seja .h5ad.
+    formato : str | None
+        Indicador opcional de formato do arquivo.
     labels : NDArray[np.int_] | None
         Array de rótulos celulares.
     Wswp : NDArray[np.float32] | None
@@ -157,6 +161,8 @@ class CarregadorDados:
         path_labels: PathType | Sequence[int] | NDArray[Any] | None = None,
         path_sweep: PathType | None = None,
         n_genes: int | None = None,
+        formato: str | None = None,
+        **kwargs: Any,
     ) -> None:
         self.path_matriz: str = str(path_matriz)
         self.path_genes: PathType | Sequence[str] | pd.DataFrame | None = path_genes
@@ -165,6 +171,8 @@ class CarregadorDados:
             str(path_sweep) if path_sweep is not None else None
         )
         self.n_genes: int | None = n_genes
+        self.formato: str | None = formato
+        self.adata: ad.AnnData | None = None
         self.X: NDArray[np.float32] | sp.spmatrix | None = None
         self.W0: NDArray[np.float32] | sp.spmatrix | None = None
         self.ids_top: NDArray[np.int_] | None = None
@@ -195,13 +203,71 @@ class CarregadorDados:
         )
         return self
 
+    def binarizar(self, limiar: float = 0.0) -> CarregadorDados:
+        """Binariza a matriz de expressão W0/X para {0.0, 1.0} preservando esparsidade.
+
+        Parameters
+        ----------
+        limiar : float, default=0.0
+            Limiar de corte para binarização.
+
+        Returns
+        -------
+        CarregadorDados
+            A própria instância com os dados binarizados.
+        """
+        target = self.W0 if self.W0 is not None else self.X
+        if target is not None:
+            if sp.issparse(target):
+                target_csr: sp.csr_matrix = sp.csr_matrix(target)
+                target_csr.data = np.where(target_csr.data > limiar, 1.0, 0.0).astype(
+                    np.float32
+                )
+                target_csr.eliminate_zeros()
+                self.W0 = target_csr
+            else:
+                self.W0 = np.where(np.asarray(target) > limiar, 1.0, 0.0).astype(
+                    np.float32
+                )
+            self.X = self.W0
+            print(
+                f"[{self.__class__.__name__}] Matriz binarizada (limiar={limiar}): {self.W0.shape}"
+            )
+        return self
+
     def _carregar_matriz(self) -> None:
         print(f"[{self.__class__.__name__}] Carregando matriz: {self.path_matriz}")
         if self.path_matriz.endswith(".npy"):
             self.X = np.load(self.path_matriz, mmap_mode="r")
-        elif self.path_matriz.endswith(".h5ad"):
-            adata: ad.AnnData = ad.read_h5ad(self.path_matriz)
-            self.X = adata.X
+        elif self.path_matriz.endswith(".h5ad") or self.formato == "h5ad":
+            self.adata = ad.read_h5ad(self.path_matriz)
+            raw_x: Any = self.adata.X
+            self.X = raw_x
+            if self.path_labels is None and self.adata.obs is not None:
+                for col in (
+                    "cell_type_code",
+                    "cell_type",
+                    "celltype",
+                    "CellType",
+                    "Subcluster",
+                    "broad_type",
+                    "cluster",
+                    "labels",
+                    "label",
+                    "clo",
+                    "cl",
+                ):
+                    if col in self.adata.obs:
+                        val = self.adata.obs[col].to_numpy()
+                        try:
+                            self.labels = np.asarray(val, dtype=int).ravel()
+                            print(
+                                f"[{self.__class__.__name__}] Rótulos extraídos de adata.obs['{col}']: "
+                                f"{self.labels.shape}"
+                            )
+                            break
+                        except (ValueError, TypeError):
+                            pass
         else:
             self.X = pd.read_csv(self.path_matriz).to_numpy(dtype=np.float32)
         assert self.X is not None
@@ -264,7 +330,8 @@ class CarregadorDados:
                             path_str, sep=",", header=None
                         ).to_numpy(dtype=np.float32)
 
-            print(f"[{self.__class__.__name__}] Wswp shape: {self.Wswp.shape}")
+            if self.Wswp is not None:
+                print(f"[{self.__class__.__name__}] Wswp shape: {self.Wswp.shape}")
 
     def __repr__(self) -> str:
         """Representação textual do carregador de dados."""
