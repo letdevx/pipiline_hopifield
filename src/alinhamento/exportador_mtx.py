@@ -137,15 +137,21 @@ class ExportadorMTX:
             print(
                 f"[ExportadorMTX] Arquivos já existem em {self.out_dir}, validando integridade..."
             )
-            vr_existente = (
-                validar_regex
-                if validar_regex is not None
-                else (
-                    any(str(g).strip().startswith("ENS") for g in genes_referencia[:50])
-                    if genes_referencia is not None
-                    else True
+            if validar_regex is not None:
+                vr_existente = validar_regex
+            elif genes_referencia is not None:
+                total_amostra = min(len(genes_referencia), 100)
+                ens_count = sum(
+                    1
+                    for g in genes_referencia[:total_amostra]
+                    if str(g).strip().startswith("ENS")
                 )
-            )
+                vr_existente = (
+                    (ens_count / total_amostra) > 0.8 if total_amostra > 0 else False
+                )
+            else:
+                vr_existente = False
+
             if genes_referencia is not None:
                 return self.validador.validar_pasta_mtx(
                     self.out_dir, genes_referencia, validar_regex=vr_existente
@@ -201,11 +207,18 @@ class ExportadorMTX:
             genes_referencia if genes_referencia is not None else genes_lista
         )
         if validar_regex is None:
-            tem_ens = any(str(g).strip().startswith("ENS") for g in genes_lista[:50])
-            validar_regex = tem_ens
+            total_amostra = min(len(genes_lista), 100)
+            ens_count = sum(
+                1
+                for g in genes_lista[:total_amostra]
+                if str(g).strip().startswith("ENS")
+            )
+            validar_regex = (
+                (ens_count / total_amostra) > 0.8 if total_amostra > 0 else False
+            )
             if not validar_regex:
                 print(
-                    "[ExportadorMTX] Identificadores de genes detectados como símbolos gênicos. "
+                    "[ExportadorMTX] Identificadores de genes detectados como símbolos gênicos ou formato misto. "
                     "Validação sintática de Ensembl regex desativada automaticamente."
                 )
 

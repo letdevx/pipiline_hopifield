@@ -43,6 +43,10 @@ class InjetorMTXSentinela:
         Lista de genes de referência para auditoria. Se omitido, tenta carregar de `genes_referencia.tsv`.
     validador : ValidadorOrdemGenes | None, optional
         Instância do validador de integridade e ordem gênica. Se None, cria uma padrão.
+    validar_regex : bool | None, optional
+        Se True, valida o regex canônico Ensembl (ENSG...). Se False, ignora validação de regex
+        (ideal para datasets que utilizam Gene Symbols oficiais como TNFRSF4, RPL7P7).
+        Se None (padrão), auto-detecta a necessidade de validar examinando os identificadores.
 
     Attributes
     ----------
@@ -58,6 +62,8 @@ class InjetorMTXSentinela:
         Vetor canônico de genes configurado.
     validador : ValidadorOrdemGenes
         Validador de integridade do pipeline.
+    validar_regex : bool | None
+        Configuração de validação regex de identificadores.
     """
 
     def __init__(
@@ -68,6 +74,7 @@ class InjetorMTXSentinela:
         buffer_size: int = 100_000,
         genes_referencia: Sequence[str] | None = None,
         validador: ValidadorOrdemGenes | None = None,
+        validar_regex: bool | None = None,
     ) -> None:
         self.dir_mtx_origem: str = os.path.abspath(str(dir_mtx_origem))
         self.dir_mtx_destino: str = (
@@ -81,6 +88,7 @@ class InjetorMTXSentinela:
         self.validador: ValidadorOrdemGenes = (
             validador if validador is not None else ValidadorOrdemGenes()
         )
+        self.validar_regex: bool | None = validar_regex
 
         os.makedirs(self.dir_mtx_destino, exist_ok=True)
 
@@ -90,6 +98,7 @@ class InjetorMTXSentinela:
         coluna_indice: str = "posicao_coluna",
         indexado_em_zero: bool = True,
         forcar: bool = False,
+        validar_regex: bool | None = None,
     ) -> dict[str, Any]:
         """Carrega os índices de colunas a partir do arquivo CSV de tracking e orquestra a injeção.
 
@@ -104,6 +113,8 @@ class InjetorMTXSentinela:
             e soma 1 para convertê-los para o formato 1-indexed do Matrix Market.
         forcar : bool, default=False
             Se True, reprocessa mesmo se o arquivo de destino já existir.
+        validar_regex : bool | None, optional
+            Sobrescreve a checagem regex Ensembl na auditoria pós-injeção.
 
         Returns
         -------
@@ -139,12 +150,17 @@ class InjetorMTXSentinela:
         print(
             f"[InjetorMTXSentinela] Tracking carregado: {len(colunas_1based):,} colunas únicas identificadas."
         )
-        return self.injetar_colunas(colunas_1based=colunas_1based, forcar=forcar)
+        return self.injetar_colunas(
+            colunas_1based=colunas_1based,
+            forcar=forcar,
+            validar_regex=validar_regex,
+        )
 
     def injetar_colunas(
         self,
         colunas_1based: Sequence[int] | set[int],
         forcar: bool = False,
+        validar_regex: bool | None = None,
     ) -> dict[str, Any]:
         """Injeta o valor sentinela nas colunas especificadas diretamente no arquivo `matrix.mtx`.
 
@@ -153,6 +169,9 @@ class InjetorMTXSentinela:
         colunas_1based : Sequence[int] | set[int]
             Conjunto ou sequência de posições de colunas (1-indexed) a serem preenchidas.
         forcar : bool, default=False
+            Se True, sobrescreve o arquivo no diretório de destino.
+        validar_regex : bool | None, optional
+            Sobrescreve a checagem regex Ensembl na auditoria pós-injeção.
             Se True, sobrescreve o arquivo no diretório de destino.
 
         Returns
@@ -250,7 +269,9 @@ class InjetorMTXSentinela:
         gc.collect()
 
         # 5. Auditoria de conformidade pós-gravação
-        relatorio_auditoria = self._executar_auditoria_se_possivel()
+        relatorio_auditoria = self._executar_auditoria_se_possivel(
+            validar_regex=validar_regex
+        )
 
         return {
             "status": "SUCESSO",
@@ -265,7 +286,8 @@ class InjetorMTXSentinela:
             "auditoria": relatorio_auditoria,
         }
 
-    def _ler_cabecalho(self, path_mtx: str) -> tuple[list[str], int, int, int]:
+    @staticmethod
+    def _ler_cabecalho(path_mtx: str) -> tuple[list[str], int, int, int]:
         """Lê os comentários e extrai as dimensões da linha de dados do MTX."""
         linhas_cabecalho: list[str] = []
         n_rows = 0
@@ -395,7 +417,9 @@ class InjetorMTXSentinela:
             if os.path.exists(src) and not os.path.exists(dst):
                 shutil.copy2(src, dst)
 
-    def _executar_auditoria_se_possivel(self) -> dict[str, Any] | None:
+    def _executar_auditoria_se_possivel(
+        self, validar_regex: bool | None = None
+    ) -> dict[str, Any] | None:
         """Executa auditoria via ValidadorOrdemGenes caso a lista de genes esteja disponível."""
         genes_ref = (
             list(self.genes_referencia) if self.genes_referencia is not None else None
@@ -411,11 +435,24 @@ class InjetorMTXSentinela:
                     break
 
         if genes_ref is not None:
-            tem_ens = any(str(g).strip().startswith("ENS") for g in genes_ref[:50])
+            vr = validar_regex if validar_regex is not None else self.validar_regex
+            if vr is None:
+                total_amostra = min(len(genes_ref), 100)
+                ens_count = sum(
+                    1
+                    for g in genes_ref[:total_amostra]
+                    if str(g).strip().startswith("ENS")
+                )
+                vr = (ens_count / total_amostra) > 0.8 if total_amostra > 0 else False
+                if not vr:
+                    print(
+                        "[InjetorMTXSentinela] Identificadores de genes detectados como símbolos gênicos ou formato misto. "
+                        "Validação sintática de Ensembl regex desativada automaticamente."
+                    )
             return self.validador.validar_pasta_mtx(
                 self.dir_mtx_destino,
                 genes_referencia=genes_ref,
-                validar_regex=tem_ens,
+                validar_regex=vr,
             )
 
         return None

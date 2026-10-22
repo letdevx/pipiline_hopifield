@@ -21,6 +21,15 @@ import os
 import subprocess
 import sys
 
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 # %%
 try:
     import anndata
@@ -57,6 +66,8 @@ EXPECTED_COMMIT = "e8f3f17"
 
 def _is_google_colab() -> bool:
     """Detecta se a execução atual está ocorrendo no Google Colab."""
+    if sys.platform == "win32":
+        return False
     return (
         "google.colab" in sys.modules
         or os.path.exists("/content")
@@ -290,6 +301,7 @@ SEED = 42
 CAMINHO_PAN_CUSTOMIZADO = "/content/drive/MyDrive/imputs/pan_anotado.h5ad"
 CAMINHO_MTX_BASE_CUSTOMIZADO = ""
 CAMINHO_TRACKING_CUSTOMIZADO = ""
+CAMINHO_ORTHBASE_CUSTOMIZADO = ""
 
 
 def resolver_caminho_pan(customizado: str = "") -> str:
@@ -374,6 +386,7 @@ def resolver_caminho_tracking_fujita(customizado: str = "") -> str:
     # 2. Candidatos secundários (locais e pastas gerais do Drive)
     candidatos = [
         r"C:\Users\Leticia\Documents\Letworkspace\Teste faltantes Pan\Dados\tracking_genes_adicionados_Fujita.csv",
+        r"C:\Users\Leticia\Downloads\tracking_genes_adicionados_fujita.csv",
         "/content/tracking_genes_adicionados_Fujita.csv",
         "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste faltantes Pan/Dados/tracking_genes_adicionados_Fujita.csv",
         "/content/drive/MyDrive/Teste faltantes Pan/Dados/tracking_genes_adicionados_Fujita.csv",
@@ -393,6 +406,32 @@ def resolver_caminho_tracking_fujita(customizado: str = "") -> str:
     )
 
 
+def resolver_caminho_orthbase(customizado: str = "") -> str:
+    """Localiza a base ortonormal canônica rSWeeP congelada (orthbase_mproj_600d.rds)."""
+    if customizado and os.path.exists(customizado):
+        return customizado
+
+    candidatos = [
+        customizado,
+        os.path.join(ROOT_DIR, "imputs", "orthbase_mproj_600d.rds"),
+        r"C:\Users\Leticia\Downloads\orthbase_mproj_600d.rds",
+        getattr(config, "PATH_ORTHBASE_RDS", ""),
+        "/content/drive/MyDrive/imputs/orthbase_mproj_600d.rds",
+        "/content/drive/MyDrive/inputs/orthbase_mproj_600d.rds",
+        "/content/drive/MyDrive/orthbase_mproj_600d.rds",
+        "/content/imputs/orthbase_mproj_600d.rds",
+    ]
+
+    for cand in candidatos:
+        if cand and os.path.exists(cand):
+            return cand
+
+    raise FileNotFoundError(
+        "[Erro] Arquivo de base ortonormal 'orthbase_mproj_600d.rds' não encontrado. "
+        "Verifique a pasta 'imputs/' no Drive ou informe 'CAMINHO_ORTHBASE_CUSTOMIZADO'."
+    )
+
+
 # Definição e criação das subpastas no diretório configurado
 DIR_ALINHAMENTO = config.OUT_ALINHAMENTO
 DIR_TREINAMENTO = config.OUT_TREINAMENTO
@@ -404,6 +443,7 @@ os.makedirs(DIR_MTX_SENTINELA, exist_ok=True)
 os.makedirs(DIR_TREINAMENTO, exist_ok=True)
 
 PATH_TRACKING_RESOLVIDO = resolver_caminho_tracking_fujita(CAMINHO_TRACKING_CUSTOMIZADO)
+PATH_ORTHBASE_RESOLVIDO = resolver_caminho_orthbase(CAMINHO_ORTHBASE_CUSTOMIZADO)
 PATH_SWEEP_SENTINELA_TXT = os.path.join(
     DIR_TREINAMENTO, "matriz_sweep600d_pan_com_sentinela_direto.txt"
 )
@@ -412,15 +452,28 @@ PATH_SWEEP_SENTINELA_NPY = os.path.join(
 )
 
 print(f"[Entrada] Tracking: {PATH_TRACKING_RESOLVIDO}")
+print(f"[Entrada] OrthBase: {PATH_ORTHBASE_RESOLVIDO}")
 
 # %%
 # ==============================================================================
 # PREPARAÇÃO DA PASTA MTX BASE DE ENTRADA (SE AINDA NÃO EXISTIR)
 # ==============================================================================
-# Verifica se já temos uma pasta MTX base pronta ou se devemos exportar a partir do pan_anotado.h5ad
+# 1. Carrega as informações do tracking para conhecer a dimensão canônica necessária
+df_trk_info = pd.read_csv(PATH_TRACKING_RESOLVIDO)
+indices_trk_arr = df_trk_info["posicao_coluna"].dropna().astype(int).to_numpy()
+n_cols_min_exigido = int(indices_trk_arr.max()) + 1
+
+print(
+    f"[Tracking] Genes ausentes a injetar: {len(indices_trk_arr):,} | Coluna máxima: {indices_trk_arr.max():,} (exige >= {n_cols_min_exigido:,} colunas)"
+)
+
+# 2. Verifica se já temos uma pasta MTX base válida com colunas suficientes
 candidatos_mtx_base = [
     CAMINHO_MTX_BASE_CUSTOMIZADO,
     DIR_MTX_BASE,
+    os.path.join(DIR_ALINHAMENTO, "mtx_pan"),
+    os.path.join(DIR_ALINHAMENTO, "mtx_referencia"),
+    "/content/drive/MyDrive/output_pan_anotado_pan_com_sentinela_05/alinhamento/mtx_pan",
     "/content/drive/MyDrive/output_pan_anotado_pan_com_sentinela_05/alinhamento/mtx_pan_base",
     "/content/drive/MyDrive/output_pan_anotado_pan_com_sentinela_05/alinhamento/mtx_referencia",
 ]
@@ -428,28 +481,87 @@ candidatos_mtx_base = [
 dir_mtx_base_encontrado: str | None = None
 for cand_dir in candidatos_mtx_base:
     if cand_dir and os.path.exists(os.path.join(cand_dir, "matrix.mtx")):
-        dir_mtx_base_encontrado = cand_dir
-        break
+        # Verifica se o MTX existente tem colunas suficientes
+        try:
+            _, _, n_cols_existente, _ = InjetorMTXSentinela._ler_cabecalho(
+                os.path.join(cand_dir, "matrix.mtx")
+            )
+            if n_cols_existente >= n_cols_min_exigido:
+                dir_mtx_base_encontrado = cand_dir
+                print(
+                    f"[MTX Base] Pasta MTX válida localizada em: {cand_dir} ({n_cols_existente:,} colunas)"
+                )
+                break
+        except Exception:
+            pass
 
 if dir_mtx_base_encontrado:
-    print(f"[MTX Base] Pasta MTX base localizada em: {dir_mtx_base_encontrado}")
+    print(f"[MTX Base] Utilizando pasta MTX base: {dir_mtx_base_encontrado}")
 else:
     print(
-        "[MTX Base] Pasta MTX base não encontrada. Exportando formato base a partir de pan_anotado.h5ad..."
+        f"[MTX Base] Nenhuma pasta MTX com >= {n_cols_min_exigido:,} colunas encontrada."
     )
+    print("[MTX Base] Exportando formato base canônico a partir de pan_anotado.h5ad...")
     PATH_PAN_RESOLVIDO = resolver_caminho_pan(CAMINHO_PAN_CUSTOMIZADO)
     print(f"[PAN] Carregando AnnData original: {PATH_PAN_RESOLVIDO}...")
     adata_pan_base = ad.read_h5ad(PATH_PAN_RESOLVIDO)
+    n_celulas_orig, n_genes_orig = adata_pan_base.shape
     print(
-        f"[PAN] Dimensões originais: {adata_pan_base.shape[0]:,} células × {adata_pan_base.shape[1]:,} genes"
+        f"[PAN] Dimensões originais: {n_celulas_orig:,} células × {n_genes_orig:,} genes"
     )
 
-    exportador_base = ExportadorMTX(out_dir=DIR_MTX_BASE)
-    exportador_base.exportar(
-        matriz=adata_pan_base,
-        nome_etapa="Exportação MTX Base PAN",
-        forcar=False,
-    )
+    if n_genes_orig < n_cols_min_exigido:
+        print(
+            f"[PAN] Espaço nativo ({n_genes_orig:,} genes) menor que espaço canônico ({n_cols_min_exigido:,} genes)."
+        )
+        print(
+            f"[PAN] Expandindo matriz esparsa CSR para {n_cols_min_exigido:,} colunas em modo OOM-Safe (sem alocação densa)..."
+        )
+        x_base = adata_pan_base.X
+        assert x_base is not None, "A matriz adata_pan_base.X não pode ser nula."
+        x_csr: sp.csr_matrix = sp.csr_matrix(x_base, dtype=np.float32)
+
+        # Expansão de colunas em O(1) de tempo e memória reaproveitando buffers CSR
+        matriz_expandida = sp.csr_matrix(
+            (x_csr.data, x_csr.indices, x_csr.indptr),
+            shape=(n_celulas_orig, n_cols_min_exigido),
+            dtype=np.float32,
+        )
+
+        # Monta a lista canônica completa de nomes de genes para genes_referencia.tsv
+        genes_completos = [f"GENE_{i:05d}" for i in range(n_cols_min_exigido)]
+        for i, g in enumerate(adata_pan_base.var_names):
+            if i < n_cols_min_exigido:
+                genes_completos[i] = str(g)
+
+        for _, row in df_trk_info.iterrows():
+            pos = int(row["posicao_coluna"])
+            if pos < n_cols_min_exigido:
+                nome_g = str(
+                    row.get("ensembl_id") or row.get("gene_name") or f"GENE_{pos:05d}"
+                )
+                genes_completos[pos] = nome_g
+
+        barcodes = list(adata_pan_base.obs_names)
+
+        exportador_base = ExportadorMTX(out_dir=DIR_MTX_BASE)
+        exportador_base.exportar(
+            matriz=matriz_expandida,
+            genes=genes_completos,
+            barcodes=barcodes,
+            nome_etapa="Exportação MTX Base PAN Expandida",
+            validar_regex=False,
+            forcar=True,
+        )
+    else:
+        exportador_base = ExportadorMTX(out_dir=DIR_MTX_BASE)
+        exportador_base.exportar(
+            matriz=adata_pan_base,
+            nome_etapa="Exportação MTX Base PAN",
+            validar_regex=False,
+            forcar=True,
+        )
+
     dir_mtx_base_encontrado = DIR_MTX_BASE
     del adata_pan_base
     import gc
@@ -469,6 +581,7 @@ injetor_mtx = InjetorMTXSentinela(
     dir_mtx_destino=DIR_MTX_SENTINELA,
     fill_value=0.5,
     buffer_size=100_000,
+    validar_regex=False,
 )
 
 relatorio_injecao = injetor_mtx.injetar_de_tracking(
@@ -499,7 +612,7 @@ projetor_sentinela = ProjetorSWeePR(
     path_saida=PATH_SWEEP_SENTINELA_TXT,
     n_componentes=600,
     seed=SEED,
-    path_orthbase=PATH_ORTHBASE_RDS,
+    path_orthbase=PATH_ORTHBASE_RESOLVIDO,
     forcar_recriacao=False,
 )
 projetor_sentinela.projetar()

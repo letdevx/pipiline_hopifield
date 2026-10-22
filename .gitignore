@@ -68,3 +68,6 @@ logs/
 *.h5ad
 *.tsv
 *.mtx
+*.rds
+imputs/
+output_*/

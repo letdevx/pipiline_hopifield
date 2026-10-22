@@ -202,3 +202,50 @@ def test_injecao_mtx_metadados_e_auditoria(
     assert (dir_destino / "barcodes.tsv").exists()
     assert relatorio["auditoria"] is not None
     assert relatorio["auditoria"]["status"] in ("APROVADO", "VALIDADO", "OK")
+
+
+def test_injecao_mtx_com_simbolos_genicos_sem_erro_regex(tmp_path: Path) -> None:
+    """Valida que datasets com símbolos gênicos (ex: TNFRSF4, RPL7P7) não falham na auditoria."""
+    dir_origem = tmp_path / "mtx_simbolos"
+    dir_destino = tmp_path / "mtx_simbolos_injetado"
+    dir_origem.mkdir(parents=True, exist_ok=True)
+
+    n_celulas = 10
+    n_genes = 5
+    matriz_esparsa = sp.csr_matrix(np.zeros((n_celulas, n_genes), dtype=np.float32))
+    genes_simbolos = ["TNFRSF4", "TNFRSF18", "ATAD3B", "MTND1P23", "PRDM16"]
+    barcodes = [f"CELL_{i}" for i in range(n_celulas)]
+
+    exportador = ExportadorMTX(out_dir=dir_origem)
+    exportador.exportar(
+        matriz=matriz_esparsa,
+        genes=genes_simbolos,
+        barcodes=barcodes,
+        nome_etapa="MTX Símbolos Teste",
+        validar_regex=False,
+        forcar=True,
+    )
+
+    # 1. Teste com detecção automática (validar_regex=None)
+    injetor_auto = InjetorMTXSentinela(
+        dir_mtx_origem=dir_origem,
+        dir_mtx_destino=dir_destino,
+        fill_value=0.5,
+    )
+    relatorio_auto = injetor_auto.injetar_colunas(colunas_1based=[1, 3], forcar=True)
+    assert relatorio_auto["status"] == "SUCESSO"
+    assert relatorio_auto["auditoria"] is not None
+    assert relatorio_auto["auditoria"]["status"] in ("APROVADO", "VALIDADO", "OK")
+
+    # 2. Teste com desativação explícita (validar_regex=False)
+    injetor_explicit = InjetorMTXSentinela(
+        dir_mtx_origem=dir_origem,
+        dir_mtx_destino=dir_destino,
+        fill_value=0.5,
+        validar_regex=False,
+    )
+    relatorio_explicit = injetor_explicit.injetar_colunas(
+        colunas_1based=[2, 4], forcar=True
+    )
+    assert relatorio_explicit["status"] == "SUCESSO"
+    assert relatorio_explicit["auditoria"]["status"] in ("APROVADO", "VALIDADO", "OK")

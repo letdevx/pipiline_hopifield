@@ -272,6 +272,23 @@ class ProjetorSWeePR:
         self.Wswp: NDArray[np.float32] | None = None
 
     @staticmethod
+    def _garantir_rscript_no_path() -> None:
+        """Garante que o executável Rscript esteja no PATH do sistema, auto-detectando no Windows se necessário."""
+        import glob
+        import shutil
+
+        if shutil.which("Rscript") is not None:
+            return
+
+        candidatos = glob.glob(r"C:\Program Files\R\R-*\bin") + glob.glob(
+            r"C:\Program Files\R\*\bin"
+        )
+        for cand in candidatos:
+            if os.path.exists(os.path.join(cand, "Rscript.exe")):
+                os.environ["PATH"] = cand + os.pathsep + os.environ.get("PATH", "")
+                return
+
+    @staticmethod
     def verificar_e_instalar_dependencias_r() -> None:
         """Verifica e instala o pacote oficial rSWeeP (Bioconductor) e Matrix no ambiente R.
 
@@ -279,6 +296,8 @@ class ProjetorSWeePR:
         estrita com Google Colab e ambientes em nuvem.
         """
         import shutil
+
+        ProjetorSWeePR._garantir_rscript_no_path()
 
         if shutil.which("Rscript") is None:
             raise RuntimeError(
@@ -402,6 +421,7 @@ cat("[ProjetorSWeePR] Ambiente R pronto. rSWeeP versao:", as.character(packageVe
             "[ProjetorSWeePR] ========================================================="
         )
 
+        self._garantir_rscript_no_path()
         cmd: list[str] = [
             "Rscript",
             self._R_SCRIPT,
