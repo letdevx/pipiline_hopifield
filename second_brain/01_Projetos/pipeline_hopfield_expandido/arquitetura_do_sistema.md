@@ -2,7 +2,7 @@
 tipo: projeto
 tags: [projeto, arquitetura, modulos-python, componentes, mermaid]
 criado: 2026-07-30
-atualizado: 2026-07-30
+atualizado: 2026-10-21
 resumo: "Documento formal de Arquitetura do Sistema detalhando módulos src/, contratos de dados e perfil de memória."
 ---
 
@@ -35,6 +35,7 @@ graph TD
         LEIT["src/alinhamento/leitor_features.py"]
         SOBR["src/alinhamento/analisador_sobreposicao.py"]
         ALIN["src/alinhamento/alinhador.py<br/>(Alinhamento Ensembl + Sentinela 0.5)"]
+        INJ["src/alinhamento/injetor_mtx_sentinela.py<br/>(Injeção Direta 0.5 MTX Streaming OOM-Safe)"]
         SELE["src/alinhamento/selecionador_genes_diferenciais.py<br/>(Seleção Diferencial χ² Top 5k)"]
     end
 
@@ -68,7 +69,8 @@ Além disso, gerencia a estrutura de saídas de forma **100% automática e dinâ
 ### 2.3. `src/alinhamento/` — Harmonização Canônica de Espaços Gênicos
 - **`leitor_features.py` (`LeitorFeatures`)**: Lê arquivos TSV/CSV de features (`gene_name` $\rightarrow$ `ensembl_id`) dos datasets de Referência e Alvo, aplicando sanitização censitária para remoção automática de sufixos de versão de transcripto/release (`.str.replace(r"\.\d+$", "")`).
 - **`validador_ordem_genes.py` (`ValidadorOrdemGenes`)**: Executa validação estrita de integridade sintática via regex sem versão (`^ENS[A-Z]*G\d{11}$`), auditoria de paridade posicional 1-to-1 ($genes\_teste[i] \equiv genes\_referencia[i]$) e auditoria pré/pós-gravação de pastas no formato Matrix Market. Veja **[[04_Recursos/adrs/adr_018_validacao_ordem_genes_exportacao_mtx|ADR 018]]**.
-- **`exportador_mtx.py` (`ExportadorMTX`)**: Exporta matrizes esparsas OOM-Safe no formato Matrix Market orientado a Machine Learning (células nas linhas $\times$ genes nas colunas) composto pelo trio `matrix.mtx`, `genes_referencia.tsv` (Ensembl ID sem versão e Gene Symbol) e `barcodes.tsv`. Veja **[[04_Recursos/adrs/adr_018_validacao_ordem_genes_exportacao_mtx|ADR 018]]**.
+- **`exportador_mtx.py` (`ExportadorMTX`)**: Exporta matrizes esparsas OOM-Safe no formato Matrix Market orientado a Machine Learning (células nas linhas × genes nas colunas) composto pelo trio `matrix.mtx`, `genes_referencia.tsv` (Ensembl ID sem versão e Gene Symbol) e `barcodes.tsv`. Veja **[[04_Recursos/adrs/adr_018_validacao_ordem_genes_exportacao_mtx|ADR 018]]**.
+- **`injetor_mtx_sentinela.py` (`InjetorMTXSentinela`)**: Injeta valores sentinela (0.5) diretamente nas colunas correspondentes de arquivos Matrix Market (`matrix.mtx`) em modo streaming determinístico OOM-Safe com buffer fixo (< 50 MB de RAM), preservando esparsidade sem materialização em memória RAM e auditando integridade via `ValidadorOrdemGenes`. Suporta mapeamento a partir de `tracking_genes_adicionados_Fujita.csv` e substituição atômica no diretório original ou em nova pasta de destino.
 - **`analisador_sobreposicao.py` (`AnalisadorSobreposicao`)**: Mapeia a interseção e os genes exclusivos de cada dataset baseando-se no Ensembl ID.
 - **`alinhador.py` (`Alinhador`)**: Realinha as matrizes binarizadas para a ordem de genes canônica do Fujita. Para o dataset Mathys, genes inexistentes no seu genoma nativo recebem o **[[03_Conhecimento/sentinela_meio_genes_ausentes|valor sentinela neutro 0.5]]**. Veja **[[04_Recursos/adrs/adr_002_sentinela_meio_genes_ausentes|ADR 002]]**.
 - **`validador_alinhamento.py` (`ValidadorAlinhamento`)**: Valida programaticamente se os genes alinhados em ambos os datasets estão na mesma ordem Ensembl.

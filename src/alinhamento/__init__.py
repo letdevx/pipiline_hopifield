@@ -10,6 +10,7 @@ from .alinhador_esparso import AlinhadorEsparso
 from .analisador_cobertura import AnalisadorCobertura
 from .analisador_sobreposicao import AnalisadorSobreposicao
 from .exportador_mtx import ExportadorMTX
+from .injetor_mtx_sentinela import InjetorMTXSentinela
 from .leitor_features import LeitorFeatures
 from .marcador_sentinela import MarcadorSentinela
 from .selecionador_genes_diferenciais import SelecionadorGenesDiferenciais
@@ -24,6 +25,7 @@ __all__ = [
     "AnalisadorCobertura",
     "AnalisadorSobreposicao",
     "ExportadorMTX",
+    "InjetorMTXSentinela",
     "LeitorFeatures",
     "MarcadorSentinela",
     "SelecionadorGenesDiferenciais",
