@@ -218,16 +218,13 @@ if _is_google_colab():
 try:
     from google.colab import drive  # type: ignore
 
-    if not os.path.ismount("/content/drive") and not os.path.exists(
-        "/content/drive/MyDrive"
-    ):
+    if not os.path.exists("/content/drive/MyDrive"):
         print("[Colab] Montando Google Drive em /content/drive...")
         drive.mount("/content/drive")
     else:
         print("[Colab] Google Drive já montado em /content/drive.")
-except (ImportError, Exception) as e:
-    if "google.colab" in sys.modules:
-        print(f"[Colab] Aviso durante montagem do Google Drive: {e}")
+except (ImportError, Exception):
+    pass
 
 # Detecção robusta do diretório raiz e de src/ para Jupyter, Scripts e Colab
 if "__file__" in globals():
@@ -289,7 +286,7 @@ from treinamento import ProjetorSWeePR
 SEED = 42
 
 # Variáveis opcionais de override para apontar caminhos específicos manualmente
-CAMINHO_PAN_CUSTOMIZADO = ""
+CAMINHO_PAN_CUSTOMIZADO = "/content/drive/MyDrive/imputs/pan_anotado.h5ad"
 CAMINHO_TRACKING_CUSTOMIZADO = ""
 
 
@@ -299,18 +296,16 @@ def resolver_caminho_pan(customizado: str = "") -> str:
         return customizado
 
     candidatos = [
+        customizado,
+        "/content/drive/MyDrive/imputs/pan_anotado.h5ad",
+        "/content/drive/MyDrive/inputs/pan_anotado.h5ad",
         getattr(config, "PATH_REFERENCIA", ""),
         r"C:\Users\Leticia\Documents\Letworkspace\Teste hop\imputs\pan_anotado.h5ad",
         r"C:\Users\Leticia\Downloads\pan_anotado.h5ad",
         r"C:\Users\Leticia\Documents\Letworkspace\Sweep-Harmonization\Meus_testes\Colocando tipo celular nos dados\matriz_anotada_binaria.h5ad",
-        "/content/pan_anotado.h5ad",
         "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs/pan_anotado.h5ad",
-        "/content/drive/Othercomputers/Meu computador/Documents/Letworkspace/Teste hop/imputs/pan_anotado.h5ad",
-        "/content/drive/Othercomputers/My Laptop/Documents/Letworkspace/Teste hop/imputs/pan_anotado.h5ad",
         "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs/PAN_Bin/pan_anotado.h5ad",
-        "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/output_pan_anotado_matriz_anotada_finalM/binarizacao/pan_anotado/pan_anotado.h5ad",
         "/content/drive/MyDrive/Teste hop/imputs/pan_anotado.h5ad",
-        "/content/drive/MyDrive/imputs/pan_anotado.h5ad",
         "/content/drive/MyDrive/pan_anotado.h5ad",
         os.path.join(ROOT_DIR, "imputs", "pan_anotado.h5ad"),
     ]
@@ -319,70 +314,68 @@ def resolver_caminho_pan(customizado: str = "") -> str:
         if cand and os.path.exists(cand):
             return cand
 
-    # Se estiver no Colab, tenta varredura recursiva inteligente
-    if os.path.exists("/content"):
-        import glob
-
-        achados_content = glob.glob("/content/**/pan_anotado*.h5ad", recursive=True)
-        if achados_content:
-            return achados_content[0]
-
-        if os.path.exists("/content/drive/MyDrive") or os.path.exists(
-            "/content/drive/Othercomputers"
-        ):
-            achados_drive = glob.glob(
-                "/content/drive/**/pan_anotado*.h5ad", recursive=True
-            )
-            if achados_drive:
-                return achados_drive[0]
-            achados_bin = glob.glob(
-                "/content/drive/**/matriz_anotada_binaria*.h5ad", recursive=True
-            )
-            if achados_bin:
-                return achados_bin[0]
-
-    # Diagnóstico didático de ambiente
-    is_colab = os.path.exists("/content")
-    drive_montado = os.path.exists("/content/drive/MyDrive") or (
-        os.path.exists("/content/drive") and os.path.ismount("/content/drive")
-    )
-    detalhes_drive = ""
-    if is_colab:
-        if not drive_montado:
-            detalhes_drive = (
-                "\n\n[DIAGNÓSTICO COLAB] O Google Drive NÃO está montado nesta sessão!\n"
-                "Para montar o Drive, execute uma célula com:\n"
-                "    from google.colab import drive\n"
-                "    drive.mount('/content/drive')\n"
-            )
-        else:
-            pastas_drive = (
-                os.listdir("/content/drive") if os.path.exists("/content/drive") else []
-            )
-            detalhes_drive = f"\n\n[DIAGNÓSTICO COLAB] Google Drive está montado. Pastas em /content/drive: {pastas_drive}"
-
     raise FileNotFoundError(
-        "[Erro] Dataset 'pan_anotado.h5ad' não encontrado nos caminhos mapeados.\n"
-        f"Verifique se o Google Drive foi montado ou defina 'CAMINHO_PAN_CUSTOMIZADO = \"/caminho/do/arquivo.h5ad\"'.{detalhes_drive}"
+        "[Erro] Dataset 'pan_anotado.h5ad' não encontrado nos caminhos mapeados. "
+        "Verifique a montagem do Google Drive ou informe 'CAMINHO_PAN_CUSTOMIZADO'."
     )
 
 
 def resolver_caminho_tracking_fujita(customizado: str = "") -> str:
-    """Localiza o arquivo tracking_genes_adicionados_Fujita.csv entre locais e Drive."""
-    if customizado and os.path.exists(customizado):
-        return customizado
+    """Localiza o arquivo tracking_genes_adicionados_Fujita.csv entre a pasta de alinhamento e Drive."""
+    if customizado:
+        if os.path.exists(customizado):
+            return customizado
+        dir_name = os.path.dirname(customizado)
+        if os.path.exists(dir_name):
+            base_lower = os.path.basename(customizado).lower()
+            try:
+                for arq in os.listdir(dir_name):
+                    if arq.lower() == base_lower:
+                        return os.path.join(dir_name, arq)
+            except OSError:
+                pass
 
+    pastas_alinhamento = [
+        os.path.join(OUTPUTS_EXP, "alinhamento"),
+        "/content/drive/MyDrive/output_pan_anotado_pan_com_sentinela_05/alinhamento",
+        "/content/drive/MyDrive/Teste hop/output_pan_anotado_pan_com_sentinela_05/alinhamento",
+        "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/output_pan_anotado_pan_com_sentinela_05/alinhamento",
+        "/content/output_pan_anotado_pan_com_sentinela_05/alinhamento",
+        os.path.join(
+            ROOT_DIR, "output_pan_anotado_pan_com_sentinela_05", "alinhamento"
+        ),
+        r"C:\Users\Leticia\Documents\Letworkspace\Teste hop\output_pan_anotado_pan_com_sentinela_05\alinhamento",
+    ]
+
+    nomes_tracking = [
+        "tracking_genes_adicionados_Fujita.csv",
+        "tracking_genes_adicionados_fujita.csv",
+        "tracking_genes_adicionados.csv",
+        "tracking_genes_ausentes.csv",
+    ]
+
+    # 1. Busca prioritária nas pastas de alinhamento do experimento (output_pan_anotado_pan_com_sentinela_05/alinhamento)
+    for pasta in pastas_alinhamento:
+        if pasta and os.path.exists(pasta):
+            for nome in nomes_tracking:
+                cand = os.path.join(pasta, nome)
+                if os.path.exists(cand):
+                    return cand
+            try:
+                for arq in os.listdir(pasta):
+                    if arq.lower().endswith(".csv") and "tracking" in arq.lower():
+                        return os.path.join(pasta, arq)
+            except OSError:
+                pass
+
+    # 2. Candidatos secundários (locais e pastas gerais do Drive)
     candidatos = [
         r"C:\Users\Leticia\Documents\Letworkspace\Teste faltantes Pan\Dados\tracking_genes_adicionados_Fujita.csv",
         "/content/tracking_genes_adicionados_Fujita.csv",
         "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste faltantes Pan/Dados/tracking_genes_adicionados_Fujita.csv",
-        "/content/drive/Othercomputers/Meu computador/Documents/Letworkspace/Teste faltantes Pan/Dados/tracking_genes_adicionados_Fujita.csv",
-        "/content/drive/Othercomputers/My Laptop/Documents/Letworkspace/Teste faltantes Pan/Dados/tracking_genes_adicionados_Fujita.csv",
         "/content/drive/MyDrive/Teste faltantes Pan/Dados/tracking_genes_adicionados_Fujita.csv",
+        "/content/drive/MyDrive/imputs/tracking_genes_adicionados_Fujita.csv",
         "/content/drive/MyDrive/tracking_genes_adicionados_Fujita.csv",
-        os.path.join(
-            OUTPUTS_EXP, "alinhamento", "tracking_genes_adicionados_Fujita.csv"
-        ),
         os.path.join(ROOT_DIR, "tracking_genes_adicionados_Fujita.csv"),
     ]
 
@@ -390,26 +383,10 @@ def resolver_caminho_tracking_fujita(customizado: str = "") -> str:
         if cand and os.path.exists(cand):
             return cand
 
-    # Se estiver no Colab, tenta varredura recursiva inteligente
-    if os.path.exists("/content"):
-        import glob
-
-        achados = glob.glob(
-            "/content/**/tracking_genes_adicionados_Fujita*.csv", recursive=True
-        )
-        if achados:
-            return achados[0]
-        if os.path.exists("/content/drive"):
-            achados_drive = glob.glob(
-                "/content/drive/**/tracking_genes_adicionados_Fujita*.csv",
-                recursive=True,
-            )
-            if achados_drive:
-                return achados_drive[0]
-
     raise FileNotFoundError(
-        "[Erro] Arquivo 'tracking_genes_adicionados_Fujita.csv' não encontrado.\n"
-        "Verifique a montagem do Google Drive ou informe 'CAMINHO_TRACKING_CUSTOMIZADO = \"/caminho/do/arquivo.csv\"'."
+        "[Erro] Arquivo 'tracking_genes_adicionados_Fujita.csv' não encontrado na pasta "
+        "'output_pan_anotado_pan_com_sentinela_05/alinhamento' nem nos caminhos mapeados. "
+        "Verifique se a pasta existe ou informe 'CAMINHO_TRACKING_CUSTOMIZADO'."
     )
 
 

@@ -33,12 +33,24 @@ def _resolver_path_base() -> str:
     if os.path.exists(colab_path):
         return colab_path
 
-    # 2. Caminho Windows Local da pesquisadora ("Meu laptop")
+    # 2. Caminho Google Colab MyDrive / Teste hop
+    colab_mydrive_hop = r"/content/drive/MyDrive/Teste hop"
+    if os.path.exists(colab_mydrive_hop):
+        return colab_mydrive_hop
+
+    # 3. Caminho Google Colab MyDrive direto
+    colab_mydrive = r"/content/drive/MyDrive"
+    if os.path.exists(
+        os.path.join(colab_mydrive, "output_pan_anotado_pan_com_sentinela_05")
+    ) or os.path.exists(os.path.join(colab_mydrive, "imputs")):
+        return colab_mydrive
+
+    # 4. Caminho Windows Local da pesquisadora ("Meu laptop")
     windows_path = r"C:\Users\Leticia\Documents\Letworkspace\Teste hop"
     if os.path.exists(windows_path):
         return windows_path
 
-    # 3. Raiz do repositório local do projeto
+    # 5. Raiz do repositório local do projeto
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     return repo_root
 
