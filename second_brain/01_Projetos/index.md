@@ -20,6 +20,8 @@ Esta pasta abriga todos os projetos de pesquisa com metas ativas, entregáveis e
   * Projeto principal de alinhamento cross-dataset (Fujita vs Mathys), projeção rSWeeP 600D, imputação via Modern Hopfield Network com sentinela 0.5 e validação em 7 classes celulares.
 * 📊 **[Documentação do Pipeline Genérico Pan × Mathys](file:///home/rasert/workspace/pipiline_hopifield/docs/pipeline_pan_mathys.md)**
   * Especificação técnica e diagramas Mermaid de ponta a ponta do notebook `pipeline_generico_Pan_Mathys.ipynb`.
+* 🧪 **[[01_Projetos/validacao_ruido_mlp_sweep/index|Validação de Sensibilidade ao Ruído (MLP + SWeeP 600D)]]**
+  * Conjunto de 6 experimentos para comprovar empiricamente a degradação do classificador MLP sob ruído sentinela (0.5), fundamentando a necessidade da imputação por Rede Hopfield Moderna.
 
 ---
 

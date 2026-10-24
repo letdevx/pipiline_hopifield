@@ -32,6 +32,7 @@ Cada seção do sistema possui seu arquivo `index.md` interno para consulta ráp
 * 📜 **[[04_Recursos/artigos/hopfield_1982_neural_networks_emergent_abilities|Artigo Fundacional: Hopfield (1982) — Modelo Clássico]]**
 * 📜 **[[04_Recursos/artigos/krotov_hopfield_2016_dense_associative_memory|Artigo Fundacional: Krotov & Hopfield (2016) — Redes Hopfield Modernas / DAM]]**
 * 🚀 **[[01_Projetos/pipeline_hopfield_expandido/documentacao_pipeline_hopfield|Documentação Mestre do Pipeline Expandido]]**
+* 🧪 **[[01_Projetos/validacao_ruido_mlp_sweep/index|Validação de Sensibilidade ao Ruído (MLP + SWeeP 600D)]]**
 * 📐 **[[01_Projetos/pipeline_hopfield_expandido/arquitetura_do_sistema|Documento de Arquitetura do Sistema]]**
 * 🏛️ **[[04_Recursos/adrs/index|Índice Formais de ADRs (Architecture Decision Records)]]**
 * 🧬 **[[03_Conhecimento/binarizacao_expressao_genica|Conceito Atômico: Binarização de Expressão Gênica]]**
