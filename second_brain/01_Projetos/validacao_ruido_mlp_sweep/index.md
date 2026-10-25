@@ -14,10 +14,12 @@ Central de documentação do experimento de comprovação de sensibilidade ao ru
 
 ## 📑 Documentação e Planos
 
+* 🏆 **[[01_Projetos/validacao_ruido_mlp_sweep/relatorio_resultados_pos_hopfield|Relatório de Resultados Pós-Hopfield: Validação da Reconstrução Gênica]]**
+  * Síntese experimental da Fase 2 comprovando que a **Modern Hopfield Network** recupera **100,2% a 141,5%** da perda de Macro F1 nos cenários intra-dataset e salta de 52% para **95,57%** em cross-dataset, comprovando empiricamente a tese central do mestrado.
 * 📊 **[[01_Projetos/validacao_ruido_mlp_sweep/relatorio_resultados_ruido_mlp|Relatório de Resultados Empíricos: Impacto do Ruído no MLP]]**
-  * Síntese quantitativa consolidada dos 6 cenários experimentais, demonstrando quedas de até **-21,40 p.p. na acurácia** e **-44,53 p.p. no Macro F1**, fundamentando a necessidade da Rede Hopfield Moderna para reconstrução gênica.
+  * Síntese quantitativa consolidada da Fase 1 demonstrando quedas de até **-21,40 p.p. na acurácia** e **-44,53 p.p. no Macro F1**, fundamentando a necessidade da Rede Hopfield Moderna para reconstrução gênica.
 * 📘 **[[01_Projetos/validacao_ruido_mlp_sweep/plano_experimentos_ruido_mlp_sweep|Plano Experimental Completo: Validação de Ruído MLP + SWeeP]]**
-  * Especificação detalhada dos 6 experimentos (Fujita->Fujita, Fujita->Mathys, Mathys->Mathys, Pan->Pan, Pan->Fujita, Pan->Mathys), dimensões exatas de genes, alinhamento Ensembl, travas de segurança de ortobase e topologia de execução paralela em Git Worktrees.
+  * Especificação detalhada dos 6 experimentos (Fujita->Fujita, Fujita->Mathys, Mathys->Mathys, Pan->Pan, Pan->Fujita, Pan->Mathys), dimensões exatas de genes, alinhamento Ensembl, travas de segurança de ortobase e topologia de execução.
 
 ---
 
