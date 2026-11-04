@@ -111,10 +111,11 @@ for _candidato in candidatos_raiz:
         break
 
 # Se estiver no Colab e o repositório ainda não existir no ambiente da VM, clona automaticamente
+dest_repo = Path("/content/pipiline_hopifield")
+repo_url = "https://github.com/letdevx/pipiline_hopifield.git"
+branch = "teste_reconstrucao_global_sweep_pan"
+
 if ROOT_DIR is None and _is_google_colab():
-    dest_repo = Path("/content/pipiline_hopifield")
-    repo_url = "https://github.com/letdevx/pipiline_hopifield.git"
-    branch = "teste_reconstrucao_global_sweep_pan"
     print(
         f"[Colab] Repositório não encontrado. Clonando branch '{branch}' de '{repo_url}'..."
     )
@@ -130,6 +131,15 @@ if ROOT_DIR is None and _is_google_colab():
         subprocess.run(["git", "clone", repo_url, str(dest_repo)], check=False)
     if (dest_repo / "src").is_dir():
         ROOT_DIR = dest_repo.resolve()
+elif ROOT_DIR is not None and _is_google_colab() and (ROOT_DIR / ".git").is_dir():
+    # Atualiza o repositório existente na VM com os commits mais recentes
+    print(f"[Colab] Sincronizando repositório via git pull ({branch})...")
+    subprocess.run(
+        ["git", "-C", str(ROOT_DIR), "pull", "origin", branch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 if ROOT_DIR is None or not (ROOT_DIR / "src").is_dir():
     ROOT_DIR = Path.cwd().resolve()
@@ -288,6 +298,7 @@ PATH_ROTULOS_FUJITA = resolver_caminho_existente(
 # 4. Classificador MLP Pré-Treinado no Conjunto Pan e Scaler
 PATH_MODELO_KERAS = resolver_caminho_existente(
     [
+        ROOT_DIR / "modelos" / "clasificador_pan.keras",
         DIR_LETWORKSPACE
         / "Treinamento-MLP-Mathys"
         / "teste_pan_ausentes"
@@ -296,6 +307,17 @@ PATH_MODELO_KERAS = resolver_caminho_existente(
         / "Treinamento-MLP-Mathys"
         / "teste_PAN_para_Fujita"
         / "clasificador_pan.keras",
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Treinamento-MLP-Mathys/teste_pan_ausentes/clasificador_pan.keras"
+        ),
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Treinamento-MLP-Mathys/teste_PAN_para_Fujita/clasificador_pan.keras"
+        ),
+        Path(
+            "/content/drive/MyDrive/Treinamento-MLP-Mathys/teste_pan_ausentes/clasificador_pan.keras"
+        ),
+        Path("/content/drive/MyDrive/clasificador_pan.keras"),
+        DIR_DRIVE_TESTE_HOP / "imputs" / "clasificador_pan.keras",
         ROOT_DIR / "imputs" / "clasificador_pan.keras",
     ],
     "Classificador MLP Pré-Treinado (clasificador_pan.keras)",
@@ -303,6 +325,7 @@ PATH_MODELO_KERAS = resolver_caminho_existente(
 
 PATH_SCALER_PKL = resolver_caminho_existente(
     [
+        ROOT_DIR / "modelos" / "scaler_celular_pan.pkl",
         DIR_LETWORKSPACE
         / "Treinamento-MLP-Mathys"
         / "teste_pan_ausentes"
@@ -311,6 +334,17 @@ PATH_SCALER_PKL = resolver_caminho_existente(
         / "Treinamento-MLP-Mathys"
         / "teste_PAN_para_Fujita"
         / "scaler_celular_pan.pkl",
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Treinamento-MLP-Mathys/teste_pan_ausentes/scaler_celular_pan.pkl"
+        ),
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Treinamento-MLP-Mathys/teste_PAN_para_Fujita/scaler_celular_pan.pkl"
+        ),
+        Path(
+            "/content/drive/MyDrive/Treinamento-MLP-Mathys/teste_pan_ausentes/scaler_celular_pan.pkl"
+        ),
+        Path("/content/drive/MyDrive/scaler_celular_pan.pkl"),
+        DIR_DRIVE_TESTE_HOP / "imputs" / "scaler_celular_pan.pkl",
         ROOT_DIR / "imputs" / "scaler_celular_pan.pkl",
     ],
     "Scaler do Classificador Pan (scaler_celular_pan.pkl)",
@@ -334,6 +368,12 @@ print(f"SWeeP Pan Referência : {sweep_pan_ref.shape} (dtype={sweep_pan_ref.dtyp
 print(
     f"Rótulos Pan          : {rotulos_pan.shape} | Classes únicas: {np.unique(rotulos_pan)}"
 )
+
+if not PATH_MODELO_KERAS.exists() or not PATH_SCALER_PKL.exists():
+    raise FileNotFoundError(
+        f"Classificador ({PATH_MODELO_KERAS}) ou scaler ({PATH_SCALER_PKL}) não encontrado!\n"
+        "Execute no Colab: !git -C /content/pipiline_hopifield pull origin teste_reconstrucao_global_sweep_pan"
+    )
 
 modelo_mlp_pan = tf.keras.models.load_model(str(PATH_MODELO_KERAS))
 scaler_pan = joblib.load(str(PATH_SCALER_PKL))
