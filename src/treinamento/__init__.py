@@ -30,6 +30,15 @@ from .gerador_conjunto_treinamento import GeradorConjuntoTreinamento
 from .gerador_relatorio import GeradorRelatorio
 from .hopfield import ModernHopfieldNetwork
 from .projetor_sweep import ProjetorSWeePR, ProjetorSWeP
+from .reconstrucao_sweep_hopfield import (
+    NOMES_CLASSES_PADRAO,
+    avaliar_no_classificador_pan,
+    calcular_metricas_geometricas_600d,
+    calibrar_hopfield_sweep_completo,
+    carregar_matriz_sweep_600d,
+    gerar_sweep_pan_com_faltantes_mathys,
+    substituir_colunas_faltantes_esparso,
+)
 from .selecionador_genes_shap import (
     HopfieldClassifierWrapper,
     SelecionadorGenesSHAPHopfield,
@@ -37,6 +46,7 @@ from .selecionador_genes_shap import (
 from .validador_imputacao import ValidadorImputacao
 
 __all__ = [
+    "NOMES_CLASSES_PADRAO",
     "AuditorOverfittingCrossDataset",
     "AuditorOverfittingHopfield",
     "AvaliadorHopfield",
@@ -61,6 +71,12 @@ __all__ = [
     "ResultadoDiagnosticoOverfitting",
     "SelecionadorGenesSHAPHopfield",
     "ValidadorImputacao",
+    "avaliar_no_classificador_pan",
+    "calcular_metricas_geometricas_600d",
+    "calibrar_hopfield_sweep_completo",
     "carregar_labels",
+    "carregar_matriz_sweep_600d",
+    "gerar_sweep_pan_com_faltantes_mathys",
     "remapear_labels_canonicos",
+    "substituir_colunas_faltantes_esparso",
 ]
