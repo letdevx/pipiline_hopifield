@@ -15,6 +15,7 @@ import pandas as pd
 import polars as pl
 import scipy.io as sio
 import scipy.sparse as sp
+import torch
 from numpy.typing import NDArray
 from sklearn.metrics import (
     accuracy_score,
@@ -358,6 +359,7 @@ def calibrar_hopfield_sweep_completo(
     modelo_mlp: Any | None = None,
     scaler_mlp: Any | None = None,
     classes_validas: Sequence[int] = (1, 2, 3, 4, 5, 6, 7),
+    device: str | torch.device | None = None,
 ) -> tuple[pd.DataFrame, dict[str, float]]:
     """Executa Grid Search de `beta` e `n_iters` na Rede Hopfield com memória completa do Pan.
 
@@ -422,6 +424,7 @@ def calibrar_hopfield_sweep_completo(
         n_iters=int(n_iters_list[0]),
         binary=False,
         normalize=True,
+        device=device,
     )
     rede.store(ref_f32)
 

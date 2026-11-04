@@ -3,6 +3,7 @@
 import time
 
 import numpy as np
+import torch
 
 from src.synthetic.gerador_ground_truth import GeradorGroundTruthSintetico
 from src.treinamento.hopfield import ModernHopfieldNetwork
@@ -272,3 +273,35 @@ def test_avaliador_hopfield_metricas_por_classe_e_relatorio_completo():
     row_macro = df_completo[df_completo["tipo_celular"] == "Macro Avg"].iloc[0]
     expected_macro_p = (p1 + p2) / 2
     assert np.isclose(float(row_macro["precision"]), expected_macro_p, atol=1e-3)
+
+
+def test_modern_hopfield_device_and_vram_support() -> None:
+    """Valida parametrização de device, inicialização e fallback de dispositivo."""
+    # 1. Instanciação com device explícito 'cpu'
+    rede_cpu = ModernHopfieldNetwork(
+        beta=10.0, n_iters=1, binary=False, normalize=True, device="cpu"
+    )
+    assert rede_cpu.device.type == "cpu"
+
+    padroes = np.random.default_rng(42).standard_normal((10, 30)).astype(np.float32)
+    rede_cpu.store(padroes)
+    assert rede_cpu.patterns.device.type == "cpu"
+
+    queries = padroes.copy()
+    rec = rede_cpu.retrieve(queries, batch_size=4, device="cpu")
+    assert rec.shape == (10, 30)
+
+    # 2. Mudança dinâmica via rede.to()
+    rede_cpu.to("cpu")
+    assert rede_cpu.device.type == "cpu"
+
+    # 3. Se CUDA estiver disponível no ambiente (ex: Colab / GPU local), valida execução em GPU
+    if torch.cuda.is_available():
+        rede_gpu = ModernHopfieldNetwork(
+            beta=10.0, n_iters=1, binary=False, normalize=True, device="cuda"
+        )
+        assert rede_gpu.device.type == "cuda"
+        rede_gpu.store(padroes)
+        assert rede_gpu.patterns.device.type == "cuda"
+        rec_gpu = rede_gpu.retrieve(queries, batch_size=4, device="cuda")
+        assert np.allclose(rec, rec_gpu, atol=1e-5)

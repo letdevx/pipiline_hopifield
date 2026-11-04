@@ -172,6 +172,7 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import polars as pl  # noqa: E402
 import tensorflow as tf  # noqa: E402
+import torch  # noqa: E402
 from sklearn.decomposition import PCA  # noqa: E402
 from sklearn.metrics import ConfusionMatrixDisplay  # noqa: E402
 
@@ -189,9 +190,17 @@ from src.treinamento import (  # noqa: E402
 DIR_SAIDA = Path(OUTPUTS) / "reconstrucao_sweep_pan_completo"
 DIR_SAIDA.mkdir(parents=True, exist_ok=True)
 
+DISPOSITIVO = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Diretório raiz do projeto : {ROOT_DIR}")
 print(f"Diretório de saídas       : {DIR_SAIDA}")
 print(f"Base ortonormal rSWeeP    : {PATH_ORTHBASE_RDS}")
+print(f"Dispositivo de computação : {DISPOSITIVO}")
+if DISPOSITIVO.type == "cuda":
+    _nome_gpu = torch.cuda.get_device_name(0)
+    _vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+    print(f"GPU / VRAM disponível     : {_nome_gpu} ({_vram_gb:.2f} GB)")
+else:
+    print("GPU / VRAM disponível     : Nenhuma (executando em CPU / RAM)")
 
 
 # %%
@@ -468,6 +477,7 @@ df_grid_pan, melhor_cfg_pan = calibrar_hopfield_sweep_completo(
     mask_self=True,
     modelo_mlp=modelo_mlp_pan,
     scaler_mlp=scaler_pan,
+    device=DISPOSITIVO,
 )
 
 df_grid_pan.to_csv(DIR_SAIDA / "grid_search_calibracao_pan_faltantes.csv", index=False)
@@ -493,6 +503,7 @@ rede_hopfield_pan = ModernHopfieldNetwork(
     n_iters=N_ITERS_OTIMO,
     binary=False,
     normalize=True,
+    device=DISPOSITIVO,
 )
 rede_hopfield_pan.store(sweep_pan_ref)
 
