@@ -65,15 +65,32 @@ if _is_google_colab():
     except Exception as err:
         print(f"[Colab] Aviso ao montar Google Drive: {err}")
 
-    # Garante instalação de dependências ausentes no runtime padrão do Colab
-    for _pkg in ["polars"]:
+    # Garante instalação de dependências essenciais ausentes no runtime padrão do Colab
+    _deps_colab = [
+        ("anndata", "anndata"),
+        ("scanpy", "scanpy"),
+        ("polars", "polars"),
+        ("umap", "umap-learn"),
+    ]
+    _instalar: list[str] = []
+    for _mod, _pkg in _deps_colab:
         try:
-            __import__(_pkg)
+            __import__(_mod)
         except ImportError:
-            print(f"[Colab] Instalando {_pkg}...")
-            subprocess.run(
-                [sys.executable, "-m", "pip", "install", "-q", _pkg], check=False
-            )
+            _instalar.append(_pkg)
+
+    if _instalar:
+        print(f"[Colab] Instalando dependências ausentes: {', '.join(_instalar)}...")
+        res_pip = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-q", *_instalar],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res_pip.returncode != 0:
+            print(f"[Colab] Aviso durante pip install:\n{res_pip.stderr.strip()}")
+        else:
+            print("[Colab] Dependências instaladas com sucesso.")
 
 # 2. Resolução do Diretório Raiz do Repositório (com fail-safe de git clone no Colab)
 candidatos_raiz = [
