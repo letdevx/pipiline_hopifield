@@ -16,8 +16,13 @@ from typing import Any, cast
 import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
+
+try:
+    import shap
+except ImportError:
+    shap = None
+
 import scipy.sparse as sp
-import shap
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -442,6 +447,10 @@ class SelecionadorGenesSHAPHopfield:
         )
 
         # 3. Inicializa o GradientExplainer
+        if shap is None:
+            raise ImportError(
+                "O pacote 'shap' é necessário para cálculo dos valores SHAP. Instale via 'uv add shap'."
+            )
         self.wrapper.eval()
         explainer = shap.GradientExplainer(self.wrapper, cast(Any, bg_tensor))
 
@@ -591,6 +600,10 @@ class SelecionadorGenesSHAPHopfield:
             )
 
         # 3. Inicializa wrapper e explainer
+        if shap is None:
+            raise ImportError(
+                "O pacote 'shap' é necessário para cálculo dos valores SHAP. Instale via 'uv add shap'."
+            )
         self.wrapper.to(device)
         self.wrapper.eval()
         bg_device = bg_tensor.to(device)

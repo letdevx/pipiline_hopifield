@@ -26,12 +26,15 @@ def _resolver_path_base() -> str:
     if env_base and os.path.exists(env_base):
         return env_base
 
-    # 1. Caminho Google Colab com Google Drive montado
-    colab_path = (
-        r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop"
-    )
-    if os.path.exists(colab_path):
-        return colab_path
+    # 1. Caminhos Google Colab com Google Drive montado
+    colab_paths = [
+        r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop",
+        r"/content/drive/MyDrive/Teste hop",
+        r"/content/drive/MyDrive/Letworkspace/Teste hop",
+    ]
+    for cp in colab_paths:
+        if os.path.exists(cp):
+            return cp
 
     # 2. Caminho Windows Local da pesquisadora ("Meu laptop")
     windows_path = r"C:\Users\Leticia\Documents\Letworkspace\Teste hop"

@@ -36,45 +36,117 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
-import joblib
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import polars as pl
-import tensorflow as tf
-from sklearn.decomposition import PCA
-from sklearn.metrics import ConfusionMatrixDisplay
 
-try:
-    from google.colab import drive  # type: ignore[import-not-found]
+def _is_google_colab() -> bool:
+    """Detecta se a execução atual está ocorrendo no Google Colab."""
+    return (
+        "google.colab" in sys.modules
+        or (os.name != "nt" and os.path.exists("/content"))
+        or os.environ.get("COLAB_GPU") is not None
+        or os.environ.get("COLAB_RELEASE_TAG") is not None
+    )
 
-    if not os.path.exists("/content/drive"):
-        print("[Colab] Montando Google Drive em /content/drive...")
-        drive.mount("/content/drive")
-except Exception:
-    pass
 
-for _candidato in [
+# 1. Google Colab: Montagem de Google Drive e Instalação de Dependências Faltantes
+if _is_google_colab():
+    print("[Colab] Execução em ambiente Google Colab detectada.")
+    try:
+        from google.colab import drive  # type: ignore[import-not-found]
+
+        if not os.path.exists("/content/drive"):
+            print("[Colab] Montando Google Drive em /content/drive...")
+            drive.mount("/content/drive")
+        else:
+            print("[Colab] Google Drive já montado.")
+    except Exception as err:
+        print(f"[Colab] Aviso ao montar Google Drive: {err}")
+
+    # Garante instalação de dependências ausentes no runtime padrão do Colab
+    for _pkg in ["polars"]:
+        try:
+            __import__(_pkg)
+        except ImportError:
+            print(f"[Colab] Instalando {_pkg}...")
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-q", _pkg], check=False
+            )
+
+# 2. Resolução do Diretório Raiz do Repositório (com fail-safe de git clone no Colab)
+candidatos_raiz = [
     Path.cwd(),
     Path.cwd().parent,
     Path("/content/pipiline_hopifield"),
+    Path("/content/drive/MyDrive/pipiline_hopifield"),
     Path(
         "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/pipiline_hopifield"
     ),
-]:
+    Path("/content/drive/MyDrive/Letworkspace/pipiline_hopifield"),
+]
+
+ROOT_DIR: Path | None = None
+for _candidato in candidatos_raiz:
     if (_candidato / "src").is_dir():
         ROOT_DIR = _candidato.resolve()
         break
-else:
+
+# Se estiver no Colab e o repositório ainda não existir no ambiente da VM, clona automaticamente
+if ROOT_DIR is None and _is_google_colab():
+    dest_repo = Path("/content/pipiline_hopifield")
+    repo_url = "https://github.com/letdevx/pipiline_hopifield.git"
+    branch = "teste_reconstrucao_global_sweep_pan"
+    print(
+        f"[Colab] Repositório não encontrado. Clonando branch '{branch}' de '{repo_url}'..."
+    )
+    res_clone = subprocess.run(
+        ["git", "clone", "--branch", branch, repo_url, str(dest_repo)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if res_clone.returncode != 0:
+        print(f"[Colab] Aviso ao clonar branch '{branch}': {res_clone.stderr.strip()}")
+        print("[Colab] Tentando clonagem padrão do repositório...")
+        subprocess.run(["git", "clone", repo_url, str(dest_repo)], check=False)
+    if (dest_repo / "src").is_dir():
+        ROOT_DIR = dest_repo.resolve()
+
+if ROOT_DIR is None or not (ROOT_DIR / "src").is_dir():
     ROOT_DIR = Path.cwd().resolve()
+    if not (ROOT_DIR / "src").is_dir():
+        msg_erro = (
+            "\n"
+            + "=" * 80
+            + "\n[ERRO DE AMBIENTE] MÓDULO 'src' NÃO ENCONTRADO\n"
+            + "=" * 80
+            + "\nO repositório 'pipiline_hopifield' precisa ser clonado na VM do Colab.\n"
+            + "Execute em uma célula de código no Colab antes desta:\n"
+            + "    !git clone -b teste_reconstrucao_global_sweep_pan https://github.com/letdevx/pipiline_hopifield.git /content/pipiline_hopifield\n"
+            + "\nEm seguida, adicione os caminhos ao sys.path:\n"
+            + "    import sys\n"
+            + "    sys.path.insert(0, '/content/pipiline_hopifield')\n"
+            + "    sys.path.insert(0, '/content/pipiline_hopifield/src')\n"
+            + "=" * 80
+        )
+        raise RuntimeError(msg_erro)
 
 SRC_DIR = ROOT_DIR / "src"
 for _p in (str(ROOT_DIR), str(SRC_DIR)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+
+# Importação de dependências científicas
+import joblib  # noqa: E402
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+import polars as pl  # noqa: E402
+import tensorflow as tf  # noqa: E402
+from sklearn.decomposition import PCA  # noqa: E402
+from sklearn.metrics import ConfusionMatrixDisplay  # noqa: E402
 
 from src.config import OUTPUTS, PATH_ORTHBASE_RDS  # noqa: E402
 from src.treinamento import (  # noqa: E402
@@ -108,8 +180,16 @@ def resolver_caminho_existente(candidatos: list[Path], descricao: str) -> Path:
 
 DIR_DOWNLOADS = Path.home() / "Downloads"
 DIR_LETWORKSPACE = ROOT_DIR.parent
-DIR_DRIVE_TESTE_HOP = Path(
-    "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop"
+candidatos_teste_hop = [
+    Path("/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop"),
+    Path("/content/drive/MyDrive/Teste hop"),
+    Path("/content/drive/MyDrive/Letworkspace/Teste hop"),
+    ROOT_DIR.parent / "Teste hop",
+    Path("/content/Teste hop"),
+]
+DIR_DRIVE_TESTE_HOP = next(
+    (p for p in candidatos_teste_hop if p.exists()),
+    candidatos_teste_hop[0],
 )
 
 # 1. SWeeP Pan Completo de Referência (58.326 × 600) e Rótulos do Pan
