@@ -234,9 +234,31 @@ DIR_DRIVE_TESTE_HOP = next(
     candidatos_teste_hop[0],
 )
 
+# Diretório de saídas específicas do conjunto Fujita no Google Drive / local
+candidatos_dir_fujita = [
+    DIR_DRIVE_TESTE_HOP / "output_pan_anotado_matrizFiltradaeNormalizadaF",
+    Path(
+        "/content/drive/MyDrive/Teste hop/output_pan_anotado_matrizFiltradaeNormalizadaF"
+    ),
+    Path(
+        "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/output_pan_anotado_matrizFiltradaeNormalizadaF"
+    ),
+    Path("/content/drive/MyDrive/output_pan_anotado_matrizFiltradaeNormalizadaF"),
+    Path("/content/output_pan_anotado_matrizFiltradaeNormalizadaF"),
+    ROOT_DIR / "output_pan_anotado_matrizFiltradaeNormalizadaF",
+    DIR_LETWORKSPACE / "output_pan_anotado_matrizFiltradaeNormalizadaF",
+    DIR_LETWORKSPACE / "Teste hop" / "output_pan_anotado_matrizFiltradaeNormalizadaF",
+]
+DIR_FUJITA_OUTPUT = next(
+    (p for p in candidatos_dir_fujita if p.exists()),
+    candidatos_dir_fujita[0],
+)
+
 # 1. SWeeP Pan Completo de Referência (58.326 × 600) e Rótulos do Pan
 PATH_SWEEP_PAN_REF = resolver_caminho_existente(
     [
+        DIR_FUJITA_OUTPUT / "treinamento" / "matriz_reduzida_sweepREF.txt",
+        DIR_FUJITA_OUTPUT / "matriz_reduzida_sweepREF.txt",
         DIR_DOWNLOADS / "matriz_reduzida_sweepREF.txt",
         Path(
             "/content/drive/Othercomputers/Meu laptop/Downloads/matriz_reduzida_sweepREF.txt"
@@ -306,6 +328,26 @@ PATH_TRACKING_MATHYS = resolver_caminho_existente(
 # 3. Arquivos do Teste 2 (SWeeP Fujita com Faltantes do Pan = 0.5 e Fujita Original)
 PATH_SWEEP_FUJITA_FALTANTES = resolver_caminho_existente(
     [
+        # output_pan_anotado_matrizFiltradaeNormalizadaF no Teste hop / Drive
+        DIR_FUJITA_OUTPUT / "treinamento" / "matriz_reduzida_sweepALVO_sentinela.txt",
+        DIR_FUJITA_OUTPUT / "matriz_reduzida_sweepALVO_sentinela.txt",
+        DIR_FUJITA_OUTPUT / "treinamento" / "matriz_sweep600d_com_sentinela.txt",
+        DIR_FUJITA_OUTPUT / "matriz_sweep600d_com_sentinela.txt",
+        DIR_FUJITA_OUTPUT / "matriz_swee_fujita_600d_com_sentinela.txt",
+        # Candidatos adicionais em pastas alternativas do Drive
+        Path(
+            "/content/drive/MyDrive/Teste hop/output_pan_anotado_matrizFiltradaeNormalizadaF/treinamento/matriz_reduzida_sweepALVO_sentinela.txt"
+        ),
+        Path(
+            "/content/drive/MyDrive/Teste hop/output_pan_anotado_matrizFiltradaeNormalizadaF/matriz_reduzida_sweepALVO_sentinela.txt"
+        ),
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/output_pan_anotado_matrizFiltradaeNormalizadaF/treinamento/matriz_reduzida_sweepALVO_sentinela.txt"
+        ),
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/output_pan_anotado_matrizFiltradaeNormalizadaF/matriz_reduzida_sweepALVO_sentinela.txt"
+        ),
+        # Downloads e raiz do Drive
         DIR_DOWNLOADS / "matriz_sweep600d_com_sentinela.txt",
         DIR_DOWNLOADS / "matriz_reduzida_sweepALVO_sentinela (1).txt",
         DIR_DOWNLOADS / "matriz_sweep600d_com_sentinela (1).txt",
@@ -315,9 +357,6 @@ PATH_SWEEP_FUJITA_FALTANTES = resolver_caminho_existente(
         Path(
             "/content/drive/Othercomputers/Meu laptop/Downloads/matriz_reduzida_sweepALVO_sentinela (1).txt"
         ),
-        Path(
-            "/content/drive/Othercomputers/Meu laptop/Downloads/matriz_sweep600d_com_sentinela (1).txt"
-        ),
         DIR_LETWORKSPACE
         / "Teste_MlP_fujita_para_fujitafaltante_fujitapos_imputacao"
         / "matriz_swee_fujita_600d_com_sentinela.txt",
@@ -326,10 +365,10 @@ PATH_SWEEP_FUJITA_FALTANTES = resolver_caminho_existente(
         ),
         Path("/content/drive/MyDrive/matriz_sweep600d_com_sentinela.txt"),
         Path("/content/drive/MyDrive/matriz_reduzida_sweepALVO_sentinela (1).txt"),
-        Path("/content/drive/MyDrive/Downloads/matriz_sweep600d_com_sentinela.txt"),
+        Path("/content/drive/MyDrive/matriz_reduzida_sweepALVO_sentinela.txt"),
         Path("/content/matriz_sweep600d_com_sentinela.txt"),
         Path("/content/matriz_reduzida_sweepALVO_sentinela (1).txt"),
-        Path("/content/matriz_swee_fujita_600d_com_sentinela.txt"),
+        Path("/content/matriz_reduzida_sweepALVO_sentinela.txt"),
         ROOT_DIR / "outputs" / "treinamento" / "matriz_sweep600d_com_sentinela.txt",
         ROOT_DIR / "imputs" / "matriz_sweep600d_com_sentinela.txt",
         DIR_DRIVE_TESTE_HOP / "imputs" / "matriz_sweep600d_com_sentinela.txt",
@@ -339,6 +378,28 @@ PATH_SWEEP_FUJITA_FALTANTES = resolver_caminho_existente(
 
 PATH_SWEEP_FUJITA_ORIGINAL = resolver_caminho_existente(
     [
+        # output_pan_anotado_matrizFiltradaeNormalizadaF no Teste hop / Drive
+        DIR_FUJITA_OUTPUT / "treinamento" / "matriz_reduzida_sweepALVO.txt",
+        DIR_FUJITA_OUTPUT / "matriz_reduzida_sweepALVO.txt",
+        DIR_FUJITA_OUTPUT / "treinamento" / "matriz_reduzida_sweepF.csv",
+        DIR_FUJITA_OUTPUT / "matriz_reduzida_sweepF.csv",
+        DIR_FUJITA_OUTPUT
+        / "treinamento"
+        / "matriz_sweep600d_matrizFiltradaeNormalizadaF.txt",
+        DIR_FUJITA_OUTPUT / "matriz_sweep600d_matrizFiltradaeNormalizadaF.txt",
+        Path(
+            "/content/drive/MyDrive/Teste hop/output_pan_anotado_matrizFiltradaeNormalizadaF/treinamento/matriz_reduzida_sweepALVO.txt"
+        ),
+        Path(
+            "/content/drive/MyDrive/Teste hop/output_pan_anotado_matrizFiltradaeNormalizadaF/matriz_reduzida_sweepALVO.txt"
+        ),
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/output_pan_anotado_matrizFiltradaeNormalizadaF/treinamento/matriz_reduzida_sweepALVO.txt"
+        ),
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/output_pan_anotado_matrizFiltradaeNormalizadaF/matriz_reduzida_sweepALVO.txt"
+        ),
+        # Downloads e raiz do Drive
         DIR_DOWNLOADS / "matriz_reduzida_sweepF.csv",
         Path(
             "/content/drive/Othercomputers/Meu laptop/Downloads/matriz_reduzida_sweepF.csv"
@@ -361,6 +422,20 @@ PATH_SWEEP_FUJITA_ORIGINAL = resolver_caminho_existente(
 
 PATH_ROTULOS_FUJITA = resolver_caminho_existente(
     [
+        # output_pan_anotado_matrizFiltradaeNormalizadaF e inputs do Teste hop
+        DIR_FUJITA_OUTPUT / "cell_types_numerico_fujita.txt",
+        DIR_FUJITA_OUTPUT / "rotulos" / "cell_types_numerico_fujita.txt",
+        DIR_DRIVE_TESTE_HOP / "imputs" / "cell_types_numerico_fujita.txt",
+        DIR_DRIVE_TESTE_HOP / "imputs" / "cell_types_fujita.txt",
+        Path(
+            "/content/drive/MyDrive/Teste hop/output_pan_anotado_matrizFiltradaeNormalizadaF/cell_types_numerico_fujita.txt"
+        ),
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/output_pan_anotado_matrizFiltradaeNormalizadaF/cell_types_numerico_fujita.txt"
+        ),
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs/cell_types_numerico_fujita.txt"
+        ),
         DIR_LETWORKSPACE
         / "Treinamento-MLP-Mathys"
         / "Inputs"
@@ -381,7 +456,6 @@ PATH_ROTULOS_FUJITA = resolver_caminho_existente(
         Path("/content/drive/MyDrive/cell_types_numerico_fujita.txt"),
         Path("/content/cell_types_numerico_fujita.txt"),
         ROOT_DIR / "imputs" / "cell_types_numerico_fujita.txt",
-        DIR_DRIVE_TESTE_HOP / "imputs" / "cell_types_numerico_fujita.txt",
     ],
     "Rótulos Numéricos do Conjunto Fujita",
 )
