@@ -210,8 +210,14 @@ def resolver_caminho_existente(candidatos: list[Path], descricao: str) -> Path:
         if caminho.exists():
             print(f"[OK] {descricao}: {caminho}")
             return caminho
-    print(f"[AVISO] {descricao} não encontrado localmente; padrão: {candidatos[0]}")
-    return candidatos[0]
+    candidato_padrao = candidatos[0]
+    msg = f"[AVISO] {descricao} não encontrado em nenhum dos {len(candidatos)} locais candidatos."
+    if _is_google_colab():
+        msg += f" (Padrão: {candidato_padrao} | No Colab, envie para /content/ ou /content/drive/MyDrive/)"
+    else:
+        msg += f" (Padrão: {candidato_padrao})"
+    print(msg)
+    return candidato_padrao
 
 
 DIR_DOWNLOADS = Path.home() / "Downloads"
@@ -232,11 +238,19 @@ DIR_DRIVE_TESTE_HOP = next(
 PATH_SWEEP_PAN_REF = resolver_caminho_existente(
     [
         DIR_DOWNLOADS / "matriz_reduzida_sweepREF.txt",
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Downloads/matriz_reduzida_sweepREF.txt"
+        ),
+        Path("/content/drive/MyDrive/Downloads/matriz_reduzida_sweepREF.txt"),
+        Path("/content/drive/MyDrive/matriz_reduzida_sweepREF.txt"),
+        Path("/content/matriz_reduzida_sweepREF.txt"),
         ROOT_DIR / "outputs" / "treinamento" / "matriz_reduzida_sweepREF.txt",
         DIR_DRIVE_TESTE_HOP
         / "outputs"
         / "treinamento"
         / "matriz_reduzida_sweepREF.txt",
+        DIR_DRIVE_TESTE_HOP / "imputs" / "matriz_reduzida_sweepREF.txt",
+        ROOT_DIR / "imputs" / "matriz_reduzida_sweepREF.txt",
     ],
     "SWeeP Pan Completo (Referência 58.326 × 600)",
 )
@@ -249,6 +263,14 @@ PATH_ROTULOS_PAN = resolver_caminho_existente(
         / "Inputs"
         / "rotulos"
         / "PanNumerico.csv",
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Treinamento-MLP-Mathys/Inputs/rotulos/PanNumerico.csv"
+        ),
+        Path(
+            "/content/drive/MyDrive/Treinamento-MLP-Mathys/Inputs/rotulos/PanNumerico.csv"
+        ),
+        Path("/content/drive/MyDrive/PanNumerico.csv"),
+        Path("/content/PanNumerico.csv"),
         DIR_DRIVE_TESTE_HOP / "imputs" / "PanNumerico.csv",
     ],
     "Rótulos Numéricos do Conjunto Pan",
@@ -259,6 +281,11 @@ PATH_PAN_H5AD = resolver_caminho_existente(
     [
         ROOT_DIR / "imputs" / "pan_anotado.h5ad",
         DIR_DRIVE_TESTE_HOP / "imputs" / "PAN_Bin" / "pan_anotado.h5ad",
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop/imputs/PAN_Bin/pan_anotado.h5ad"
+        ),
+        Path("/content/drive/MyDrive/pan_anotado.h5ad"),
+        Path("/content/pan_anotado.h5ad"),
     ],
     "Dataset Pan Completo (~61k genes - pan_anotado.h5ad)",
 )
@@ -270,6 +297,8 @@ PATH_TRACKING_MATHYS = resolver_caminho_existente(
         / "outputs"
         / "alinhamento"
         / "tracking_genes_adicionados_mathys.csv",
+        Path("/content/drive/MyDrive/tracking_genes_adicionados_mathys.csv"),
+        Path("/content/tracking_genes_adicionados_mathys.csv"),
     ],
     "Tracking de Colunas do Pan Faltantes no Mathys",
 )
@@ -279,7 +308,31 @@ PATH_SWEEP_FUJITA_FALTANTES = resolver_caminho_existente(
     [
         DIR_DOWNLOADS / "matriz_sweep600d_com_sentinela.txt",
         DIR_DOWNLOADS / "matriz_reduzida_sweepALVO_sentinela (1).txt",
+        DIR_DOWNLOADS / "matriz_sweep600d_com_sentinela (1).txt",
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Downloads/matriz_sweep600d_com_sentinela.txt"
+        ),
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Downloads/matriz_reduzida_sweepALVO_sentinela (1).txt"
+        ),
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Downloads/matriz_sweep600d_com_sentinela (1).txt"
+        ),
+        DIR_LETWORKSPACE
+        / "Teste_MlP_fujita_para_fujitafaltante_fujitapos_imputacao"
+        / "matriz_swee_fujita_600d_com_sentinela.txt",
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste_MlP_fujita_para_fujitafaltante_fujitapos_imputacao/matriz_swee_fujita_600d_com_sentinela.txt"
+        ),
+        Path("/content/drive/MyDrive/matriz_sweep600d_com_sentinela.txt"),
+        Path("/content/drive/MyDrive/matriz_reduzida_sweepALVO_sentinela (1).txt"),
+        Path("/content/drive/MyDrive/Downloads/matriz_sweep600d_com_sentinela.txt"),
+        Path("/content/matriz_sweep600d_com_sentinela.txt"),
+        Path("/content/matriz_reduzida_sweepALVO_sentinela (1).txt"),
+        Path("/content/matriz_swee_fujita_600d_com_sentinela.txt"),
         ROOT_DIR / "outputs" / "treinamento" / "matriz_sweep600d_com_sentinela.txt",
+        ROOT_DIR / "imputs" / "matriz_sweep600d_com_sentinela.txt",
+        DIR_DRIVE_TESTE_HOP / "imputs" / "matriz_sweep600d_com_sentinela.txt",
     ],
     "SWeeP Fujita com Colunas Faltantes do Pan = 0.5 (40.913 × 600)",
 )
@@ -287,7 +340,21 @@ PATH_SWEEP_FUJITA_FALTANTES = resolver_caminho_existente(
 PATH_SWEEP_FUJITA_ORIGINAL = resolver_caminho_existente(
     [
         DIR_DOWNLOADS / "matriz_reduzida_sweepF.csv",
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Downloads/matriz_reduzida_sweepF.csv"
+        ),
+        Path("/content/drive/MyDrive/Downloads/matriz_reduzida_sweepF.csv"),
+        Path("/content/drive/MyDrive/matriz_reduzida_sweepF.csv"),
+        DIR_LETWORKSPACE
+        / "Teste_MlP_fujita_para_fujitafaltante_fujitapos_imputacao"
+        / "matriz_sweep600d_matrizFiltradaeNormalizadaF.txt",
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste_MlP_fujita_para_fujitafaltante_fujitapos_imputacao/matriz_sweep600d_matrizFiltradaeNormalizadaF.txt"
+        ),
+        Path("/content/matriz_reduzida_sweepF.csv"),
+        Path("/content/matriz_sweep600d_matrizFiltradaeNormalizadaF.txt"),
         ROOT_DIR / "imputs" / "matriz_reduzida_sweepF.csv",
+        DIR_DRIVE_TESTE_HOP / "imputs" / "matriz_reduzida_sweepF.csv",
     ],
     "SWeeP Fujita Original Sem 0.5 (40.913 × 600)",
 )
@@ -299,7 +366,22 @@ PATH_ROTULOS_FUJITA = resolver_caminho_existente(
         / "Inputs"
         / "rotulos"
         / "cell_types_numerico_fujita.txt",
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Treinamento-MLP-Mathys/Inputs/rotulos/cell_types_numerico_fujita.txt"
+        ),
+        DIR_LETWORKSPACE
+        / "Teste_MlP_fujita_para_fujitafaltante_fujitapos_imputacao"
+        / "cell_types_numerico_fujita.txt",
+        Path(
+            "/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste_MlP_fujita_para_fujitafaltante_fujitapos_imputacao/cell_types_numerico_fujita.txt"
+        ),
+        Path(
+            "/content/drive/MyDrive/Treinamento-MLP-Mathys/Inputs/rotulos/cell_types_numerico_fujita.txt"
+        ),
+        Path("/content/drive/MyDrive/cell_types_numerico_fujita.txt"),
+        Path("/content/cell_types_numerico_fujita.txt"),
         ROOT_DIR / "imputs" / "cell_types_numerico_fujita.txt",
+        DIR_DRIVE_TESTE_HOP / "imputs" / "cell_types_numerico_fujita.txt",
     ],
     "Rótulos Numéricos do Conjunto Fujita",
 )
@@ -442,13 +524,25 @@ elif (
         forcar_reprojecao=FORCAR_REPROJECAO_PAN_MATHYS,
     )
 else:
-    # Caso executado em máquina local sem o .h5ad de 61k genes montado, usa o SWeeP Pan c/ sentinela disponível em Downloads para validação do fluxo
+    # Caso executado em máquina local sem o .h5ad de 61k genes montado, usa o SWeeP Pan c/ sentinela disponível em Downloads ou Drive para validação do fluxo
     PATH_FALLBACK_SENTINELA_PAN = resolver_caminho_existente(
         [
             DIR_DOWNLOADS / "matriz_reduzida_sweepALVO_sentinela.txt",
             DIR_DOWNLOADS / "matriz_sweep600d_pan_com_sentinela_direto.txt",
+            Path(
+                "/content/drive/Othercomputers/Meu laptop/Downloads/matriz_reduzida_sweepALVO_sentinela.txt"
+            ),
+            Path(
+                "/content/drive/Othercomputers/Meu laptop/Downloads/matriz_sweep600d_pan_com_sentinela_direto.txt"
+            ),
+            Path("/content/drive/MyDrive/matriz_reduzida_sweepALVO_sentinela.txt"),
+            Path(
+                "/content/drive/MyDrive/matriz_sweep600d_pan_com_sentinela_direto.txt"
+            ),
+            Path("/content/matriz_reduzida_sweepALVO_sentinela.txt"),
+            Path("/content/matriz_sweep600d_pan_com_sentinela_direto.txt"),
         ],
-        "SWeeP Pan com Sentinela 0.5 pré-projetado em Downloads",
+        "SWeeP Pan com Sentinela 0.5 pré-projetado",
     )
     sweep_pan_faltantes_mathys = carregar_matriz_sweep_600d(PATH_FALLBACK_SENTINELA_PAN)
 
@@ -637,6 +731,32 @@ plt.show()
 # Agora utilizamos a `ModernHopfieldNetwork` abastecida com **100% do SWeeP Pan (`58.326 × 600`)** para reconstruir a matriz SWeeP do conjunto **Fujita (`40.913 × 600`)** projetada com sentinela `0.5` nas `25.065` colunas presentes nos `61.541` genes do Pan e ausentes no Fujita.
 
 # %%
+if not PATH_SWEEP_FUJITA_FALTANTES.exists():
+    raise FileNotFoundError(
+        f"\n[ERRO TESTE 2] Arquivo SWeeP Fujita com sentinela 0.5 não encontrado!\n"
+        f"Caminho verificado: {PATH_SWEEP_FUJITA_FALTANTES}\n\n"
+        f"Como resolver no Google Colab:\n"
+        f"  1. Opção A (Upload rápido na VM): Faça upload de 'matriz_sweep600d_com_sentinela.txt' para '/content/' na barra lateral do Colab; OU\n"
+        f"  2. Opção B (Google Drive): Copie 'matriz_sweep600d_com_sentinela.txt' para o Google Drive em '/content/drive/MyDrive/' ou sincronize a pasta Downloads do laptop."
+    )
+
+if not PATH_SWEEP_FUJITA_ORIGINAL.exists():
+    raise FileNotFoundError(
+        f"\n[ERRO TESTE 2] Arquivo SWeeP Fujita Original (sem 0.5) não encontrado!\n"
+        f"Caminho verificado: {PATH_SWEEP_FUJITA_ORIGINAL}\n\n"
+        f"Como resolver no Google Colab:\n"
+        f"  1. Opção A (Upload rápido na VM): Faça upload de 'matriz_reduzida_sweepF.csv' para '/content/' na barra lateral do Colab; OU\n"
+        f"  2. Opção B (Google Drive): Copie para '/content/drive/MyDrive/matriz_reduzida_sweepF.csv'."
+    )
+
+if not PATH_ROTULOS_FUJITA.exists():
+    raise FileNotFoundError(
+        f"\n[ERRO TESTE 2] Rótulos celulares do conjunto Fujita não encontrados!\n"
+        f"Caminho verificado: {PATH_ROTULOS_FUJITA}\n\n"
+        f"Como resolver no Google Colab:\n"
+        f"  Faça upload de 'cell_types_numerico_fujita.txt' para '/content/' ou copie para '/content/drive/MyDrive/'."
+    )
+
 sweep_fujita_faltantes = carregar_matriz_sweep_600d(PATH_SWEEP_FUJITA_FALTANTES)
 sweep_fujita_original = carregar_matriz_sweep_600d(PATH_SWEEP_FUJITA_ORIGINAL)
 rotulos_fujita = (
