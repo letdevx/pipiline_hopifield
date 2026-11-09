@@ -26,12 +26,15 @@ def _resolver_path_base() -> str:
     if env_base and os.path.exists(env_base):
         return env_base
 
-    # 1. Caminho Google Colab com Google Drive montado
-    colab_path = (
-        r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop"
-    )
-    if os.path.exists(colab_path):
-        return colab_path
+    # 1. Caminhos Google Colab com Google Drive montado
+    colab_paths = [
+        r"/content/drive/Othercomputers/Meu laptop/Documents/Letworkspace/Teste hop",
+        r"/content/drive/MyDrive/Teste hop",
+        r"/content/drive/MyDrive/Letworkspace/Teste hop",
+    ]
+    for cp in colab_paths:
+        if os.path.exists(cp):
+            return cp
 
     # 2. Caminho Windows Local da pesquisadora ("Meu laptop")
     windows_path = r"C:\Users\Leticia\Documents\Letworkspace\Teste hop"
@@ -56,7 +59,8 @@ def _extrair_nome_dataset(caminho: str) -> str:
     str
         Nome base do arquivo sem extensão, com caracteres especiais convertidos para sublinhado.
     """
-    stem = Path(caminho).stem
+    caminho_normalizado = caminho.replace("\\", "/")
+    stem = Path(caminho_normalizado).stem
     # Remove ou substitui caracteres especiais por sublinhado
     sanitizado = re.sub(r"[^\w\-]", "_", stem)
     return sanitizado or "dados"
@@ -73,7 +77,7 @@ PATH_REFERENCIA: str = os.environ.get(
 # Entrada Conjunto Alvo
 PATH_ALVO: str = os.environ.get(
     "PATH_ALVO",
-    os.path.join(PATH_BASE, "imputs", "pan_com_sentinela_05.h5ad"),
+    os.path.join(PATH_BASE, "imputs", "matriz_anotada_finalM.h5ad"),
 )
 
 # Identificadores automáticos dos conjuntos
@@ -84,7 +88,7 @@ NOME_ALVO: str = os.environ.get("NOME_ALVO") or _extrair_nome_dataset(PATH_ALVO)
 PATH_FEATURES_REFERENCIA: str = os.path.join(
     PATH_BASE, "imputs", "featuresPANcorrigido.tsv"
 )
-PATH_FEATURES_ALVO: str = os.path.join(PATH_BASE, "imputs", "featuresPANcorrigido.tsv")
+PATH_FEATURES_ALVO: str = os.path.join(PATH_BASE, "imputs", "featuresM.tsv")
 
 # Base Ortonormal Congelada e Rótulos
 PATH_ORTHBASE_RDS: str = os.environ.get(
@@ -92,7 +96,9 @@ PATH_ORTHBASE_RDS: str = os.environ.get(
     os.path.join(PATH_BASE, "imputs", "orthbase_mproj_600d.rds"),
 )
 PATH_LABELS_REFERENCIA: str = os.path.join(PATH_BASE, "imputs", "PanNumerico.csv")
-PATH_LABELS_ALVO: str = os.path.join(PATH_BASE, "imputs", "PanNumerico.csv")
+PATH_LABELS_ALVO: str = os.path.join(
+    PATH_BASE, "imputs", "tipos_celulares_numericoMs.txt"
+)
 
 # ---------------------------------------------------------------------------
 # Saídas dinâmicas — inicializadas no padrão output_<nome_ref>_<nome_alvo>
@@ -105,6 +111,8 @@ OUT_TREINAMENTO: str = os.path.join(OUTPUTS, "treinamento")
 OUT_HOPFIELD: str = os.path.join(OUTPUTS, "hopfield")
 OUT_IMPUTACAO: str = os.path.join(OUTPUTS, "imputacao")
 OUT_RELATORIO: str = os.path.join(OUTPUTS, "relatorio")
+OUT_SHAP: str = os.path.join(OUTPUTS, "shap")
+OUT_EMBEDDINGS: str = os.path.join(OUTPUTS, "embeddings_comparativos")
 OUT_SWEEP_ALVO_POS_IMPUTACAO: str = os.path.join(OUTPUTS, "sweep_alvo_pos_imputacao")
 OUT_SWEEP_POS_IMPUTACAO: str = OUT_SWEEP_ALVO_POS_IMPUTACAO
 
@@ -175,7 +183,7 @@ def configurar_diretorios(
     """
     global PATH_BASE, PATH_REFERENCIA, PATH_ALVO, NOME_REF, NOME_ALVO
     global OUTPUTS, OUT_BINARIZACAO, OUT_ALINHAMENTO, OUT_TOP_GENES
-    global OUT_TREINAMENTO, OUT_HOPFIELD, OUT_IMPUTACAO, OUT_RELATORIO
+    global OUT_TREINAMENTO, OUT_HOPFIELD, OUT_IMPUTACAO, OUT_RELATORIO, OUT_SHAP
     global OUT_SWEEP_ALVO_POS_IMPUTACAO, OUT_SWEEP_POS_IMPUTACAO
     global OUT_MTX_REFERENCIA, OUT_MTX_ALVO_SENTINELA, OUT_MTX_ALVO_IMPUTADO
     global PATH_SWEEP_REFERENCIA, PATH_SWEEP_ALVO, PATH_SWEEP_ALVO_SENTINELA
@@ -211,6 +219,8 @@ def configurar_diretorios(
     OUT_HOPFIELD = os.path.join(OUTPUTS, "hopfield")
     OUT_IMPUTACAO = os.path.join(OUTPUTS, "imputacao")
     OUT_RELATORIO = os.path.join(OUTPUTS, "relatorio")
+    OUT_SHAP = os.path.join(OUTPUTS, "shap")
+    OUT_EMBEDDINGS = os.path.join(OUTPUTS, "embeddings_comparativos")
     OUT_SWEEP_ALVO_POS_IMPUTACAO = os.path.join(OUTPUTS, "sweep_alvo_pos_imputacao")
     OUT_SWEEP_POS_IMPUTACAO = OUT_SWEEP_ALVO_POS_IMPUTACAO
 
@@ -238,6 +248,8 @@ def configurar_diretorios(
             OUT_HOPFIELD,
             OUT_IMPUTACAO,
             OUT_RELATORIO,
+            OUT_SHAP,
+            OUT_EMBEDDINGS,
             OUT_SWEEP_ALVO_POS_IMPUTACAO,
             OUT_MTX_REFERENCIA,
             OUT_MTX_ALVO_SENTINELA,
