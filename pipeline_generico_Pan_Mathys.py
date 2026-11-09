@@ -78,7 +78,7 @@ DEST_PATH = f"/content/{REPO_NAME}"
 
 # Commit hash que o HEAD da VM DEVE conter (aceita hash curto de 7+ chars ou SHA-1 de 40 chars)
 # OBRIGATÓRIO NO GOOGLE COLAB: previne execução com código defasado por esquecimento de 'git push'
-EXPECTED_COMMIT = "5e061cc4482b6660854b6c7b1f0087774ce46bd1"
+EXPECTED_COMMIT = "af6d430"
 
 
 def _is_google_colab() -> bool:
@@ -135,32 +135,54 @@ def sincronizar_e_validar_repo_colab(
 
     # 2. Clona se o repositório ainda não existir na VM
     if not os.path.exists(dest_path):
-        print(f"[Colab Git] Clonando '{repo_url}' em '{dest_path}'...")
+        print(f"[Colab Git] Clonando '{repo_url}' (branch '{branch}') em '{dest_path}'...")
         res_clone = subprocess.run(
-            ["git", "clone", repo_url, dest_path],
+            ["git", "clone", "-b", branch, repo_url, dest_path],
             capture_output=True,
             text=True,
             check=False,
         )
         if res_clone.returncode != 0:
-            raise RuntimeError(
-                f"Falha ao clonar repositório:\n{res_clone.stderr.strip()}"
+            res_clone = subprocess.run(
+                ["git", "clone", repo_url, dest_path],
+                capture_output=True,
+                text=True,
+                check=False,
             )
+            if res_clone.returncode != 0:
+                raise RuntimeError(
+                    f"Falha ao clonar repositório:\n{res_clone.stderr.strip()}"
+                )
 
-    # 3. Checkout e atualização da branch remota na VM
-    print(f"[Colab Git] Atualizando branch '{branch}' a partir de origin...")
-    subprocess.run(
-        ["git", "-C", dest_path, "checkout", branch],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    # 3. Sincronização, fetch e checkout da branch remota na VM
+    print(f"[Colab Git] Sincronizando branch '{branch}' a partir de origin...")
     subprocess.run(
         ["git", "-C", dest_path, "fetch", "origin", branch],
         capture_output=True,
         text=True,
         check=False,
     )
+    res_checkout = subprocess.run(
+        ["git", "-C", dest_path, "checkout", branch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if res_checkout.returncode != 0:
+        res_checkout = subprocess.run(
+            ["git", "-C", dest_path, "checkout", "-B", branch, f"origin/{branch}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res_checkout.returncode != 0:
+            raise RuntimeError(
+                f"\n{'=' * 80}\n"
+                f"[FALHA DE BRANCH NO COLAB] Não foi possível encontrar a branch '{branch}' no repositório remoto!\n"
+                f"Verifique se o nome da branch no GitHub corresponde exatamente a '{branch}'.\n"
+                f"Erro Git: {res_checkout.stderr.strip()}\n"
+                f"{'=' * 80}"
+            )
     res_pull = subprocess.run(
         ["git", "-C", dest_path, "pull", "origin", branch],
         capture_output=True,
